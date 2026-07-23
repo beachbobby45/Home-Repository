@@ -2,13 +2,16 @@
 
 > **Purpose:** Complete handoff document for building an AI-powered stock market analysis and trading signal agent. Designed to be given to a coding agent or developer on a PC with full development environment access.
 >
-> **Version:** 2.0 (patched July 23, 2026)
+> **Version:** 2.1 (patched July 23, 2026)
 > **Changes from v1:** Added pre-build access checklist, verified external dependency matrix, Layer 1.5 signal gate, complete risk engine spec, formal thesis schema, anti-hallucination validation, order lifecycle, expanded database schema, gate-based testing plan, realistic cost model, and removed/replaced data sources that are unavailable or impractical on free tiers.
+>
+> **Fees & billing:** See **[Fees at a Glance](./FEES_AT_A_GLANCE.md)** for every key, cost, and Anthropic trial credit details.
 
 ---
 
 ## Table of Contents
 
+0. [Fees at a Glance](./FEES_AT_A_GLANCE.md) ← **read before spending anything**
 1. [Pre-Build Access Checklist (Read First)](#pre-build-access-checklist-read-first)
 2. [External Dependencies Matrix](#external-dependencies-matrix)
 3. [Overview](#overview)
@@ -42,7 +45,7 @@
 | # | Service | What you need | Cost | Access type | Blocker if missing |
 |---|---------|---------------|------|-------------|-------------------|
 | 1 | **Alpaca Markets** | Broker account + **paper** API key/secret | $0 | Self-serve signup at [alpaca.markets](https://alpaca.markets). US retail accounts only. | Cannot paper trade or sync portfolio |
-| 2 | **Anthropic Claude API** | API key from [console.anthropic.com](https://console.anthropic.com) | ~$15–80/mo usage (see cost section) | Self-serve. Phone verification required. **No permanent free tier** — new accounts may get ~$5 one-time trial credits; ongoing use requires prepaid credits + payment method. | Cannot generate theses |
+| 2 | **Anthropic Claude API** | API key from [console.anthropic.com](https://console.anthropic.com) | ~$5–25/mo with gating (see [Fees at a Glance](./FEES_AT_A_GLANCE.md)) | Self-serve. Phone verification required. **No permanent free tier.** Official docs: *"New users receive a small amount of free credits to test the API"* ([pricing FAQ](https://platform.claude.com/docs/en/about-claude/pricing)). Exact amount not published — **verify your balance in Console → Billing before testing.** Ongoing use requires prepaid credits. | Cannot generate theses |
 | 3 | **FRED (St. Louis Fed)** | Free API key from [fredaccount.stlouisfed.org](https://fredaccount.stlouisfed.org/useraccount/apikey) | $0 | Self-serve, instant | Cannot fetch VIX proxy, macro series, or release dates |
 | 4 | **Finnhub** | Free API key from [finnhub.io](https://finnhub.io) | $0 (personal use) | Self-serve, instant. **License: personal use only.** US-focused on free tier. | Cannot fetch fundamentals/news on free path |
 
@@ -73,20 +76,22 @@
 
 ### Pre-build verification script (run before Phase 1)
 
-Create `scripts/verify_access.py` and confirm each check passes:
+Run the included verification script:
 
-```python
-CHECKS = [
-    ("alpaca_trading", "GET /v2/account on paper endpoint → 200"),
-    ("alpaca_bars", "Fetch 1 bar for SPY → non-empty"),
-    ("anthropic", "Minimal messages API call → 200"),
-    ("fred", "Fetch VIXCLS series → non-empty"),
-    ("finnhub", "Fetch AAPL quote → non-empty"),
-    ("massive_optional", "Fetch 1 agg for SPY → 200 or skip if not configured"),
-]
+```bash
+cp .env.example .env   # fill in your keys first
+pip install -r requirements.txt
+python scripts/verify_access.py
 ```
 
-**Gate rule:** If any **required** check fails, stop and resolve before proceeding to the next phase.
+Checks performed:
+- `alpaca` — paper account + daily bars for test ticker
+- `anthropic` — minimal Haiku call (consumes small credit; check balance before/after)
+- `fred` — VIXCLS latest observation
+- `finnhub` — quote for test ticker
+- `massive` — optional; skipped if key not set
+
+**Gate rule:** If any **required** check fails, stop and resolve before proceeding to the next phase. See [Fees at a Glance](./FEES_AT_A_GLANCE.md) for Anthropic credit verification steps.
 
 ---
 
@@ -919,7 +924,7 @@ Formal contract for Layer 2 output. Implement as Pydantic model `ThesisOutput`.
 | Finnhub (free, personal) | $0 | |
 | FRED | $0 | |
 | Massive/Polygon (free, backfill only) | $0 | |
-| Claude API (2–8 theses/day, cached) | **$5–25** | ~60–240 theses/month |
+| Claude API (2–8 theses/day, cached) | **$5–25** | ~60–240 theses/month; free starter credits may cover early Gate 0–2 testing |
 | VPS (optional) | $0–10 | Can run locally for v1 |
 | Benzinga news (optional) | $0 | AWS Marketplace free tier |
 | **Total v1** | **$5–35/mo** | |
@@ -1059,5 +1064,5 @@ This document is for educational and informational purposes only. Nothing here c
 ---
 
 *Document prepared: June 28, 2026 (v1)*
-*Patched: July 23, 2026 (v2)*
+*Patched: July 23, 2026 (v2.1 — added Fees at a Glance + Gate 0 script)*
 *Ready for handoff to development agent or PC environment*
