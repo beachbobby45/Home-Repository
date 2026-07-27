@@ -1,8 +1,11 @@
-# AI Investment Agent — Full Architecture & Build Spec (v2)
+# AI Investment Agent — Full Architecture & Build Spec
 
-> **Purpose:** Complete handoff document for building an AI-powered stock market analysis and trading signal agent. Designed to be given to a coding agent or developer on a PC with full development environment access.
->
-> **Version:** 2.1 (patched July 23, 2026)
+> **Authoritative product rules:** **[PRODUCT_SPEC_V3.md](./PRODUCT_SPEC_V3.md)** (July 27, 2026 — approved)  
+> **This file:** technical appendix (layers, gates, schemas). Where v2 conflicts with v3, **v3 wins** (E*TRADE manual, intraday rules, no 8% cap, no Alpaca execution).
+
+> **Purpose:** Complete handoff document for building an AI-powered stock market analysis and **alerting** agent.
+
+> **Version:** 3.0 (Phase 0 started July 27, 2026)
 > **Changes from v1:** Added pre-build access checklist, verified external dependency matrix, Layer 1.5 signal gate, complete risk engine spec, formal thesis schema, anti-hallucination validation, order lifecycle, expanded database schema, gate-based testing plan, realistic cost model, and removed/replaced data sources that are unavailable or impractical on free tiers.
 >
 > **Fees & billing:** See **[Fees at a Glance](./FEES_AT_A_GLANCE.md)** for every key, cost, and Anthropic trial credit details.

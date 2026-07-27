@@ -15,33 +15,30 @@ from investment_agent.config import Settings, missing_required_keys
 
 def test_missing_required_keys_detects_empty_values():
     settings = Settings(
-        alpaca_api_key="",
-        alpaca_secret_key="secret",
-        alpaca_paper=True,
-        alpaca_base_url="https://paper-api.alpaca.markets",
         anthropic_api_key="sk-test",
         fred_api_key="",
         finnhub_api_key="fh-test",
         massive_api_key=None,
         verify_test_ticker="SPY",
+        app_api_key="",
+        alpaca_api_key=None,
+        alpaca_secret_key=None,
     )
     missing = missing_required_keys(settings)
-    assert "ALPACA_API_KEY" in missing
     assert "FRED_API_KEY" in missing
     assert "ANTHROPIC_API_KEY" not in missing
 
 
 def test_missing_required_keys_passes_when_all_set():
     settings = Settings(
-        alpaca_api_key="key",
-        alpaca_secret_key="secret",
-        alpaca_paper=True,
-        alpaca_base_url="https://paper-api.alpaca.markets",
         anthropic_api_key="sk-test",
         fred_api_key="fred-key",
         finnhub_api_key="fh-test",
         massive_api_key=None,
         verify_test_ticker="SPY",
+        app_api_key="x",
+        alpaca_api_key=None,
+        alpaca_secret_key=None,
     )
     assert missing_required_keys(settings) == []
 
@@ -58,4 +55,4 @@ def test_verify_access_module_imports():
     sys.modules["verify_access"] = module
     spec.loader.exec_module(module)
     assert "CHECKS" in dir(module)
-    assert set(module.REQUIRED_CHECKS) == {"alpaca", "anthropic", "fred", "finnhub"}
+    assert set(module.REQUIRED_CHECKS) == {"anthropic", "fred", "finnhub"}

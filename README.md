@@ -1,62 +1,40 @@
-# AI Investment Agent
+# AI Investment Agent (Product Spec v3)
 
-AI-powered stock analysis and trading signal agent with human-in-the-loop approval.
+Intraday **alerting and analysis** system: CIO + sub-agents → dashboard recommendations (+1.13% / −0.50%, ~3% swing proof). **You** execute in **E*TRADE** and log trades. Target goal tracking: **$5M** from **$10K** basis.
 
 ## Documentation
 
-- **[Architecture Spec (v2)](docs/AI_Investment_Agent_Spec.md)** — full system design
-- **[Fees at a Glance](docs/FEES_AT_A_GLANCE.md)** — costs, trial credits, and billing surprises
+| Doc | Purpose |
+|-----|---------|
+| **[PRODUCT_SPEC_V3.md](docs/PRODUCT_SPEC_V3.md)** | **Authoritative** product & financial rules |
+| **[PHASE_0.md](docs/PHASE_0.md)** | Gate 0 checklist |
+| **[FEES_AT_A_GLANCE.md](docs/FEES_AT_A_GLANCE.md)** | API costs |
+| **[AI_Investment_Agent_Spec.md](docs/AI_Investment_Agent_Spec.md)** | Technical appendix (gates, schemas; some v2 items superseded by v3) |
 
-## Quick Start (Phase 0)
-
-### 1. Get your API keys
-
-See [docs/FEES_AT_A_GLANCE.md](docs/FEES_AT_A_GLANCE.md) for signup links and costs.
-
-Required (all free to obtain; Anthropic has usage fees after trial credits):
-- Alpaca paper account
-- Anthropic Claude API key
-- FRED API key
-- Finnhub API key
-
-### 2. Set up environment
+## Phase 0 — Start here
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with your keys
+# Add ANTHROPIC_API_KEY, FRED_API_KEY, FINNHUB_API_KEY
+
+pip install -r requirements.txt
+PYTHONPATH=src python3 -m pytest tests/ -v
+PYTHONPATH=src python3 scripts/verify_access.py
 ```
 
-### 3. Run Gate 0 verification
+Gate 0 must pass before Phase 1.
 
-```bash
-python scripts/verify_access.py
-```
+## v3 highlights
 
-All required checks must pass before proceeding to Phase 1.
+- **CIO + sub-agents** (research, stock team, regime, monitor, learning) — one repo
+- **$7 buy / $7 sell** fees in P&amp;L model
+- **Month-end sweeps:** 10% management + **editable** 25% tax reserve on **realized gains only**
+- **No Alpaca orders**; optional Massive for backtest later
+- **Progress:** `% of $5M goal` month by month
 
-### 4. Run tests
-
-```bash
-pytest tests/ -v
-```
-
-## Project Status
+## Status
 
 | Phase | Status |
 |-------|--------|
-| Phase 0 — Access & foundation | In progress |
-| Phase 1 — Data pipeline | Not started |
-| Phase 1.5 — Signal gate + backtest | Not started |
-| Phase 2 — Reasoning engine | Not started |
-| Phase 3 — Risk engine | Not started |
-| Phase 4 — Dashboard | Not started |
-| Phase 5 — Paper trading | Not started |
-
-## Important
-
-- This system does **not** auto-trade. Human approval is required for every order.
-- Paper trade for 60–90 days minimum before considering live trading.
-- See the legal disclaimer in the architecture spec.
+| 0 — Foundation | **In progress** (code); awaiting your `.env` Gate 0 |
+| 1 — Data pipeline | Not started |

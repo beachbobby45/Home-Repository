@@ -1,10 +1,7 @@
-# Core
+# Core (Phase 0)
 python-dotenv>=1.0.0
 httpx>=0.27.0
 pydantic>=2.0.0
-
-# Broker & data (Phase 0 verification)
-alpaca-py>=0.39.0
 
 # AI (Phase 0 verification)
 anthropic>=0.49.0

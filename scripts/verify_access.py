@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Gate 0 — verify all required external API connections before building.
+Gate 0 — verify required external API connections (Product Spec v3).
+
+Required: anthropic, fred, finnhub.
+Optional: massive. Alpaca not used (E*TRADE manual execution).
 
 Usage:
-    python scripts/verify_access.py              # run all required checks
-    python scripts/verify_access.py --check alpaca
+    python scripts/verify_access.py              # required + optional massive
     python scripts/verify_access.py --check anthropic
     python scripts/verify_access.py --check fred
     python scripts/verify_access.py --check finnhub
@@ -42,62 +44,20 @@ class CheckResult:
 
 
 def check_alpaca(settings: Settings) -> CheckResult:
-    """Verify Alpaca paper account and bar data."""
+    """Optional legacy check — skipped unless Alpaca keys are set."""
     if not settings.alpaca_api_key or not settings.alpaca_secret_key:
-        return CheckResult("alpaca", False, "Missing ALPACA_API_KEY or ALPACA_SECRET_KEY")
-
-    try:
-        from alpaca.trading.client import TradingClient
-        from alpaca.data.historical import StockHistoricalDataClient
-        from alpaca.data.requests import StockBarsRequest
-        from alpaca.data.timeframe import TimeFrame
-    except ImportError:
-        return CheckResult(
-            "alpaca",
-            False,
-            "alpaca-py not installed — run: pip install -r requirements.txt",
-        )
-
-    try:
-        trading = TradingClient(
-            settings.alpaca_api_key,
-            settings.alpaca_secret_key,
-            paper=settings.alpaca_paper,
-        )
-        account = trading.get_account()
-        equity = float(account.equity)
-        if equity <= 0:
-            return CheckResult("alpaca", False, f"Account equity invalid: {equity}")
-
-        data_client = StockHistoricalDataClient(
-            settings.alpaca_api_key,
-            settings.alpaca_secret_key,
-        )
-        end = datetime.now(timezone.utc)
-        start = end - timedelta(days=5)
-        request = StockBarsRequest(
-            symbol_or_symbols=settings.verify_test_ticker,
-            timeframe=TimeFrame.Day,
-            start=start,
-            end=end,
-        )
-        bars = data_client.get_stock_bars(request)
-        ticker_bars = bars.data.get(settings.verify_test_ticker, [])
-        if not ticker_bars:
-            return CheckResult(
-                "alpaca",
-                False,
-                f"No bars returned for {settings.verify_test_ticker}",
-            )
-
         return CheckResult(
             "alpaca",
             True,
-            f"Paper account OK — equity=${equity:,.2f}, "
-            f"{len(ticker_bars)} daily bars for {settings.verify_test_ticker}",
+            "Skipped — optional; v3 uses E*TRADE manual execution",
+            required=False,
         )
-    except Exception as exc:
-        return CheckResult("alpaca", False, f"Alpaca error: {exc}")
+    return CheckResult(
+        "alpaca",
+        True,
+        "Keys present (optional data-only; not required for Gate 0)",
+        required=False,
+    )
 
 
 def check_anthropic(settings: Settings) -> CheckResult:
@@ -265,7 +225,8 @@ CHECKS = {
     "massive": check_massive,
 }
 
-REQUIRED_CHECKS = ["alpaca", "anthropic", "fred", "finnhub"]
+REQUIRED_CHECKS = ["anthropic", "fred", "finnhub"]
+DEFAULT_CHECKS = REQUIRED_CHECKS + ["massive"]
 
 
 def run_checks(selected: list[str] | None = None) -> list[CheckResult]:
@@ -280,7 +241,7 @@ def run_checks(selected: list[str] | None = None) -> list[CheckResult]:
         print("See docs/FEES_AT_A_GLANCE.md for signup links and costs.")
         sys.exit(2)
 
-    names = selected or list(CHECKS.keys())
+    names = selected or DEFAULT_CHECKS
     results = []
     for name in names:
         fn = CHECKS.get(name)
