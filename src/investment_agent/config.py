@@ -45,11 +45,16 @@ class Settings:
         )
 
 
-def missing_required_keys(settings: Settings) -> list[str]:
+def missing_required_keys(
+    settings: Settings,
+    *,
+    require_anthropic: bool = True,
+) -> list[str]:
     """Return names of required env vars that are empty (v3: no Alpaca)."""
     required = {
-        "ANTHROPIC_API_KEY": settings.anthropic_api_key,
         "FRED_API_KEY": settings.fred_api_key,
         "FINNHUB_API_KEY": settings.finnhub_api_key,
     }
+    if require_anthropic:
+        required["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
     return [name for name, value in required.items() if not value.strip()]

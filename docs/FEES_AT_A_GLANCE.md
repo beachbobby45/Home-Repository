@@ -17,6 +17,8 @@ These four keys are required before any feature code. **Only Anthropic has ongoi
 | 3 | **FRED (St. Louis Fed)** | $0 | $0 | $0 | No |
 | 4 | **Finnhub** | $0 | $0 on free personal tier | $0 | No |
 
+**Daily OHLCV note:** Finnhub **free tier does not include** `/stock/candle` (403). Phase 1 uses **yfinance** for daily bars (free) and **Finnhub** for live quotes only. Upgrade Finnhub or add Massive/Polygon later if you want a single vendor.
+
 **Minimum cash to start building:** **$0** if Anthropic free credits are available on your account.  
 **Minimum cash to finish building + paper trade:** plan **~$5–25/month** for Claude API (with signal gating).
 

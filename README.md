@@ -15,14 +15,23 @@ Intraday **alerting and analysis** system: CIO + sub-agents → dashboard recomm
 
 ```bash
 cp .env.example .env
-# Add ANTHROPIC_API_KEY, FRED_API_KEY, FINNHUB_API_KEY
+# Add FRED_API_KEY, FINNHUB_API_KEY (ANTHROPIC later when you add ~$25 credits)
 
 pip install -r requirements.txt
 PYTHONPATH=src python3 -m pytest tests/ -v
-PYTHONPATH=src python3 scripts/verify_access.py
+PYTHONPATH=src python3 scripts/verify_access.py --no-claude
 ```
 
-Gate 0 must pass before Phase 1.
+Gate 0 must pass before Phase 1. Use full `verify_access.py` once Anthropic credits are added.
+
+## Phase 1 — Data ingest (no Claude)
+
+```bash
+PYTHONPATH=src python3 scripts/run_ingest.py
+PYTHONPATH=src python3 scripts/run_ingest.py --tickers SPY AAPL
+```
+
+Fetches FRED macro (VIX), Finnhub live quotes, yfinance daily bars, liquidity metrics, and SPY/DIA/QQQ regime gate.
 
 ## v3 highlights
 
@@ -36,5 +45,5 @@ Gate 0 must pass before Phase 1.
 
 | Phase | Status |
 |-------|--------|
-| 0 — Foundation | **In progress** (code); awaiting your `.env` Gate 0 |
-| 1 — Data pipeline | Not started |
+| 0 — Foundation | **Done** (Option A: `--no-claude` Gate 0) |
+| 1 — Data pipeline | **In progress** (ingest + regime gate working) |

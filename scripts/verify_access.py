@@ -226,14 +226,20 @@ CHECKS = {
 }
 
 REQUIRED_CHECKS = ["anthropic", "fred", "finnhub"]
+REQUIRED_CHECKS_NO_CLAUDE = ["fred", "finnhub"]
 DEFAULT_CHECKS = REQUIRED_CHECKS + ["massive"]
 
 
-def run_checks(selected: list[str] | None = None) -> list[CheckResult]:
+def run_checks(
+    selected: list[str] | None = None,
+    *,
+    require_anthropic: bool = True,
+) -> list[CheckResult]:
     load_env()
     settings = Settings.from_env()
-    missing = missing_required_keys(settings)
-    if missing and (selected is None or any(c in REQUIRED_CHECKS for c in (selected or []))):
+    missing = missing_required_keys(settings, require_anthropic=require_anthropic)
+    required = REQUIRED_CHECKS if require_anthropic else REQUIRED_CHECKS_NO_CLAUDE
+    if missing and (selected is None or any(c in required for c in (selected or []))):
         print("ERROR: Missing required environment variables:")
         for name in missing:
             print(f"  - {name}")
@@ -241,9 +247,19 @@ def run_checks(selected: list[str] | None = None) -> list[CheckResult]:
         print("See docs/FEES_AT_A_GLANCE.md for signup links and costs.")
         sys.exit(2)
 
-    names = selected or DEFAULT_CHECKS
+    names = selected or (DEFAULT_CHECKS if require_anthropic else REQUIRED_CHECKS_NO_CLAUDE + ["massive"])
     results = []
     for name in names:
+        if name == "anthropic" and not require_anthropic:
+            results.append(
+                CheckResult(
+                    "anthropic",
+                    True,
+                    "Skipped — building without Claude (Option A); add credits later",
+                    required=False,
+                )
+            )
+            continue
         fn = CHECKS.get(name)
         if fn is None:
             print(f"Unknown check: {name}")
@@ -280,8 +296,13 @@ def main() -> None:
         action="append",
         help="Run a specific check (can repeat). Default: all checks.",
     )
+    parser.add_argument(
+        "--no-claude",
+        action="store_true",
+        help="Option A: skip Anthropic as required (FRED + Finnhub only)",
+    )
     args = parser.parse_args()
-    results = run_checks(args.check)
+    results = run_checks(args.check, require_anthropic=not args.no_claude)
     sys.exit(print_results(results))
 
 

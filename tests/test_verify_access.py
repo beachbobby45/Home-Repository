@@ -43,6 +43,20 @@ def test_missing_required_keys_passes_when_all_set():
     assert missing_required_keys(settings) == []
 
 
+def test_missing_required_keys_skips_anthropic_when_disabled():
+    settings = Settings(
+        anthropic_api_key="",
+        fred_api_key="fred-key",
+        finnhub_api_key="fh-test",
+        massive_api_key=None,
+        verify_test_ticker="SPY",
+        app_api_key="x",
+        alpaca_api_key=None,
+        alpaca_secret_key=None,
+    )
+    assert missing_required_keys(settings, require_anthropic=False) == []
+
+
 def test_verify_access_module_imports():
     """Ensure verify_access script is importable."""
     import importlib.util
@@ -56,3 +70,4 @@ def test_verify_access_module_imports():
     spec.loader.exec_module(module)
     assert "CHECKS" in dir(module)
     assert set(module.REQUIRED_CHECKS) == {"anthropic", "fred", "finnhub"}
+    assert set(module.REQUIRED_CHECKS_NO_CLAUDE) == {"fred", "finnhub"}
