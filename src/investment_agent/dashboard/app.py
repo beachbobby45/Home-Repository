@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -54,6 +54,8 @@ from investment_agent.stock_team import (
 )
 
 DASHBOARD_DIR = Path(__file__).resolve().parent
+REPO_ROOT = DASHBOARD_DIR.parents[2]
+ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
 app = FastAPI(title="AI Investment Agent Dashboard", version="0.7.0")
@@ -97,6 +99,17 @@ def _require_api_key(
         return
     if x_api_key != key:
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+
+@app.get("/one-pager.pdf")
+def one_pager_pdf() -> FileResponse:
+    if not ONE_PAGER_PDF.is_file():
+        raise HTTPException(status_code=404, detail="One-pager PDF not found")
+    return FileResponse(
+        ONE_PAGER_PDF,
+        media_type="application/pdf",
+        filename="AI-Investment-Agent-Daily-One-Pager.pdf",
+    )
 
 
 @app.get("/api/config")
