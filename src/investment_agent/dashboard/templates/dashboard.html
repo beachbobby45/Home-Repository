@@ -12,10 +12,11 @@
     <p class="subtitle">Intraday alerts · E*TRADE manual · $5M goal · Option A (no Claude)</p>
     {% if api_key_required %}
     <div class="api-key-bar" id="api-key-bar">
-      <label for="app-api-key">API key (for log trade, monitor, sync, etc.)</label>
-      <input type="password" id="app-api-key" placeholder="Paste APP_API_KEY from your .env" autocomplete="off" />
+      <label for="app-api-key">Dashboard password</label>
+      <input type="password" id="app-api-key" placeholder="Same value as APP_API_KEY in your .env" autocomplete="off" />
       <button class="btn secondary btn-sm" type="button" id="save-api-key">Save</button>
       <span class="brief" id="api-key-status"></span>
+      <span class="brief api-key-hint">Server binds to 127.0.0.1 by default (this machine only). Required for action buttons if you use a tunnel or --host 0.0.0.0.</span>
     </div>
     {% endif %}
   </header>
@@ -320,7 +321,7 @@
     const API_KEY_STORAGE = "investment_agent_api_key";
 
     function getApiKey() {
-      return sessionStorage.getItem(API_KEY_STORAGE) || "";
+      return localStorage.getItem(API_KEY_STORAGE) || "";
     }
 
     function apiHeaders(extra = {}) {
@@ -338,7 +339,7 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 401) {
-          throw new Error("Invalid or missing API key — enter APP_API_KEY in the header bar above.");
+          throw new Error("Invalid dashboard password — enter the APP_API_KEY value from your .env file above.");
         }
         throw new Error(data.detail || data.error || res.statusText);
       }
@@ -351,18 +352,18 @@
       const saved = getApiKey();
       if (saved) {
         input.value = saved;
-        document.getElementById("api-key-status").textContent = "Key saved for this session.";
+        document.getElementById("api-key-status").textContent = "Password saved in this browser.";
       }
       document.getElementById("save-api-key").addEventListener("click", () => {
         const key = input.value.trim();
         if (!key) {
-          sessionStorage.removeItem(API_KEY_STORAGE);
-          document.getElementById("api-key-status").textContent = "Key cleared.";
+          localStorage.removeItem(API_KEY_STORAGE);
+          document.getElementById("api-key-status").textContent = "Password cleared.";
           return;
         }
-        sessionStorage.setItem(API_KEY_STORAGE, key);
-        document.getElementById("api-key-status").textContent = "Key saved — retry your action.";
-        toast("API key saved for this browser session");
+        localStorage.setItem(API_KEY_STORAGE, key);
+        document.getElementById("api-key-status").textContent = "Password saved — retry your action.";
+        toast("Dashboard password saved in this browser");
       });
     }
 

@@ -73,6 +73,12 @@ header .subtitle {
   color: var(--text);
 }
 
+.api-key-hint {
+  flex: 1 1 100%;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .screener-filters {
   display: flex;
   flex-wrap: wrap;

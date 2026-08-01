@@ -24,6 +24,13 @@ def main() -> None:
         print("ERROR: uvicorn not installed — run: pip install -r requirements.txt")
         sys.exit(2)
 
+    bind = f"http://{args.host}:{args.port}"
+    if args.host in ("127.0.0.1", "localhost"):
+        print(f"Dashboard (local only): {bind}")
+    else:
+        print(f"WARNING: Dashboard listening on {args.host} — reachable on your network. Set APP_API_KEY in .env.")
+        print(f"  Open: {bind}")
+
     uvicorn.run(
         "investment_agent.dashboard.app:app",
         host=args.host,
