@@ -73,6 +73,58 @@ header .subtitle {
   color: var(--text);
 }
 
+.screener-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.screener-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+}
+
+.screener-filters input[type="text"],
+.screener-filters input[type="number"],
+.screener-filters select {
+  padding: 0.3rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.screener-filters .inline-check {
+  color: var(--text);
+}
+
+.sortable-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sortable-table th.sortable:hover {
+  color: var(--accent);
+}
+
+.sortable-table th.sortable.sorted-asc::after {
+  content: " ▲";
+  font-size: 0.7em;
+  color: var(--accent);
+}
+
+.sortable-table th.sortable.sorted-desc::after {
+  content: " ▼";
+  font-size: 0.7em;
+  color: var(--accent);
+}
+
 main {
   max-width: 1200px;
   margin: 0 auto;

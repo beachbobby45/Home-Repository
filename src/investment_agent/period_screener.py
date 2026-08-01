@@ -9,9 +9,94 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from investment_agent.finance import ORIGINAL_BASIS
-from investment_agent.historical import evaluate_period, evaluate_trading_day
-from investment_agent.stock_team import screen_candidates
+from investment_agent.historical import evaluate_period
+from investment_agent.liquidity import MIN_ADV_DOLLAR, SWING_TARGET_PCT
+from investment_agent.stock_team import _latest_metrics, screen_candidates
 from investment_agent.strategy import REGIME_ONLY_TICKERS
+
+# Rank weights — historical + live Step 3 likelihood (pre-Claude)
+RANK_WEIGHTS = {
+    "live_pass": 0.25,
+    "hit_rate": 0.20,
+    "consistency": 0.20,
+    "swing_proximity": 0.15,
+    "liquidity": 0.10,
+    "near_swing": 0.10,
+}
+
+
+def _metrics_map(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
+    return {row["ticker"]: row for row in _latest_metrics(conn)}
+
+
+def _swing_proximity(avg_range_pct: float) -> float:
+    return max(0.0, 1.0 - abs(avg_range_pct - SWING_TARGET_PCT) / SWING_TARGET_PCT)
+
+
+def _liquidity_score(adv_dollar: float, meets_liquidity: bool) -> float:
+    if not meets_liquidity or adv_dollar <= 0:
+        return 0.0
+    return min(1.0, adv_dollar / (MIN_ADV_DOLLAR * 5))
+
+
+def _criteria_likelihood_score(
+    *,
+    live_pass: bool,
+    hit_rate_pct: float,
+    days_screened: int,
+    avg_range_pct: float,
+    adv_dollar: float = 0.0,
+    meets_liquidity: bool = False,
+    near_swing: bool = False,
+    period_days: int = 14,
+) -> dict:
+    swing_px = _swing_proximity(avg_range_pct)
+    liq = _liquidity_score(adv_dollar, meets_liquidity)
+    consistency = min(days_screened / max(period_days * 0.5, 1), 1.0)
+    hit = hit_rate_pct / 100.0
+    score = (
+        RANK_WEIGHTS["live_pass"] * (1.0 if live_pass else 0.0)
+        + RANK_WEIGHTS["hit_rate"] * hit
+        + RANK_WEIGHTS["consistency"] * consistency
+        + RANK_WEIGHTS["swing_proximity"] * swing_px
+        + RANK_WEIGHTS["liquidity"] * liq
+        + RANK_WEIGHTS["near_swing"] * (1.0 if near_swing else 0.0)
+    )
+    return {
+        "score": round(score, 4),
+        "swing_proximity": round(swing_px, 3),
+        "liquidity_score": round(liq, 3),
+        "consistency_score": round(consistency, 3),
+        "hit_rate_component": round(hit, 3),
+    }
+
+
+def _enrich_row(row: dict, metrics: sqlite3.Row | None, *, period_days: int) -> dict:
+    adv = float(metrics["adv_dollar"] or 0) if metrics else 0.0
+    avg_range = float(row.get("avg_range_pct") or (metrics["avg_range_pct"] if metrics else 0) or 0)
+    meets_liq = bool(metrics["meets_liquidity_min"]) if metrics else False
+    near_swing = bool(metrics["near_swing_target"]) if metrics else False
+    if metrics and avg_range == 0:
+        avg_range = float(metrics["avg_range_pct"] or 0)
+
+    parts = _criteria_likelihood_score(
+        live_pass=bool(row.get("live_pass_today")),
+        hit_rate_pct=float(row.get("hit_rate_pct") or 0),
+        days_screened=int(row.get("days_screened") or 0),
+        avg_range_pct=avg_range,
+        adv_dollar=adv,
+        meets_liquidity=meets_liq,
+        near_swing=near_swing,
+        period_days=period_days,
+    )
+    out = {**row, **parts}
+    out["avg_range_pct"] = round(avg_range, 2)
+    out["adv_dollar"] = round(adv, 0)
+    out["adv_dollar_m"] = round(adv / 1_000_000, 1) if adv else 0.0
+    out["liquidity_cap"] = round(float(metrics["liquidity_cap"] or 0), 0) if metrics else None
+    out["meets_liquidity"] = meets_liq
+    out["near_swing_target"] = near_swing
+    return out
 
 ET = ZoneInfo("America/New_York")
 
@@ -37,14 +122,21 @@ def _rank_score(
     hit_rate_pct: float,
     days_screened: int,
     avg_range_pct: float,
+    adv_dollar: float = 0.0,
+    meets_liquidity: bool = False,
+    near_swing: bool = False,
+    period_days: int = 14,
 ) -> float:
-    swing_proximity = max(0.0, 1.0 - abs(avg_range_pct - 3.0) / 3.0)
-    return (
-        0.4 * (1.0 if live_pass else 0.0)
-        + 0.3 * (hit_rate_pct / 100.0)
-        + 0.2 * min(days_screened / 10.0, 1.0)
-        + 0.1 * swing_proximity
-    )
+    return _criteria_likelihood_score(
+        live_pass=live_pass,
+        hit_rate_pct=hit_rate_pct,
+        days_screened=days_screened,
+        avg_range_pct=avg_range_pct,
+        adv_dollar=adv_dollar,
+        meets_liquidity=meets_liquidity,
+        near_swing=near_swing,
+        period_days=period_days,
+    )["score"]
 
 
 def run_period_screener(
@@ -59,6 +151,10 @@ def run_period_screener(
     """Aggregate period evaluation by ticker and rank candidates."""
     period = evaluate_period(conn, start_date, end_date, tradable_cash=tradable_cash)
     live_tickers = {c.ticker for c in screen_candidates(conn)}
+    metrics_by_ticker = _metrics_map(conn)
+    period_days = (
+        datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")
+    ).days + 1
 
     agg: dict[str, dict] = {}
     for day in period["days"]:
@@ -98,7 +194,8 @@ def run_period_screener(
             continue
         avg_range = round(b["_range_sum"] / max(b["days_screened"], 1), 2)
         live_pass = ticker in live_tickers
-        row = {
+        m = metrics_by_ticker.get(ticker)
+        base = {
             "ticker": ticker,
             "days_screened": b["days_screened"],
             "simulated_targets": b["simulated_targets"],
@@ -108,27 +205,18 @@ def run_period_screener(
             "avg_range_pct": avg_range,
             "last_screened_date": b["last_screened_date"],
             "live_pass_today": live_pass,
-            "score": round(
-                _rank_score(
-                    live_pass=live_pass,
-                    hit_rate_pct=hit_rate,
-                    days_screened=b["days_screened"],
-                    avg_range_pct=avg_range,
-                ),
-                4,
-            ),
         }
+        row = _enrich_row(base, m, period_days=period_days)
         candidates.append(row)
 
-    candidates.sort(key=lambda r: (-r["score"], -r["days_screened"], r["ticker"]))
+    candidates.sort(
+        key=lambda r: (-r["score"], -r["days_screened"], -r.get("adv_dollar", 0), r["ticker"])
+    )
 
     return {
         "start_date": start_date,
         "end_date": end_date,
-        "period_days": (
-            datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")
-        ).days
-        + 1,
+        "period_days": period_days,
         "days_evaluated": period["days_evaluated"],
         "candidates": candidates,
         "summary": {
@@ -230,19 +318,22 @@ def build_ranked_candidates(
     )
     live = screen_candidates(conn)
     live_map = {c.ticker: c for c in live}
+    metrics_by_ticker = _metrics_map(conn)
+    period_days = period["period_days"]
 
     ranked: list[dict] = []
     seen: set[str] = set()
 
     for c in period["candidates"]:
         card = live_map.get(c["ticker"])
+        row = _enrich_row(c, metrics_by_ticker.get(c["ticker"]), period_days=period_days)
         ranked.append(
             {
-                **c,
+                **row,
                 "entry_price": card.entry_price if card else None,
                 "target_price": card.target_price if card else None,
                 "stop_price": card.stop_price if card else None,
-                "suggested_size": card.suggested_size if card else None,
+                "suggested_size": card.suggested_size if card else row.get("liquidity_cap"),
                 "thesis_summary": card.thesis_summary if card else None,
             }
         )
@@ -251,35 +342,34 @@ def build_ranked_candidates(
     for card in live:
         if card.ticker in seen:
             continue
+        m = metrics_by_ticker.get(card.ticker)
+        base = {
+            "ticker": card.ticker,
+            "days_screened": 0,
+            "simulated_targets": 0,
+            "simulated_stops": 0,
+            "simulated_neither": 0,
+            "hit_rate_pct": 0.0,
+            "avg_range_pct": card.avg_range_pct,
+            "last_screened_date": None,
+            "live_pass_today": True,
+        }
+        row = _enrich_row(base, m, period_days=period_days)
         ranked.append(
             {
-                "ticker": card.ticker,
-                "days_screened": 0,
-                "simulated_targets": 0,
-                "simulated_stops": 0,
-                "simulated_neither": 0,
-                "hit_rate_pct": 0.0,
-                "avg_range_pct": card.avg_range_pct,
-                "last_screened_date": None,
-                "live_pass_today": True,
-                "score": round(
-                    _rank_score(
-                        live_pass=True,
-                        hit_rate_pct=0.0,
-                        days_screened=0,
-                        avg_range_pct=card.avg_range_pct,
-                    ),
-                    4,
-                ),
+                **row,
                 "entry_price": card.entry_price,
                 "target_price": card.target_price,
                 "stop_price": card.stop_price,
                 "suggested_size": card.suggested_size,
                 "thesis_summary": card.thesis_summary,
+                "liquidity_cap": card.liquidity_cap,
             }
         )
 
-    ranked.sort(key=lambda r: (-r["score"], -r["days_screened"], r["ticker"]))
+    ranked.sort(
+        key=lambda r: (-r["score"], -r["days_screened"], -r.get("adv_dollar", 0), r["ticker"])
+    )
     return {
         "period_days": period_days,
         "start_date": start,
@@ -287,6 +377,7 @@ def build_ranked_candidates(
         "ranked": ranked,
         "live_count": len(live),
         "period_unique": len(period["candidates"]),
+        "rank_weights": RANK_WEIGHTS,
     }
 
 

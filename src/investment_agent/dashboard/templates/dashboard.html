@@ -170,21 +170,37 @@
       </div>
       <div class="card">
         <div id="watchlist-stats" class="brief">Loading universe stats…</div>
-        <table style="margin-top:0.75rem;width:100%">
+        <div class="screener-filters">
+          <label>Ticker <input type="text" id="screener-filter-ticker" placeholder="Filter…" /></label>
+          <label>Min hit % <input type="number" id="screener-min-hit" min="0" max="100" step="1" placeholder="0" style="width:70px" /></label>
+          <label>Min days <input type="number" id="screener-min-days" min="0" max="30" step="1" placeholder="0" style="width:70px" /></label>
+          <label class="inline-check"><input type="checkbox" id="screener-live-only" /> Live pass only</label>
+          <label>Period
+            <select id="screener-period-days">
+              <option value="7">7d</option>
+              <option value="14" selected>14d</option>
+              <option value="30">30d</option>
+            </select>
+          </label>
+          <span id="screener-row-count" class="brief"></span>
+        </div>
+        <table class="sortable-table" style="margin-top:0.75rem;width:100%">
           <thead>
             <tr>
-              <th>Ticker</th>
-              <th>Days screened</th>
-              <th>Targets</th>
-              <th>Stops</th>
-              <th>Hit rate</th>
-              <th>Live?</th>
-              <th>Score</th>
+              <th data-sort="score" class="sortable sorted-desc">Rank score</th>
+              <th data-sort="ticker" class="sortable">Ticker</th>
+              <th data-sort="avg_range_pct" class="sortable">Avg range</th>
+              <th data-sort="adv_dollar_m" class="sortable">ADV ($M)</th>
+              <th data-sort="days_screened" class="sortable">Days</th>
+              <th data-sort="simulated_targets" class="sortable">Targets</th>
+              <th data-sort="simulated_stops" class="sortable">Stops</th>
+              <th data-sort="hit_rate_pct" class="sortable">Hit rate</th>
+              <th data-sort="live_pass_today" class="sortable">Live</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="period-screener-body">
-            <tr><td colspan="8" class="empty">Run period screener after pulling history.</td></tr>
+            <tr><td colspan="10" class="empty">Run period screener after pulling history.</td></tr>
           </tbody>
         </table>
       </div>
@@ -496,35 +512,97 @@
         + `Missing metrics: ${s.missing_metrics}`;
     }
 
-    async function loadPeriodScreener() {
-      const data = await api("/api/screener/period/latest");
+    let screenerRows = [];
+    let screenerSortKey = "score";
+    let screenerSortAsc = false;
+
+    function screenerNumeric(val) {
+      if (val === true) return 1;
+      if (val === false) return 0;
+      const n = Number(val);
+      return Number.isFinite(n) ? n : -Infinity;
+    }
+
+    function applyScreenerFilters(rows) {
+      const q = (document.getElementById("screener-filter-ticker").value || "").trim().toUpperCase();
+      const minHit = document.getElementById("screener-min-hit").value;
+      const minDays = document.getElementById("screener-min-days").value;
+      const liveOnly = document.getElementById("screener-live-only").checked;
+      return rows.filter((r) => {
+        if (q && !r.ticker.includes(q)) return false;
+        if (minHit !== "" && (r.hit_rate_pct ?? 0) < Number(minHit)) return false;
+        if (minDays !== "" && (r.days_screened ?? 0) < Number(minDays)) return false;
+        if (liveOnly && !r.live_pass_today) return false;
+        return true;
+      });
+    }
+
+    function sortScreenerRows(rows) {
+      const key = screenerSortKey;
+      const asc = screenerSortAsc;
+      return [...rows].sort((a, b) => {
+        const av = key === "ticker" ? a.ticker : screenerNumeric(a[key]);
+        const bv = key === "ticker" ? b.ticker : screenerNumeric(b[key]);
+        if (key === "ticker") {
+          return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+        if (av === bv) return a.ticker.localeCompare(b.ticker);
+        return asc ? av - bv : bv - av;
+      });
+    }
+
+    function renderScreenerTable() {
       const body = document.getElementById("period-screener-body");
-      const rows = data.candidates || [];
-      if (!rows.length) {
-        body.innerHTML = "<tr><td colspan='8' class='empty'>No saved period screener run — click Run 14d screener.</td></tr>";
+      const filtered = sortScreenerRows(applyScreenerFilters(screenerRows));
+      document.getElementById("screener-row-count").textContent =
+        `${filtered.length} of ${screenerRows.length} shown · sorted by ${screenerSortKey} (${screenerSortAsc ? "asc" : "desc"})`;
+
+      if (!filtered.length) {
+        body.innerHTML = `<tr><td colspan="10" class="empty">${screenerRows.length ? "No rows match filters." : "Run period screener after pulling history."}</td></tr>`;
         return;
       }
-      body.innerHTML = rows.map((r) => `
+
+      body.innerHTML = filtered.map((r) => `
         <tr>
+          <td><strong>${r.score != null ? Number(r.score).toFixed(3) : "—"}</strong></td>
           <td>${r.ticker}</td>
+          <td>${r.avg_range_pct != null ? r.avg_range_pct + "%" : "—"}</td>
+          <td>${r.adv_dollar_m != null ? r.adv_dollar_m : "—"}</td>
           <td>${r.days_screened ?? "—"}</td>
           <td>${r.simulated_targets ?? "—"}</td>
           <td>${r.simulated_stops ?? "—"}</td>
           <td>${r.hit_rate_pct != null ? r.hit_rate_pct + "%" : "—"}</td>
           <td>${r.live_pass_today ? "Yes" : "—"}</td>
-          <td>${r.score != null ? Number(r.score).toFixed(2) : "—"}</td>
           <td><button class="btn btn-sm secondary promote-btn" data-ticker="${r.ticker}">Add to queue</button></td>
         </tr>
       `).join("");
+
       body.querySelectorAll(".promote-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
           try {
-            const r = await api(`/api/screener/promote/${btn.dataset.ticker}`, { method: "POST" });
-            toast(r.message || "Promoted");
+            const res = await api(`/api/screener/promote/${btn.dataset.ticker}`, { method: "POST" });
+            toast(res.message || "Promoted");
             await loadQueue();
           } catch (e) { toast(e.message); }
         });
       });
+    }
+
+    function updateScreenerSortHeaders() {
+      document.querySelectorAll(".sortable-table th.sortable").forEach((th) => {
+        th.classList.remove("sorted-asc", "sorted-desc");
+        if (th.dataset.sort === screenerSortKey) {
+          th.classList.add(screenerSortAsc ? "sorted-asc" : "sorted-desc");
+        }
+      });
+    }
+
+    async function loadPeriodScreener() {
+      const days = document.getElementById("screener-period-days").value || "14";
+      const data = await api(`/api/screener/ranked?period_days=${days}`);
+      screenerRows = data.ranked || [];
+      renderScreenerTable();
+      updateScreenerSortHeaders();
     }
 
     async function loadRankedAndStats() {
@@ -680,10 +758,11 @@
     });
     document.getElementById("run-period-screener").addEventListener("click", async () => {
       try {
-        toast("Running 14-day period screener…");
+        const days = Number(document.getElementById("screener-period-days").value || 14);
+        toast(`Running ${days}-day period screener…`);
         const r = await api("/api/screener/period", {
           method: "POST",
-          body: JSON.stringify({ period_days: 14, min_days_screened: 1, save: true }),
+          body: JSON.stringify({ period_days: days, min_days_screened: 1, save: true }),
         });
         toast(`Screener done: ${r.candidates?.length || 0} candidate(s)`);
         await loadPeriodScreener();
@@ -691,6 +770,27 @@
       } catch (e) { toast(e.message); }
     });
     document.getElementById("refresh-ranked").addEventListener("click", () => loadRankedAndStats().catch((e) => toast(e.message)));
+
+    ["screener-filter-ticker", "screener-min-hit", "screener-min-days"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", () => renderScreenerTable());
+    });
+    document.getElementById("screener-live-only").addEventListener("change", () => renderScreenerTable());
+    document.getElementById("screener-period-days").addEventListener("change", () => {
+      loadPeriodScreener().catch((e) => toast(e.message));
+    });
+    document.querySelectorAll(".sortable-table th.sortable").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        if (screenerSortKey === key) {
+          screenerSortAsc = !screenerSortAsc;
+        } else {
+          screenerSortKey = key;
+          screenerSortAsc = key === "ticker";
+        }
+        updateScreenerSortHeaders();
+        renderScreenerTable();
+      });
+    });
 
     document.getElementById("pull-historical").addEventListener("click", async () => {
       try {
