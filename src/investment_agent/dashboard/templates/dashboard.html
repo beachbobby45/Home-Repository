@@ -42,6 +42,31 @@
     </div>
 
     <section>
+      <h2>$5M Scenario Visualizer</h2>
+      <p class="brief" style="margin:0 0 0.75rem">Journal-fed actual path + projections toward $5,000,000.</p>
+      <div class="card" id="scenario-panel">
+        <div id="scenario-summary" class="brief">Loading…</div>
+        <div class="scenario-stats grid grid-4" id="scenario-stats"></div>
+        <div class="scenario-chart-wrap">
+          <svg id="scenario-chart" viewBox="0 0 800 220" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div class="scenario-legend" id="scenario-legend"></div>
+        <table style="margin-top:1rem;width:100%">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Tradable</th>
+              <th>Goal %</th>
+              <th>Month P&amp;L</th>
+              <th>Sweep</th>
+            </tr>
+          </thead>
+          <tbody id="scenario-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
       <h2>CIO Summary</h2>
       <div class="card cio-panel" id="cio-panel">
         <div class="cio-headline" id="cio-headline">Loading…</div>
@@ -373,8 +398,70 @@
       }).join("");
     }
 
+    async function loadScenario() {
+      const s = await api("/api/scenario/visualizer?projection_months=120");
+      document.getElementById("scenario-summary").textContent = s.summary || "";
+      const stats = document.getElementById("scenario-stats");
+      stats.innerHTML = `
+        <div class="card"><h2>Current</h2><div class="metric small">$${fmt(s.current_balance)}</div></div>
+        <div class="card"><h2>Goal %</h2><div class="metric small">${fmtPct(s.current_goal_pct)}</div></div>
+        <div class="card"><h2>Journal pace</h2><div class="metric small">${s.scenarios?.journal_pace?.months_to_goal != null ? s.scenarios.journal_pace.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
+        <div class="card"><h2>10yr required</h2><div class="metric small">${s.scenarios?.required_10yr?.monthly_return_pct?.toFixed(2) || "—"}%/mo</div></div>
+      `;
+      renderScenarioChart(s);
+      const tbody = document.getElementById("scenario-table");
+      tbody.innerHTML = (s.actual_timeline || []).map((p) => `
+        <tr>
+          <td>${p.label || p.month_key}</td>
+          <td>$${fmt(p.tradable_balance)}</td>
+          <td>${fmtPct(p.goal_pct)}</td>
+          <td>${p.monthly_realized_net ? ((p.monthly_realized_net >= 0 ? "+" : "") + "$" + fmt(p.monthly_realized_net)) : "—"}</td>
+          <td>${p.sweep_total ? "$" + fmt(p.sweep_total) : "—"}</td>
+        </tr>
+      `).join("");
+      const leg = document.getElementById("scenario-legend");
+      leg.innerHTML = `
+        <span class="legend-item"><span class="swatch actual"></span> Actual (journal)</span>
+        <span class="legend-item"><span class="swatch pace"></span> Journal pace</span>
+        <span class="legend-item"><span class="swatch strategy"></span> Strategy reference</span>
+      `;
+    }
+
+    function renderScenarioChart(s) {
+      const svg = document.getElementById("scenario-chart");
+      const W = 800, H = 220, pad = { l: 55, r: 20, t: 20, b: 35 };
+      const actual = s.actual_timeline || [];
+      const pace = s.scenarios?.journal_pace?.points || [];
+      const allY = [
+        ...actual.map((p) => p.tradable_balance),
+        ...pace.map((p) => p.balance),
+        s.goal,
+      ].filter((v) => v != null && v > 0);
+      const minY = Math.min(...allY, s.original_basis) * 0.95;
+      const maxY = Math.max(...allY) * 1.05;
+      const xScale = (i, n) => pad.l + (i / Math.max(n - 1, 1)) * (W - pad.l - pad.r);
+      const yScale = (v) => pad.t + (1 - (v - minY) / (maxY - minY)) * (H - pad.t - pad.b);
+      const line = (pts, key) => {
+        if (!pts.length) return "";
+        return pts.map((p, i) => {
+          const x = xScale(i, pts.length);
+          const y = yScale(p.tradable_balance ?? p.balance);
+          return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(" ");
+      };
+      const goalY = yScale(s.goal);
+      svg.innerHTML = `
+        <line x1="${pad.l}" y1="${goalY}" x2="${W - pad.r}" y2="${goalY}" stroke="#6366f1" stroke-dasharray="4 4" opacity="0.5"/>
+        <text x="${W - pad.r}" y="${goalY - 4}" fill="#8b9cb3" font-size="10" text-anchor="end">$5M goal</text>
+        <path d="${line(actual.map((p) => ({ balance: p.tradable_balance })), "balance")}" fill="none" stroke="#22c55e" stroke-width="2.5"/>
+        <path d="${line(pace, "balance")}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6 4" opacity="0.85"/>
+        <text x="${pad.l}" y="${H - 8}" fill="#8b9cb3" font-size="10">Months →</text>
+        <text x="8" y="${pad.t + 10}" fill="#8b9cb3" font-size="10" transform="rotate(-90 8,${pad.t + 10})">Balance</text>
+      `;
+    }
+
     async function refreshAll() {
-      await Promise.all([loadSummary(), loadCio(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
+      await Promise.all([loadSummary(), loadScenario(), loadCio(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
     }
 
     document.getElementById("generate-learning").addEventListener("click", async () => {

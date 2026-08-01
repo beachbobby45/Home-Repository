@@ -355,6 +355,49 @@ textarea {
   border-color: rgba(59, 130, 246, 0.35);
 }
 
+.scenario-chart-wrap {
+  margin-top: 1rem;
+  background: var(--bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+}
+
+#scenario-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.scenario-legend {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 0.65rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.swatch.actual { background: #22c55e; }
+.swatch.pace { background: #3b82f6; }
+.swatch.strategy { background: #f59e0b; }
+
+.scenario-stats .metric {
+  font-size: 1rem;
+}
+
 @media (max-width: 640px) {
   main {
     padding: 1rem;

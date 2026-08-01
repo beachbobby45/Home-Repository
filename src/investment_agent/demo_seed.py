@@ -184,7 +184,50 @@ def seed_demo_db(db_path: Path | None = None) -> Path:
             )
             queue_ids[ticker] = int(cur.lastrowid)
 
-        # Journal — AAPL round trip (profit), NVDA open buy
+        # Journal — multi-month history for scenario visualizer + current month
+        # June 2026: strong MSFT round trip
+        insert_trade(
+            conn,
+            ticker="MSFT",
+            side="BUY",
+            shares=10,
+            price=400.0,
+            fee=7.0,
+            executed_at="2026-06-15T14:00:00+00:00",
+            notes="Demo Jun buy",
+        )
+        insert_trade(
+            conn,
+            ticker="MSFT",
+            side="SELL",
+            shares=10,
+            price=404.52,
+            fee=7.0,
+            executed_at="2026-06-15T15:00:00+00:00",
+            notes="Demo Jun sell at +1.13%",
+        )
+        # July 2026: smaller AMD round trip
+        insert_trade(
+            conn,
+            ticker="AMD",
+            side="BUY",
+            shares=20,
+            price=150.0,
+            fee=7.0,
+            executed_at="2026-07-20T14:00:00+00:00",
+            notes="Demo Jul buy",
+        )
+        insert_trade(
+            conn,
+            ticker="AMD",
+            side="SELL",
+            shares=20,
+            price=151.70,
+            fee=7.0,
+            executed_at="2026-07-20T15:00:00+00:00",
+            notes="Demo Jul sell",
+        )
+        # August 2026: AAPL round trip + NVDA open
         insert_trade(
             conn,
             ticker="AAPL",
@@ -234,13 +277,28 @@ def expected_demo_summary() -> dict:
     aapl_pnl = (101.13 - 100.0) * 10 - 14.0
     # Cash: 10000 - 1007 (AAPL buy) + 1004.3 (AAPL sell) - 5007 (NVDA buy) = 4990.3
     nvda_cost = 50 * 100 + 7
-    cash = ORIGINAL_BASIS - (10 * 100 + 7) + (10 * 101.13 - 7) - nvda_cost
+    msft_jun = (10 * 400 + 7) - (10 * 404.52 - 7)
+    amd_jul = (20 * 150 + 7) - (20 * 151.70 - 7)
+    cash = (
+        ORIGINAL_BASIS
+        - msft_jun
+        - amd_jul
+        - (10 * 100 + 7)
+        + (10 * 101.13 - 7)
+        - nvda_cost
+    )
+    # After Jun+Jul round trips (before Aug): MSFT net ~31.2, AMD net ~20.0
+    jun_net = (404.52 - 400.0) * 10 - 14.0
+    jul_net = (151.70 - 150.0) * 20 - 14.0
     return {
         "month_key": MONTH_KEY,
         "monthly_realized_net": aapl_pnl,
         "tradable_cash": cash,
         "queue_count": 5,
-        "journal_count": 3,
+        "journal_count": 7,
         "regime_ok": True,
         "vix": 18.25,
+        "timeline_months": 4,  # start + Jun + Jul + Aug
+        "jun_realized_net": jun_net,
+        "jul_realized_net": jul_net,
     }

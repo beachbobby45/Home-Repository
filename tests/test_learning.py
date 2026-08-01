@@ -25,8 +25,8 @@ def test_fifo_open_and_round_trips_on_demo():
         trips = get_completed_round_trips(conn)
         assert len(open_pos) == 1
         assert open_pos[0]["ticker"] == "NVDA"
-        assert len(trips) == 1
-        assert trips[0]["ticker"] == "AAPL"
+        assert len(trips) == 3
+        assert trips[0]["ticker"] in ("AAPL", "AMD", "MSFT")
         assert trips[0]["same_day"] is True
         conn.close()
 

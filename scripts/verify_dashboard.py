@@ -172,6 +172,22 @@ def verify(db_path: Path) -> dict:
             gen = r.json()
             record("POST /api/learning/generate", r.status_code == 200 and gen.get("ok"), "")
 
+            # Phase 6 — Scenario visualizer
+            r = client.get("/api/scenario/visualizer")
+            scenario = r.json()
+            record("GET /api/scenario/visualizer", r.status_code == 200, "")
+            record(
+                "scenario.timeline",
+                len(scenario.get("actual_timeline", [])) >= 3,
+                f"points={len(scenario.get('actual_timeline', []))}",
+            )
+            record(
+                "scenario.journal_pace",
+                scenario.get("scenarios", {}).get("journal_pace", {}).get("months_to_goal") is not None,
+                str(scenario.get("scenarios", {}).get("journal_pace", {})),
+            )
+            record("scenario.summary", bool(scenario.get("summary")), "")
+
             # Static assets
             r = client.get("/static/style.css")
             record("GET /static/style.css", r.status_code == 200, "")

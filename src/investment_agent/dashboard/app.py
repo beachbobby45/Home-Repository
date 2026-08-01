@@ -1,4 +1,4 @@
-"""FastAPI dashboard — Phase 3–5 (queue, journal, goal, sweeps, monitor, learning, CIO)."""
+"""FastAPI dashboard — Phase 3–6 (queue, journal, goal, sweeps, monitor, learning, CIO, scenario)."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from investment_agent.learning import (
 )
 from investment_agent.db import connect, init_db
 from investment_agent.journal import insert_trade, list_trades, trade_to_dict
+from investment_agent.scenario import build_scenario_visualizer
 from investment_agent.monitor import (
     acknowledge_alert,
     enrich_queue_item,
@@ -47,7 +48,7 @@ from investment_agent.stock_team import (
 DASHBOARD_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
-app = FastAPI(title="AI Investment Agent Dashboard", version="0.5.0")
+app = FastAPI(title="AI Investment Agent Dashboard", version="0.6.0")
 app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR / "static")), name="static")
 
 
@@ -97,6 +98,14 @@ def dashboard_page(request: Request) -> HTMLResponse:
         "dashboard.html",
         {"request": request},
     )
+
+
+@app.get("/api/scenario/visualizer")
+def api_scenario_visualizer(
+    conn=Depends(_db),
+    projection_months: int = 120,
+) -> dict[str, Any]:
+    return build_scenario_visualizer(conn, projection_horizon=projection_months)
 
 
 @app.get("/api/cio/summary")

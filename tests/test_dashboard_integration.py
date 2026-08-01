@@ -56,7 +56,7 @@ def test_full_dashboard_flow_with_demo_data():
             home = client.get("/")
             assert home.status_code == 200
             for section_id in (
-                "regime-banner", "cio-headline", "cio-panel", "learning-panel",
+                "regime-banner", "scenario-panel", "cio-headline", "learning-panel",
             ):
                 assert section_id in home.text or section_id.replace("-", "_") in home.text
 
@@ -79,6 +79,13 @@ def test_full_dashboard_flow_with_demo_data():
             # Journal
             journal = client.get("/api/journal").json()
             assert len(journal) == expected["journal_count"]
+
+            # Phase 6 — Scenario visualizer
+            scenario = client.get("/api/scenario/visualizer").json()
+            assert scenario["goal"] == 5_000_000
+            assert len(scenario["actual_timeline"]) >= 3
+            assert scenario["scenarios"]["journal_pace"]["months_to_goal"] is not None
+            assert "scenario-panel" in home.text or "Scenario Visualizer" in home.text
 
             # Candidates from metrics
             candidates = client.get("/api/candidates").json()

@@ -52,6 +52,9 @@ PYTHONPATH=src python3 scripts/run_monitor.py
 
 # Learning + CIO summary (Phase 5, no Claude)
 PYTHONPATH=src python3 scripts/run_learning.py
+
+# $5M scenario visualizer — journal-fed chart + projections (Phase 6)
+PYTHONPATH=src python3 scripts/verify_dashboard.py --seed   # 34 checks incl. scenario
 ```
 
 ## v3 highlights
