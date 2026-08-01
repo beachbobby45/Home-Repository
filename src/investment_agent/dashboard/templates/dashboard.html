@@ -42,6 +42,16 @@
     </div>
 
     <section>
+      <h2>CIO Summary</h2>
+      <div class="card cio-panel" id="cio-panel">
+        <div class="cio-headline" id="cio-headline">Loading…</div>
+        <p class="brief" id="cio-narrative"></p>
+        <ul id="cio-actions" class="cio-actions"></ul>
+        <div class="grid grid-4" style="margin-top:0.75rem" id="cio-subagents"></div>
+      </div>
+    </section>
+
+    <section>
       <h2>Market Brief</h2>
       <div class="card brief" id="market-brief">Loading…</div>
     </section>
@@ -114,6 +124,17 @@
             <tr><td colspan="10" class="empty">Loading queue…</td></tr>
           </tbody>
         </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Learning Report</h2>
+      <div class="actions">
+        <button class="btn" id="generate-learning">Generate report</button>
+      </div>
+      <div class="card" id="learning-panel">
+        <div id="learning-highlights" class="brief">Loading…</div>
+        <div class="learning-grid" id="learning-details"></div>
       </div>
     </section>
 
@@ -318,9 +339,52 @@
       `).join("");
     }
 
-    async function refreshAll() {
-      await Promise.all([loadSummary(), loadAlerts(), loadQueue(), loadJournal()]);
+    async function loadCio() {
+      const cio = await api("/api/cio/summary");
+      document.getElementById("cio-headline").textContent = cio.headline || "—";
+      document.getElementById("cio-narrative").textContent = cio.narrative || "";
+      const actions = document.getElementById("cio-actions");
+      actions.innerHTML = (cio.action_items || []).map((a) => `<li>${a}</li>`).join("") || "<li>No urgent actions</li>";
+      const subs = document.getElementById("cio-subagents");
+      const sa = cio.sub_agents || {};
+      subs.innerHTML = Object.entries(sa).map(([k, v]) => `
+        <div class="card" style="padding:0.65rem">
+          <h2 style="margin-bottom:0.35rem">${k.replace("_", " ")}</h2>
+          <div class="brief" style="font-size:0.82rem">${v}</div>
+        </div>
+      `).join("");
     }
+
+    async function loadLearning() {
+      const r = await api("/api/learning/report");
+      const hl = document.getElementById("learning-highlights");
+      hl.innerHTML = (r.highlights || []).length
+        ? `<ul>${r.highlights.map((h) => `<li>${h}</li>`).join("")}</ul>`
+        : "<span class='empty'>No highlights yet — log trades and run ingest.</span>";
+      const details = document.getElementById("learning-details");
+      const sections = [
+        ["Active positions", r.active_positions, (p) => `${p.ticker}: ${p.note}`],
+        ["Round trips", r.round_trips, (p) => `${p.ticker}: ${p.note}`],
+        ["Watchlist", r.watchlist_insights, (p) => `${p.ticker}: ${p.note}`],
+      ];
+      details.innerHTML = sections.map(([title, rows, fmt]) => {
+        if (!rows || !rows.length) return `<div class="learning-block"><h3>${title}</h3><p class="empty">None</p></div>`;
+        return `<div class="learning-block"><h3>${title}</h3><ul>${rows.map((x) => `<li>${fmt(x)}</li>`).join("")}</ul></div>`;
+      }).join("");
+    }
+
+    async function refreshAll() {
+      await Promise.all([loadSummary(), loadCio(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
+    }
+
+    document.getElementById("generate-learning").addEventListener("click", async () => {
+      try {
+        await api("/api/learning/generate", { method: "POST" });
+        toast("Learning report saved");
+        await loadLearning();
+        await loadCio();
+      } catch (e) { toast(e.message); }
+    });
 
     document.getElementById("run-monitor").addEventListener("click", async () => {
       try {

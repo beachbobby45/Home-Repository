@@ -155,6 +155,23 @@ def verify(db_path: Path) -> dict:
             )
             record("POST /api/journal", r.status_code == 200 and r.json().get("ok"), "")
 
+            # Phase 5 — CIO + Learning
+            r = client.get("/api/cio/summary")
+            cio = r.json()
+            record("GET /api/cio/summary", r.status_code == 200 and bool(cio.get("headline")), "")
+            record("cio.action_items", len(cio.get("action_items", [])) >= 1, "")
+            record("cio.sub_agents", len(cio.get("sub_agents", {})) >= 4, "")
+
+            r = client.get("/api/learning/report")
+            learning = r.json()
+            record("GET /api/learning/report", r.status_code == 200, "")
+            record("learning.active_positions", len(learning.get("active_positions", [])) >= 1, "")
+            record("learning.round_trips", len(learning.get("round_trips", [])) >= 1, "")
+
+            r = client.post("/api/learning/generate")
+            gen = r.json()
+            record("POST /api/learning/generate", r.status_code == 200 and gen.get("ok"), "")
+
             # Static assets
             r = client.get("/static/style.css")
             record("GET /static/style.css", r.status_code == 200, "")

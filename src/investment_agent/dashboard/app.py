@@ -1,4 +1,4 @@
-"""FastAPI dashboard — Phase 3–4 (queue, journal, goal, sweeps, monitor)."""
+"""FastAPI dashboard — Phase 3–5 (queue, journal, goal, sweeps, monitor, learning, CIO)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,14 @@ from investment_agent.account import (
     set_setting,
     summary_to_dict,
 )
+from investment_agent.cio import build_cio_summary
 from investment_agent.config import Settings
+from investment_agent.learning import (
+    generate_learning_report,
+    get_learning_report,
+    get_or_generate_learning_report,
+    save_learning_report,
+)
 from investment_agent.db import connect, init_db
 from investment_agent.journal import insert_trade, list_trades, trade_to_dict
 from investment_agent.monitor import (
@@ -40,7 +47,7 @@ from investment_agent.stock_team import (
 DASHBOARD_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
-app = FastAPI(title="AI Investment Agent Dashboard", version="0.4.0")
+app = FastAPI(title="AI Investment Agent Dashboard", version="0.5.0")
 app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR / "static")), name="static")
 
 
@@ -90,6 +97,28 @@ def dashboard_page(request: Request) -> HTMLResponse:
         "dashboard.html",
         {"request": request},
     )
+
+
+@app.get("/api/cio/summary")
+def api_cio_summary(conn=Depends(_db)) -> dict[str, Any]:
+    return build_cio_summary(conn)
+
+
+@app.get("/api/learning/report")
+def api_learning_report(conn=Depends(_db)) -> dict[str, Any]:
+    report = get_or_generate_learning_report(conn)
+    return report
+
+
+@app.post("/api/learning/generate")
+def api_learning_generate(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    report = generate_learning_report(conn)
+    report_id = save_learning_report(conn, report)
+    conn.commit()
+    return {"ok": True, "id": report_id, "report": report}
 
 
 @app.get("/api/summary")

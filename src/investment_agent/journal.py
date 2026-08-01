@@ -175,3 +175,101 @@ def trade_to_dict(entry: JournalEntry) -> dict:
         "notes": entry.notes,
         "queue_id": entry.queue_id,
     }
+
+
+def _fifo_ledger(conn: sqlite3.Connection) -> tuple[list[dict], list[dict]]:
+    """Return (open_lots, completed_round_trips) via FIFO matching."""
+    rows = conn.execute(
+        """
+        SELECT id, ticker, side, shares, price, fee, executed_at, queue_id
+        FROM trade_journal
+        ORDER BY executed_at ASC, id ASC
+        """
+    ).fetchall()
+
+    open_lots: dict[str, deque] = {}
+    completed: list[dict] = []
+
+    for row in rows:
+        ticker = row["ticker"]
+        if row["side"] == "BUY":
+            open_lots.setdefault(ticker, deque()).append(
+                {
+                    "buy_id": row["id"],
+                    "shares": float(row["shares"]),
+                    "price": float(row["price"]),
+                    "fee": float(row["fee"]),
+                    "executed_at": row["executed_at"],
+                    "queue_id": row["queue_id"],
+                }
+            )
+            continue
+
+        remaining = float(row["shares"])
+        sell_price = float(row["price"])
+        sell_shares = float(row["shares"])
+        sell_fee_total = float(row["fee"])
+        sell_at = row["executed_at"]
+        sell_id = row["id"]
+        sell_queue_id = row["queue_id"]
+        queue = open_lots.setdefault(ticker, deque())
+
+        while remaining > 1e-9 and queue:
+            buy = queue[0]
+            matched = min(remaining, buy["shares"])
+            buy_fee = buy["fee"] * (matched / buy["shares"])
+            sell_fee = sell_fee_total * (matched / sell_shares)
+            gross = (sell_price - buy["price"]) * matched
+            net = gross - buy_fee - sell_fee
+            completed.append(
+                {
+                    "ticker": ticker,
+                    "shares": matched,
+                    "buy_price": buy["price"],
+                    "sell_price": sell_price,
+                    "buy_at": buy["executed_at"],
+                    "sell_at": sell_at,
+                    "buy_id": buy["buy_id"],
+                    "sell_id": sell_id,
+                    "queue_id": buy["queue_id"] or sell_queue_id,
+                    "gross_pnl": gross,
+                    "net_pnl": net,
+                    "buy_fee": buy_fee,
+                    "sell_fee": sell_fee,
+                    "same_day": buy["executed_at"][:10] == sell_at[:10],
+                }
+            )
+            remaining -= matched
+            buy["shares"] -= matched
+            buy["fee"] -= buy_fee
+            if buy["shares"] <= 1e-9:
+                queue.popleft()
+
+    open_positions: list[dict] = []
+    for ticker, lots in open_lots.items():
+        for lot in lots:
+            if lot["shares"] <= 1e-9:
+                continue
+            open_positions.append(
+                {
+                    "ticker": ticker,
+                    "shares": lot["shares"],
+                    "avg_cost": lot["price"],
+                    "cost_basis": lot["shares"] * lot["price"] + lot["fee"],
+                    "buy_at": lot["executed_at"],
+                    "buy_id": lot["buy_id"],
+                    "queue_id": lot["queue_id"],
+                }
+            )
+    return open_positions, completed
+
+
+def get_open_positions(conn: sqlite3.Connection) -> list[dict]:
+    open_positions, _ = _fifo_ledger(conn)
+    return open_positions
+
+
+def get_completed_round_trips(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
+    _, completed = _fifo_ledger(conn)
+    completed.sort(key=lambda r: r["sell_at"], reverse=True)
+    return completed[:limit]

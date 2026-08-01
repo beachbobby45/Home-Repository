@@ -49,6 +49,9 @@ PYTHONPATH=src python3 scripts/verify_dashboard.py --seed
 
 # Intraday monitor (uses quotes in DB; add --refresh-quotes for live Finnhub)
 PYTHONPATH=src python3 scripts/run_monitor.py
+
+# Learning + CIO summary (Phase 5, no Claude)
+PYTHONPATH=src python3 scripts/run_learning.py
 ```
 
 ## v3 highlights
@@ -67,4 +70,5 @@ PYTHONPATH=src python3 scripts/run_monitor.py
 | 1 — Data pipeline | **Done** (ingest + regime gate) |
 | 2–3 — Screener + dashboard | **Done** (queue, journal, goal, sweeps) |
 | 4 — Intraday monitor | **Done** (target/stop/EOD alerts) |
-| 5 — Learning + CIO | Not started |
+| 5 — Learning + CIO | **Done** (daily report, rule-based CIO panel) |
+| 6 — $5M scenario visualizer | Not started |

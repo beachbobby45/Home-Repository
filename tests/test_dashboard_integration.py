@@ -55,7 +55,9 @@ def test_full_dashboard_flow_with_demo_data():
             # Page loads
             home = client.get("/")
             assert home.status_code == 200
-            for section_id in ("regime-banner", "goal-pct", "alerts-body", "queue-body", "journal-body"):
+            for section_id in (
+                "regime-banner", "cio-headline", "cio-panel", "learning-panel",
+            ):
                 assert section_id in home.text or section_id.replace("-", "_") in home.text
 
             # Summary
@@ -122,6 +124,20 @@ def test_full_dashboard_flow_with_demo_data():
 
             # Static
             assert client.get("/static/style.css").status_code == 200
+
+            # Phase 5 — CIO + Learning
+            cio = client.get("/api/cio/summary").json()
+            assert cio["headline"]
+            assert len(cio["action_items"]) >= 1
+            assert cio["sub_agents"]["regime"].startswith("Regime OK")
+
+            learning = client.get("/api/learning/report").json()
+            assert learning["active_positions"]
+            assert learning["round_trips"]
+
+            gen = client.post("/api/learning/generate").json()
+            assert gen["ok"] is True
+            assert gen["report"]["highlights"]
 
 
 def test_verify_dashboard_script_matches_integration():

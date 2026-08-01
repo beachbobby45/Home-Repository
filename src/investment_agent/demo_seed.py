@@ -52,6 +52,7 @@ def seed_demo_db(db_path: Path | None = None) -> Path:
 
         # Clear mutable demo tables for idempotent re-seed
         for table in (
+            "learning_reports",
             "price_alerts",
             "trade_journal",
             "queue_items",

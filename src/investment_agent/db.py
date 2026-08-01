@@ -168,6 +168,13 @@ CREATE TABLE IF NOT EXISTS price_alerts (
 
 CREATE INDEX IF NOT EXISTS idx_price_alerts_active
   ON price_alerts(acknowledged, alert_date, ticker);
+
+CREATE TABLE IF NOT EXISTS learning_reports (
+  id INTEGER PRIMARY KEY,
+  report_date TEXT NOT NULL UNIQUE,
+  generated_at TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+);
 """
 
 
