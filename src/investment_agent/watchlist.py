@@ -12,7 +12,7 @@ from investment_agent.ingest import DEFAULT_TICKERS
 from investment_agent.strategy import REGIME_ONLY_TICKERS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-UNIVERSE_DIR = REPO_ROOT / "data" / "universe"
+UNIVERSE_DIR = REPO_ROOT / "universe"
 
 PRESETS: dict[str, str] = {
     "starter10": "Starter 10 (default ingest list)",
