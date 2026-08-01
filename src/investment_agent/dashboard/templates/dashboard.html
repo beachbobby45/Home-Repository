@@ -10,6 +10,14 @@
   <header>
     <h1>AI Investment Agent</h1>
     <p class="subtitle">Intraday alerts · E*TRADE manual · $5M goal · Option A (no Claude)</p>
+    {% if api_key_required %}
+    <div class="api-key-bar" id="api-key-bar">
+      <label for="app-api-key">API key (for log trade, monitor, sync, etc.)</label>
+      <input type="password" id="app-api-key" placeholder="Paste APP_API_KEY from your .env" autocomplete="off" />
+      <button class="btn secondary btn-sm" type="button" id="save-api-key">Save</button>
+      <span class="brief" id="api-key-status"></span>
+    </div>
+    {% endif %}
   </header>
 
   <main>
@@ -263,14 +271,53 @@
       setTimeout(() => el.classList.remove("show"), 3200);
     }
 
+    const API_KEY_STORAGE = "investment_agent_api_key";
+
+    function getApiKey() {
+      return sessionStorage.getItem(API_KEY_STORAGE) || "";
+    }
+
+    function apiHeaders(extra = {}) {
+      const headers = { "Content-Type": "application/json", ...extra };
+      const key = getApiKey();
+      if (key) headers["X-API-Key"] = key;
+      return headers;
+    }
+
     async function api(path, opts = {}) {
       const res = await fetch(path, {
-        headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
         ...opts,
+        headers: apiHeaders(opts.headers || {}),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || data.error || res.statusText);
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error("Invalid or missing API key — enter APP_API_KEY in the header bar above.");
+        }
+        throw new Error(data.detail || data.error || res.statusText);
+      }
       return data;
+    }
+
+    function initApiKeyBar() {
+      const input = document.getElementById("app-api-key");
+      if (!input) return;
+      const saved = getApiKey();
+      if (saved) {
+        input.value = saved;
+        document.getElementById("api-key-status").textContent = "Key saved for this session.";
+      }
+      document.getElementById("save-api-key").addEventListener("click", () => {
+        const key = input.value.trim();
+        if (!key) {
+          sessionStorage.removeItem(API_KEY_STORAGE);
+          document.getElementById("api-key-status").textContent = "Key cleared.";
+          return;
+        }
+        sessionStorage.setItem(API_KEY_STORAGE, key);
+        document.getElementById("api-key-status").textContent = "Key saved — retry your action.";
+        toast("API key saved for this browser session");
+      });
     }
 
     async function loadSummary() {
@@ -620,6 +667,7 @@
       } catch (err) { toast(err.message); }
     });
 
+    initApiKeyBar();
     refreshAll().catch((e) => toast(e.message));
   </script>
 </body>

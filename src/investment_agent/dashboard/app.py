@@ -99,12 +99,26 @@ def _require_api_key(
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
 
+@app.get("/api/config")
+def api_config() -> dict[str, bool]:
+    settings = Settings.from_env()
+    key = settings.app_api_key.strip()
+    return {
+        "api_key_required": bool(key and key != "change-me-to-a-random-secret"),
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard_page(request: Request) -> HTMLResponse:
+    settings = Settings.from_env()
+    key = settings.app_api_key.strip()
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"request": request},
+        {
+            "request": request,
+            "api_key_required": bool(key and key != "change-me-to-a-random-secret"),
+        },
     )
 
 

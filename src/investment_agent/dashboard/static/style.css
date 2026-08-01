@@ -46,6 +46,33 @@ header .subtitle {
   font-size: 0.875rem;
 }
 
+.api-key-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+}
+
+.api-key-bar label {
+  color: var(--muted);
+}
+
+.api-key-bar input {
+  flex: 1 1 220px;
+  min-width: 180px;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
 main {
   max-width: 1200px;
   margin: 0 auto;
