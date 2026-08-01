@@ -222,26 +222,42 @@ def pull_historical_data(
     tickers: list[str] | None = None,
     db_path=None,
     lookback_days: int = 60,
+    use_active_watchlist: bool = True,
 ) -> dict:
     """Fetch limited daily OHLCV history into ohlcv_daily (yfinance, free tier)."""
-    from investment_agent.ingest import DEFAULT_TICKERS
-
     path = init_db(db_path)
-    symbols = [t.upper() for t in (tickers or DEFAULT_TICKERS)]
     summary: dict = {
         "db_path": str(path),
         "lookback_days": lookback_days,
-        "tickers": symbols,
         "bars_inserted": 0,
         "errors": [],
+        "tickers_processed": 0,
     }
 
     with sqlite3.connect(path) as raw:
         conn = raw
         conn.row_factory = sqlite3.Row
-        upsert_watchlist(conn, symbols)
+
+        if tickers is not None:
+            symbols = [t.upper() for t in tickers]
+            upsert_watchlist(conn, symbols)
+        elif use_active_watchlist:
+            symbols = get_active_watchlist(conn)
+            if not symbols:
+                from investment_agent.ingest import DEFAULT_TICKERS
+
+                symbols = [t.upper() for t in DEFAULT_TICKERS]
+                upsert_watchlist(conn, symbols)
+        else:
+            from investment_agent.ingest import DEFAULT_TICKERS
+
+            symbols = [t.upper() for t in DEFAULT_TICKERS]
+            upsert_watchlist(conn, symbols)
+
+        summary["tickers"] = symbols
 
         for symbol in symbols:
+            summary["tickers_processed"] += 1
             try:
                 candles = get_daily_bars(symbol, lookback_days=lookback_days)
                 count = insert_ohlcv_rows(conn, candles)
@@ -257,6 +273,9 @@ def pull_historical_data(
     summary["ok"] = summary["error_count"] == 0
     with connect(path) as conn:
         summary["coverage"] = build_historical_summary(conn)
+        from investment_agent.watchlist import compute_universe_stats
+
+        summary["universe_stats"] = compute_universe_stats(conn)
     return summary
 
 

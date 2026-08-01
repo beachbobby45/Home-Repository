@@ -205,6 +205,17 @@ def verify(db_path: Path) -> dict:
             r = client.get("/static/style.css")
             record("GET /static/style.css", r.status_code == 200, "")
 
+            # Phase 7 — watchlist + period screener
+            r = client.get("/api/screener/ranked")
+            ranked = r.json()
+            record("GET /api/screener/ranked", r.status_code == 200 and "ranked" in ranked, "")
+
+            r = client.get("/api/watchlist/stats")
+            record("GET /api/watchlist/stats", r.status_code == 200, "")
+
+            r = client.get("/api/watchlist/presets")
+            record("GET /api/watchlist/presets", r.status_code == 200 and len(r.json()) >= 2, "")
+
             app.dependency_overrides.pop(_require_api_key, None)
 
     return {

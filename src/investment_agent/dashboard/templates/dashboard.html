@@ -161,6 +161,36 @@
     </section>
 
     <section>
+      <h2>Watchlist &amp; Period Screener</h2>
+      <p class="brief" style="margin:0 0 0.75rem">Expand universe, scan last N days for Step 3 matches, rank candidates (pre-Claude).</p>
+      <div class="actions">
+        <button class="btn secondary" id="load-sp100">Load SP100 preset</button>
+        <button class="btn secondary" id="run-period-screener">Run 14d screener</button>
+        <button class="btn secondary" id="refresh-ranked">Refresh ranked</button>
+      </div>
+      <div class="card">
+        <div id="watchlist-stats" class="brief">Loading universe stats…</div>
+        <table style="margin-top:0.75rem;width:100%">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Days screened</th>
+              <th>Targets</th>
+              <th>Stops</th>
+              <th>Hit rate</th>
+              <th>Live?</th>
+              <th>Score</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="period-screener-body">
+            <tr><td colspan="8" class="empty">Run period screener after pulling history.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
       <h2>Historical Analysis</h2>
       <p class="brief" style="margin:0 0 0.75rem">Limited OHLCV history for prior-day screener replay and period evaluation.</p>
       <div class="actions">
@@ -457,6 +487,51 @@
       `).join("");
     }
 
+    async function loadWatchlistStats() {
+      const s = await api("/api/watchlist/stats");
+      document.getElementById("watchlist-stats").textContent =
+        `Universe: ${s.universe_size} tickers (${s.tradeable_universe} tradeable) · `
+        + `Step 3 pass: ${s.pass_both_step3} (${s.pass_pct}%) · `
+        + `Filtered out: ${s.filtered_out} (${s.filter_pct_out}%) · `
+        + `Missing metrics: ${s.missing_metrics}`;
+    }
+
+    async function loadPeriodScreener() {
+      const data = await api("/api/screener/period/latest");
+      const body = document.getElementById("period-screener-body");
+      const rows = data.candidates || [];
+      if (!rows.length) {
+        body.innerHTML = "<tr><td colspan='8' class='empty'>No saved period screener run — click Run 14d screener.</td></tr>";
+        return;
+      }
+      body.innerHTML = rows.map((r) => `
+        <tr>
+          <td>${r.ticker}</td>
+          <td>${r.days_screened ?? "—"}</td>
+          <td>${r.simulated_targets ?? "—"}</td>
+          <td>${r.simulated_stops ?? "—"}</td>
+          <td>${r.hit_rate_pct != null ? r.hit_rate_pct + "%" : "—"}</td>
+          <td>${r.live_pass_today ? "Yes" : "—"}</td>
+          <td>${r.score != null ? Number(r.score).toFixed(2) : "—"}</td>
+          <td><button class="btn btn-sm secondary promote-btn" data-ticker="${r.ticker}">Add to queue</button></td>
+        </tr>
+      `).join("");
+      body.querySelectorAll(".promote-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            const r = await api(`/api/screener/promote/${btn.dataset.ticker}`, { method: "POST" });
+            toast(r.message || "Promoted");
+            await loadQueue();
+          } catch (e) { toast(e.message); }
+        });
+      });
+    }
+
+    async function loadRankedAndStats() {
+      await loadWatchlistStats();
+      await loadPeriodScreener();
+    }
+
     async function loadHistorical() {
       const summary = await api("/api/historical/summary");
       const el = document.getElementById("historical-summary");
@@ -590,8 +665,32 @@
     }
 
     async function refreshAll() {
-      await Promise.all([loadSummary(), loadScenario(), loadCio(), loadHistorical(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
+      await Promise.all([loadSummary(), loadScenario(), loadCio(), loadRankedAndStats(), loadHistorical(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
     }
+
+    document.getElementById("load-sp100").addEventListener("click", async () => {
+      try {
+        const r = await api("/api/watchlist/load-preset", {
+          method: "POST",
+          body: JSON.stringify({ preset: "sp100", replace: false }),
+        });
+        toast(`Loaded ${r.tickers_loaded} tickers (${r.tickers_activated} active)`);
+        await loadRankedAndStats();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("run-period-screener").addEventListener("click", async () => {
+      try {
+        toast("Running 14-day period screener…");
+        const r = await api("/api/screener/period", {
+          method: "POST",
+          body: JSON.stringify({ period_days: 14, min_days_screened: 1, save: true }),
+        });
+        toast(`Screener done: ${r.candidates?.length || 0} candidate(s)`);
+        await loadPeriodScreener();
+        await loadWatchlistStats();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("refresh-ranked").addEventListener("click", () => loadRankedAndStats().catch((e) => toast(e.message)));
 
     document.getElementById("pull-historical").addEventListener("click", async () => {
       try {

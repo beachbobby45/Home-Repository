@@ -175,7 +175,47 @@ CREATE TABLE IF NOT EXISTS learning_reports (
   generated_at TEXT NOT NULL,
   payload_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS screener_runs (
+  id INTEGER PRIMARY KEY,
+  run_type TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  params_json TEXT NOT NULL,
+  summary_json TEXT,
+  status TEXT NOT NULL DEFAULT 'running'
+);
+
+CREATE TABLE IF NOT EXISTS period_screener_hits (
+  id INTEGER PRIMARY KEY,
+  run_id INTEGER NOT NULL,
+  ticker TEXT NOT NULL,
+  hit_date TEXT NOT NULL,
+  predicted_range_pct REAL,
+  actual_range_pct REAL,
+  simulated_outcome TEXT,
+  would_screen INTEGER NOT NULL DEFAULT 1,
+  days_screened INTEGER NOT NULL DEFAULT 0,
+  hit_rate_pct REAL,
+  score REAL,
+  FOREIGN KEY (run_id) REFERENCES screener_runs(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_period_hits_run
+  ON period_screener_hits(run_id, score DESC);
 """
+
+MIGRATION_SQL = """
+-- Phase 7 watchlist columns (idempotent via try/ignore in Python)
+"""
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(watchlist)")}
+    if "source" not in cols:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN source TEXT DEFAULT 'manual'")
+    if "added_via" not in cols:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN added_via TEXT DEFAULT 'manual'")
 
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
@@ -190,20 +230,15 @@ def init_db(db_path: Path | None = None) -> Path:
     path = db_path or DEFAULT_DB_PATH
     with connect(path) as conn:
         conn.executescript(SCHEMA_SQL)
+        _apply_migrations(conn)
         conn.commit()
     return path
 
 
 def upsert_watchlist(conn: sqlite3.Connection, tickers: list[str]) -> None:
-    for ticker in tickers:
-        conn.execute(
-            """
-            INSERT INTO watchlist (ticker, active)
-            VALUES (?, 1)
-            ON CONFLICT(ticker) DO UPDATE SET active = 1
-            """,
-            (ticker.upper(),),
-        )
+    from investment_agent.watchlist import upsert_tickers
+
+    upsert_tickers(conn, tickers, source="ingest", added_via="run_ingest")
 
 
 def insert_ohlcv_rows(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
@@ -228,6 +263,14 @@ def insert_ohlcv_rows(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> i
         )
         count += 1
     return count
+
+
+def get_max_ohlcv_date(conn: sqlite3.Connection, ticker: str) -> str | None:
+    row = conn.execute(
+        "SELECT MAX(date) AS d FROM ohlcv_daily WHERE ticker = ?",
+        (ticker.upper(),),
+    ).fetchone()
+    return row["d"] if row and row["d"] else None
 
 
 def insert_quote(conn: sqlite3.Connection, row: dict[str, Any]) -> None:

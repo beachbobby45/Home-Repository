@@ -34,9 +34,25 @@ from investment_agent.learning import (
     list_learning_report_dates,
     save_learning_report,
 )
+from investment_agent.period_screener import (
+    build_ranked_candidates,
+    get_latest_screener_run,
+    promote_ticker_to_queue,
+    run_period_screener,
+    save_screener_run,
+    date_range_for_period,
+)
 from investment_agent.db import connect, init_db
 from investment_agent.journal import insert_trade, list_trades, trade_to_dict
 from investment_agent.scenario import build_scenario_visualizer
+from investment_agent.watchlist import (
+    compute_universe_stats,
+    deactivate_ticker,
+    get_active_watchlist_details,
+    import_tickers,
+    list_presets,
+    load_preset_into_watchlist,
+)
 from investment_agent.monitor import (
     acknowledge_alert,
     enrich_queue_item,
@@ -58,7 +74,7 @@ REPO_ROOT = DASHBOARD_DIR.parents[2]
 ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
-app = FastAPI(title="AI Investment Agent Dashboard", version="0.7.0")
+app = FastAPI(title="AI Investment Agent Dashboard", version="0.8.0")
 app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR / "static")), name="static")
 
 
@@ -79,6 +95,22 @@ class TaxRateUpdate(BaseModel):
 
 class QueueStateUpdate(BaseModel):
     state: str
+
+
+class WatchlistImportBody(BaseModel):
+    tickers: list[str]
+
+
+class LoadPresetBody(BaseModel):
+    preset: str
+    replace: bool = False
+
+
+class PeriodScreenerBody(BaseModel):
+    period_days: int = 14
+    min_days_screened: int = 1
+    min_hit_rate_pct: float | None = None
+    save: bool = True
 
 
 def _db():
@@ -335,6 +367,109 @@ def api_apply_sweep(
     _: None = Depends(_require_api_key),
 ) -> dict:
     result = apply_month_end_sweep(conn)
+    if result.get("ok"):
+        conn.commit()
+    return result
+
+
+@app.get("/api/watchlist")
+def api_watchlist(conn=Depends(_db)) -> dict[str, Any]:
+    return {
+        "tickers": get_active_watchlist_details(conn),
+        "count": len(get_active_watchlist_details(conn)),
+    }
+
+
+@app.get("/api/watchlist/presets")
+def api_watchlist_presets() -> list[dict[str, Any]]:
+    return [
+        {"name": p.name, "description": p.description, "ticker_count": p.ticker_count}
+        for p in list_presets()
+    ]
+
+
+@app.get("/api/watchlist/stats")
+def api_watchlist_stats(conn=Depends(_db)) -> dict[str, Any]:
+    return compute_universe_stats(conn)
+
+
+@app.post("/api/watchlist/load-preset")
+def api_load_preset(
+    body: LoadPresetBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    result = load_preset_into_watchlist(conn, body.preset, replace=body.replace)
+    conn.commit()
+    return result
+
+
+@app.post("/api/watchlist/import")
+def api_watchlist_import(
+    body: WatchlistImportBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    result = import_tickers(conn, body.tickers)
+    conn.commit()
+    return result
+
+
+@app.delete("/api/watchlist/{ticker}")
+def api_watchlist_remove(
+    ticker: str,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    result = deactivate_ticker(conn, ticker)
+    conn.commit()
+    return result
+
+
+@app.get("/api/screener/ranked")
+def api_screener_ranked(
+    conn=Depends(_db),
+    period_days: int = 14,
+) -> dict[str, Any]:
+    return build_ranked_candidates(conn, period_days=period_days)
+
+
+@app.post("/api/screener/period")
+def api_screener_period(
+    body: PeriodScreenerBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    start, end = date_range_for_period(body.period_days)
+    result = run_period_screener(
+        conn,
+        start_date=start,
+        end_date=end,
+        min_days_screened=body.min_days_screened,
+        min_hit_rate_pct=body.min_hit_rate_pct,
+    )
+    if body.save:
+        run_id = save_screener_run(conn, result)
+        conn.commit()
+        result["saved_run_id"] = run_id
+    return result
+
+
+@app.get("/api/screener/period/latest")
+def api_screener_period_latest(conn=Depends(_db)) -> dict[str, Any]:
+    result = get_latest_screener_run(conn)
+    if result is None:
+        return {"candidates": [], "summary": {}}
+    return result
+
+
+@app.post("/api/screener/promote/{ticker}")
+def api_screener_promote(
+    ticker: str,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    result = promote_ticker_to_queue(conn, ticker)
     if result.get("ok"):
         conn.commit()
     return result
