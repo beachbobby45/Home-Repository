@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from investment_agent.account import (
     apply_month_end_sweep,
@@ -75,6 +76,21 @@ ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
 app = FastAPI(title="AI Investment Agent Dashboard", version="0.8.0")
+
+
+class NoCacheDashboardMiddleware(BaseHTTPMiddleware):
+    """Avoid stale dashboard HTML/JS/CSS in the browser during active development."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path == "/" or path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
+
+app.add_middleware(NoCacheDashboardMiddleware)
 app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR / "static")), name="static")
 
 
