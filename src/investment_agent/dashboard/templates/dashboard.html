@@ -15,6 +15,7 @@
       <label for="app-api-key">Dashboard password</label>
       <input type="password" id="app-api-key" placeholder="Same value as APP_API_KEY in your .env" autocomplete="off" />
       <button class="btn secondary btn-sm" type="button" id="save-api-key">Save</button>
+      <button class="btn secondary btn-sm" type="button" id="clear-api-key">Clear</button>
       <span class="brief" id="api-key-status"></span>
       <span class="brief api-key-hint">Server binds to 127.0.0.1 by default (this machine only). Required for action buttons if you use a tunnel or --host 0.0.0.0.</span>
     </div>
@@ -320,8 +321,10 @@
     }
 
     const API_KEY_STORAGE = "investment_agent_api_key";
+    let apiKeyRequired = false;
 
     function getApiKey() {
+      if (!apiKeyRequired) return "";
       return localStorage.getItem(API_KEY_STORAGE) || "";
     }
 
@@ -340,7 +343,13 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 401) {
-          throw new Error("Invalid dashboard password — enter the APP_API_KEY value from your .env file above.");
+          localStorage.removeItem(API_KEY_STORAGE);
+          const input = document.getElementById("app-api-key");
+          if (input) input.value = "";
+          throw new Error(
+            "Invalid dashboard password — it must match APP_API_KEY in your .env exactly. "
+            + "Saved password cleared; re-enter and click Save, or leave APP_API_KEY blank in .env for local-only use."
+          );
         }
         throw new Error(data.detail || data.error || res.statusText);
       }
@@ -366,6 +375,22 @@
         document.getElementById("api-key-status").textContent = "Password saved — retry your action.";
         toast("Dashboard password saved in this browser");
       });
+      document.getElementById("clear-api-key")?.addEventListener("click", () => {
+        localStorage.removeItem(API_KEY_STORAGE);
+        input.value = "";
+        document.getElementById("api-key-status").textContent = "Password cleared.";
+      });
+    }
+
+    async function initDashboard() {
+      const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => ({ api_key_required: false }));
+      apiKeyRequired = !!cfg.api_key_required;
+      if (!apiKeyRequired) {
+        localStorage.removeItem(API_KEY_STORAGE);
+      } else {
+        initApiKeyBar();
+      }
+      await refreshAll();
     }
 
     async function loadSummary() {
@@ -870,8 +895,7 @@
       } catch (err) { toast(err.message); }
     });
 
-    initApiKeyBar();
-    refreshAll().catch((e) => toast(e.message));
+    initDashboard().catch((e) => toast(e.message));
   </script>
 </body>
 </html>
