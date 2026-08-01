@@ -20,8 +20,8 @@ def main() -> None:
     parser.add_argument(
         "--tickers",
         nargs="+",
-        default=DEFAULT_TICKERS,
-        help="Symbols to ingest (default: starter watchlist)",
+        default=None,
+        help="Symbols to ingest (default: all active watchlist symbols)",
     )
     parser.add_argument(
         "--db",

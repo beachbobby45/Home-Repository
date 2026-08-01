@@ -8,6 +8,7 @@ from pathlib import Path
 
 from investment_agent.config import Settings
 from investment_agent.db import (
+    get_active_watchlist,
     init_db,
     insert_macro,
     insert_ohlcv_rows,
@@ -54,7 +55,14 @@ def run_ingest(
 ) -> dict:
     """Fetch macro + quotes + daily bars; compute liquidity/range metrics + regime."""
     path = init_db(db_path)
-    symbols = [t.upper() for t in (tickers or DEFAULT_TICKERS)]
+    if tickers is not None:
+        symbols = [t.upper() for t in tickers]
+    else:
+        with sqlite3.connect(path) as raw:
+            raw.row_factory = sqlite3.Row
+            symbols = get_active_watchlist(raw)
+        if not symbols:
+            symbols = [t.upper() for t in DEFAULT_TICKERS]
     summary: dict = {"db_path": str(path), "tickers": symbols, "errors": []}
     index_quotes: dict = {}
 

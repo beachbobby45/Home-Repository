@@ -26,7 +26,12 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     pull = sub.add_parser("pull", help="Fetch limited daily bars into SQLite")
-    pull.add_argument("--tickers", nargs="+", default=DEFAULT_TICKERS)
+    pull.add_argument(
+        "--tickers",
+        nargs="+",
+        default=None,
+        help="Explicit tickers (default: all active watchlist symbols)",
+    )
     pull.add_argument("--lookback-days", type=int, default=60)
     pull.add_argument("--db", type=Path, default=None)
 
