@@ -1,0 +1,89 @@
+"""Tests for trade journal and P&L."""
+
+from __future__ import annotations
+
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from investment_agent.db import init_db
+from investment_agent.finance import ORIGINAL_BASIS
+from investment_agent.journal import (
+    compute_monthly_realized_net,
+    insert_trade,
+    journal_cash_balance,
+)
+
+
+def _conn():
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    path = Path(tmp.name)
+    tmp.close()
+    init_db(path)
+    return sqlite3.connect(path), path
+
+
+def test_journal_cash_balance_after_round_trip():
+    conn, path = _conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        insert_trade(
+            conn,
+            ticker="AAPL",
+            side="BUY",
+            shares=10,
+            price=100,
+            fee=7,
+            executed_at="2026-07-31T14:00:00+00:00",
+        )
+        insert_trade(
+            conn,
+            ticker="AAPL",
+            side="SELL",
+            shares=10,
+            price=101.13,
+            fee=7,
+            executed_at="2026-07-31T15:00:00+00:00",
+        )
+        conn.commit()
+        cash = journal_cash_balance(conn)
+        # Buy 1007, sell proceeds 1004.3 → net cash −2.7 vs basis
+        assert abs(cash - (ORIGINAL_BASIS - 2.7)) < 0.01
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
+def test_monthly_realized_net_includes_fees():
+    conn, path = _conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        insert_trade(
+            conn,
+            ticker="AAPL",
+            side="BUY",
+            shares=10,
+            price=100,
+            fee=7,
+            executed_at="2026-07-31T14:00:00+00:00",
+        )
+        insert_trade(
+            conn,
+            ticker="AAPL",
+            side="SELL",
+            shares=10,
+            price=101.13,
+            fee=7,
+            executed_at="2026-07-31T15:00:00+00:00",
+        )
+        conn.commit()
+        net = compute_monthly_realized_net(conn, "2026-07")
+        # Gross +11.3, fees 14 → net −2.7
+        assert abs(net - (-2.7)) < 0.01
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)

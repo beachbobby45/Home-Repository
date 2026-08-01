@@ -91,6 +91,63 @@ CREATE TABLE IF NOT EXISTS regime_snapshots (
   block_new_longs INTEGER NOT NULL DEFAULT 0,
   summary TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS jar_balances (
+  jar_type TEXT PRIMARY KEY,
+  balance REAL NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS sweep_history (
+  id INTEGER PRIMARY KEY,
+  month_key TEXT NOT NULL UNIQUE,
+  realized_net REAL NOT NULL,
+  management_amount REAL NOT NULL,
+  tax_amount REAL NOT NULL,
+  tax_rate REAL NOT NULL,
+  applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS queue_items (
+  id INTEGER PRIMARY KEY,
+  ticker TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'watching',
+  suggested_size REAL,
+  entry_price REAL,
+  target_price REAL,
+  stop_price REAL,
+  avg_range_pct REAL,
+  liquidity_cap REAL,
+  thesis_summary TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_queue_items_ticker_state
+  ON queue_items(ticker, state);
+
+CREATE TABLE IF NOT EXISTS trade_journal (
+  id INTEGER PRIMARY KEY,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
+  shares REAL NOT NULL,
+  price REAL NOT NULL,
+  fee REAL NOT NULL DEFAULT 7.0,
+  executed_at TEXT NOT NULL,
+  notes TEXT,
+  queue_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (queue_id) REFERENCES queue_items(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trade_journal_executed
+  ON trade_journal(executed_at);
 """
 
 

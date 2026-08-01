@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Investment Agent</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Investment Agent</h1>
+    <p class="subtitle">Intraday alerts · E*TRADE manual · $5M goal · Option A (no Claude)</p>
+  </header>
+
+  <main>
+    <div id="regime-banner" class="banner ok">Loading regime…</div>
+
+    <div class="grid grid-4">
+      <div class="card">
+        <h2>$5M Goal</h2>
+        <div class="metric" id="goal-pct">—</div>
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill" id="goal-bar" style="width:0%"></div></div>
+          <div class="progress-label" id="goal-label">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Tradable Cash</h2>
+        <div class="metric" id="tradable-cash">—</div>
+        <div class="progress-label">Basis <span id="original-basis">—</span></div>
+      </div>
+      <div class="card">
+        <h2>Month P&amp;L</h2>
+        <div class="metric" id="month-pnl">—</div>
+        <div class="progress-label"><span id="month-key">—</span> · fees <span id="total-fees">—</span></div>
+      </div>
+      <div class="card">
+        <h2>Jars</h2>
+        <div class="metric small">Mgmt <span id="mgmt-jar">—</span></div>
+        <div class="metric small" style="margin-top:0.35rem">Tax <span id="tax-jar">—</span></div>
+      </div>
+    </div>
+
+    <section>
+      <h2>Market Brief</h2>
+      <div class="card brief" id="market-brief">Loading…</div>
+    </section>
+
+    <section>
+      <h2>Month-end Sweep Preview</h2>
+      <div class="card">
+        <div id="sweep-preview">Loading…</div>
+        <div class="actions" style="margin-top:0.75rem">
+          <label style="display:inline-flex;align-items:center;gap:0.5rem">
+            Tax reserve rate
+            <input type="number" id="tax-rate" min="0" max="100" step="1" style="width:70px" />
+            %
+          </label>
+          <button class="btn secondary btn-sm" id="save-tax">Save rate</button>
+          <button class="btn btn-sm" id="apply-sweep">Apply month-end sweep</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Trade Queue</h2>
+      <div class="actions">
+        <button class="btn" id="sync-queue">Sync from screener</button>
+        <button class="btn secondary" id="refresh-all">Refresh</button>
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>State</th>
+              <th>Entry</th>
+              <th>Target +1.13%</th>
+              <th>Stop −0.50%</th>
+              <th>Size</th>
+              <th>Thesis</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="queue-body">
+            <tr><td colspan="8" class="empty">Loading queue…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Trade Journal</h2>
+      <div class="card">
+        <form id="trade-form">
+          <div class="form-row">
+            <div>
+              <label for="t-ticker">Ticker</label>
+              <input id="t-ticker" required placeholder="AAPL" />
+            </div>
+            <div>
+              <label for="t-side">Side</label>
+              <select id="t-side">
+                <option value="BUY">BUY</option>
+                <option value="SELL">SELL</option>
+              </select>
+            </div>
+            <div>
+              <label for="t-shares">Shares</label>
+              <input id="t-shares" type="number" step="any" min="0.0001" required />
+            </div>
+            <div>
+              <label for="t-price">Price</label>
+              <input id="t-price" type="number" step="any" min="0.01" required />
+            </div>
+            <div>
+              <label for="t-fee">Fee ($)</label>
+              <input id="t-fee" type="number" step="0.01" min="0" placeholder="7" />
+            </div>
+            <div>
+              <label for="t-notes">Notes</label>
+              <input id="t-notes" placeholder="E*TRADE fill" />
+            </div>
+          </div>
+          <button class="btn" type="submit">Log trade</button>
+        </form>
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto;margin-top:0.75rem">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Ticker</th>
+              <th>Side</th>
+              <th>Shares</th>
+              <th>Price</th>
+              <th>Fee</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="journal-body">
+            <tr><td colspan="7" class="empty">Loading journal…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const fmt = (n) => n == null ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtPct = (n) => n == null ? "—" : Number(n).toFixed(4) + "%";
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 3200);
+    }
+
+    async function api(path, opts = {}) {
+      const res = await fetch(path, {
+        headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+        ...opts,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.error || res.statusText);
+      return data;
+    }
+
+    async function loadSummary() {
+      const s = await api("/api/summary");
+      document.getElementById("goal-pct").textContent = fmtPct(s.goal_pct);
+      document.getElementById("goal-bar").style.width = Math.min(100, s.goal_pct) + "%";
+      document.getElementById("goal-label").textContent =
+        `$${fmt(s.tradable_cash)} of $${fmt(s.goal_target)} goal`;
+      document.getElementById("tradable-cash").textContent = "$" + fmt(s.tradable_cash);
+      document.getElementById("original-basis").textContent = "$" + fmt(s.original_basis);
+
+      const pnlEl = document.getElementById("month-pnl");
+      pnlEl.textContent = (s.monthly_realized_net >= 0 ? "+" : "") + "$" + fmt(s.monthly_realized_net);
+      pnlEl.className = "metric " + (s.monthly_realized_net >= 0 ? "positive" : s.monthly_realized_net < 0 ? "negative" : "");
+
+      document.getElementById("month-key").textContent = s.month_key;
+      document.getElementById("total-fees").textContent = "$" + fmt(s.total_fees_paid);
+      document.getElementById("mgmt-jar").textContent = "$" + fmt(s.management_jar);
+      document.getElementById("tax-jar").textContent = "$" + fmt(s.tax_jar);
+      document.getElementById("market-brief").textContent = s.market_brief;
+      document.getElementById("tax-rate").value = Math.round(s.tax_rate * 100);
+
+      const banner = document.getElementById("regime-banner");
+      if (s.block_new_longs) {
+        banner.className = "banner block";
+        banner.textContent = s.regime?.summary || "Regime: no new longs";
+      } else {
+        banner.className = "banner ok";
+        banner.textContent = s.regime?.summary || "Regime data unavailable — run ingest";
+      }
+
+      const sp = s.sweep_preview;
+      let sweepHtml = sp.applies
+        ? `Realized net $${fmt(sp.monthly_realized_net)} → sweep $${fmt(sp.total_sweep)} `
+          + `(mgmt $${fmt(sp.management_sweep)} + tax $${fmt(sp.tax_sweep)})`
+        : `No sweep this month (realized net $${fmt(sp.monthly_realized_net)} ≤ 0)`;
+      if (s.sweep_already_applied) sweepHtml += " · <strong>Already applied</strong>";
+      document.getElementById("sweep-preview").innerHTML = sweepHtml;
+    }
+
+    async function loadQueue() {
+      const items = await api("/api/queue");
+      const body = document.getElementById("queue-body");
+      if (!items.length) {
+        body.innerHTML = '<tr><td colspan="8" class="empty">Queue empty — run ingest then Sync from screener</td></tr>';
+        return;
+      }
+      body.innerHTML = items.map((q) => `
+        <tr>
+          <td><strong>${q.ticker}</strong></td>
+          <td><span class="badge ${q.state}">${q.state}</span></td>
+          <td>$${fmt(q.entry_price)}</td>
+          <td>$${fmt(q.target_price)}</td>
+          <td>$${fmt(q.stop_price)}</td>
+          <td>$${fmt(q.suggested_size)}</td>
+          <td class="thesis">${q.thesis_summary || ""}</td>
+          <td><button class="btn secondary btn-sm" data-advance="${q.id}">Advance</button></td>
+        </tr>
+      `).join("");
+      body.querySelectorAll("[data-advance]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            const r = await api(`/api/queue/${btn.dataset.advance}/advance`, { method: "POST" });
+            toast(`${r.from_state} → ${r.to_state}`);
+            await refreshAll();
+          } catch (e) { toast(e.message); }
+        });
+      });
+    }
+
+    async function loadJournal() {
+      const trades = await api("/api/journal");
+      const body = document.getElementById("journal-body");
+      if (!trades.length) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">No trades logged yet</td></tr>';
+        return;
+      }
+      body.innerHTML = trades.map((t) => `
+        <tr>
+          <td>${t.executed_at?.slice(0, 16) || ""}</td>
+          <td><strong>${t.ticker}</strong></td>
+          <td>${t.side}</td>
+          <td>${t.shares}</td>
+          <td>$${fmt(t.price)}</td>
+          <td>$${fmt(t.fee)}</td>
+          <td>${t.notes || ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function refreshAll() {
+      await Promise.all([loadSummary(), loadQueue(), loadJournal()]);
+    }
+
+    document.getElementById("refresh-all").addEventListener("click", () => refreshAll().catch((e) => toast(e.message)));
+    document.getElementById("sync-queue").addEventListener("click", async () => {
+      try {
+        const r = await api("/api/queue/sync", { method: "POST" });
+        toast(r.message || "Synced");
+        await refreshAll();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("save-tax").addEventListener("click", async () => {
+      try {
+        const rate = Number(document.getElementById("tax-rate").value) / 100;
+        await api("/api/settings/tax-rate", { method: "PUT", body: JSON.stringify({ tax_rate: rate }) });
+        toast("Tax rate saved");
+        await loadSummary();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("apply-sweep").addEventListener("click", async () => {
+      try {
+        const r = await api("/api/sweeps/apply", { method: "POST" });
+        if (!r.ok) { toast(r.error || "Sweep not applied"); return; }
+        toast(`Sweep applied: $${fmt(r.total_sweep)}`);
+        await refreshAll();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("trade-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const feeVal = document.getElementById("t-fee").value;
+      const payload = {
+        ticker: document.getElementById("t-ticker").value.trim(),
+        side: document.getElementById("t-side").value,
+        shares: Number(document.getElementById("t-shares").value),
+        price: Number(document.getElementById("t-price").value),
+        notes: document.getElementById("t-notes").value || null,
+      };
+      if (feeVal) payload.fee = Number(feeVal);
+      try {
+        await api("/api/journal", { method: "POST", body: JSON.stringify(payload) });
+        toast("Trade logged");
+        e.target.reset();
+        await refreshAll();
+      } catch (err) { toast(err.message); }
+    });
+
+    refreshAll().catch((e) => toast(e.message));
+  </script>
+</body>
+</html>

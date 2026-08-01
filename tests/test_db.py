@@ -29,6 +29,8 @@ def test_init_db_creates_tables():
         assert "ohlcv_daily" in tables
         assert "ticker_metrics" in tables
         assert "regime_snapshots" in tables
+        assert "queue_items" in tables
+        assert "trade_journal" in tables
 
 
 def test_upsert_watchlist():

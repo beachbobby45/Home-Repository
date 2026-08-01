@@ -33,6 +33,15 @@ PYTHONPATH=src python3 scripts/run_ingest.py --tickers SPY AAPL
 
 Fetches FRED macro (VIX), Finnhub live quotes, yfinance daily bars, liquidity metrics, and SPY/DIA/QQQ regime gate.
 
+## Phase 2–3 — Dashboard (no Claude)
+
+```bash
+PYTHONPATH=src python3 scripts/sync_queue.py      # populate queue from screener
+PYTHONPATH=src python3 scripts/run_dashboard.py   # http://127.0.0.1:8080
+```
+
+Dashboard: **$5M goal**, tradable cash, month P&amp;L, sweep preview, regime banner, trade queue, manual journal.
+
 ## v3 highlights
 
 - **CIO + sub-agents** (research, stock team, regime, monitor, learning) — one repo
@@ -46,4 +55,6 @@ Fetches FRED macro (VIX), Finnhub live quotes, yfinance daily bars, liquidity me
 | Phase | Status |
 |-------|--------|
 | 0 — Foundation | **Done** (Option A: `--no-claude` Gate 0) |
-| 1 — Data pipeline | **In progress** (ingest + regime gate working) |
+| 1 — Data pipeline | **Done** (ingest + regime gate) |
+| 2–3 — Screener + dashboard | **Done** (queue, journal, goal, sweeps) |
+| 4 — Intraday monitor | Not started |
