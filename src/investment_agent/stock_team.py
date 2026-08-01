@@ -134,13 +134,16 @@ def sync_queue_from_screener(conn: sqlite3.Connection, *, max_items: int = 5) ->
         return {
             "ok": False,
             "added": 0,
+            "live_count": 0,
+            "already_in_queue": 0,
             "message": "Regime blocks new longs — SPY/DIA/QQQ all down intraday.",
         }
 
     active = _active_queue_tickers(conn)
-    candidates = [c for c in screen_candidates(conn) if c.ticker not in active]
+    live = screen_candidates(conn)
+    candidates = [c for c in live if c.ticker not in active]
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    added = 0
+    added_tickers: list[str] = []
 
     for card in candidates[:max_items]:
         conn.execute(
@@ -163,12 +166,31 @@ def sync_queue_from_screener(conn: sqlite3.Connection, *, max_items: int = 5) ->
                 now,
             ),
         )
-        added += 1
+        added_tickers.append(card.ticker)
+
+    added = len(added_tickers)
+    already = len(live) - len(candidates)
+    if added:
+        message = f"Added {added} ticker(s) to queue: {', '.join(added_tickers)}."
+    elif not live:
+        message = "No tickers pass Step 3 today — run ingest after loading your watchlist."
+    elif already >= len(live):
+        live_names = ", ".join(c.ticker for c in live[:8])
+        suffix = f" ({live_names})" if live_names else ""
+        message = (
+            f"Nothing to add — all {len(live)} live screener candidate(s) "
+            f"are already in the queue{suffix}."
+        )
+    else:
+        message = "No new tickers to add (queue already has active picks)."
 
     return {
         "ok": True,
         "added": added,
-        "message": f"Added {added} ticker(s) to queue.",
+        "live_count": len(live),
+        "already_in_queue": already,
+        "added_tickers": added_tickers,
+        "message": message,
     }
 
 

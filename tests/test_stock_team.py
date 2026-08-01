@@ -66,9 +66,26 @@ def test_sync_queue_adds_candidates():
         result = sync_queue_from_screener(conn, max_items=3)
         assert result["ok"] is True
         assert result["added"] == 1
+        assert result["added_tickers"] == ["AAPL"]
         row = conn.execute("SELECT ticker, state FROM queue_items").fetchone()
         assert row["ticker"] == "AAPL"
         assert row["state"] == "watching"
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
+def test_sync_queue_skips_when_all_live_already_active():
+    conn, path = _conn()
+    try:
+        _insert_metric(conn, "AAPL")
+        conn.commit()
+        first = sync_queue_from_screener(conn, max_items=3)
+        assert first["added"] == 1
+        second = sync_queue_from_screener(conn, max_items=3)
+        assert second["added"] == 0
+        assert second["already_in_queue"] == 1
+        assert "already in the queue" in second["message"]
     finally:
         conn.close()
         path.unlink(missing_ok=True)

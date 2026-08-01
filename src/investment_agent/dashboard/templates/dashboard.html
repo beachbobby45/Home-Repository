@@ -134,6 +134,7 @@
 
     <section>
       <h2>Trade Queue</h2>
+      <p class="brief" style="margin:0 0 0.75rem">Active trades you are working — not the full ranked screener. Sync adds up to 5 <em>new</em> live Step 3 passers not already in the queue.</p>
       <div class="actions">
         <button class="btn" id="sync-queue">Sync from screener</button>
         <button class="btn secondary" id="refresh-all">Refresh</button>
@@ -311,11 +312,11 @@
     const fmt = (n) => n == null ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtPct = (n) => n == null ? "—" : Number(n).toFixed(4) + "%";
 
-    function toast(msg) {
+    function toast(msg, ms = 3200) {
       const el = document.getElementById("toast");
       el.textContent = msg;
       el.classList.add("show");
-      setTimeout(() => el.classList.remove("show"), 3200);
+      setTimeout(() => el.classList.remove("show"), ms);
     }
 
     const API_KEY_STORAGE = "investment_agent_api_key";
@@ -828,8 +829,10 @@
     document.getElementById("sync-queue").addEventListener("click", async () => {
       try {
         const r = await api("/api/queue/sync", { method: "POST" });
-        toast(r.message || "Synced");
-        await refreshAll();
+        const msg = r.message || (r.added ? `Added ${r.added} ticker(s)` : "Sync complete — no new tickers");
+        toast(msg, msg.length > 60 ? 6000 : 3200);
+        await loadQueue();
+        await loadCio();
       } catch (e) { toast(e.message); }
     });
     document.getElementById("save-tax").addEventListener("click", async () => {
