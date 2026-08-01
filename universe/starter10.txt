@@ -1,0 +1,11 @@
+# Starter watchlist (Product Spec v3 default)
+SPY
+DIA
+QQQ
+AAPL
+MSFT
+NVDA
+AMD
+META
+TSLA
+IWM
