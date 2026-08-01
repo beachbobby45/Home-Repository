@@ -40,7 +40,16 @@ PYTHONPATH=src python3 scripts/sync_queue.py      # populate queue from screener
 PYTHONPATH=src python3 scripts/run_dashboard.py   # http://127.0.0.1:8080
 ```
 
-Dashboard: **$5M goal**, tradable cash, month P&amp;L, sweep preview, regime banner, trade queue, manual journal.
+Dashboard: **$5M goal**, tradable cash, month P&amp;L, sweep preview, regime banner, **intraday alerts**, trade queue, manual journal.
+
+```bash
+# Demo mode — seed test data and verify all dashboard endpoints (24 checks)
+PYTHONPATH=src python3 scripts/seed_demo_data.py
+PYTHONPATH=src python3 scripts/verify_dashboard.py --seed
+
+# Intraday monitor (uses quotes in DB; add --refresh-quotes for live Finnhub)
+PYTHONPATH=src python3 scripts/run_monitor.py
+```
 
 ## v3 highlights
 
@@ -57,4 +66,5 @@ Dashboard: **$5M goal**, tradable cash, month P&amp;L, sweep preview, regime ban
 | 0 — Foundation | **Done** (Option A: `--no-claude` Gate 0) |
 | 1 — Data pipeline | **Done** (ingest + regime gate) |
 | 2–3 — Screener + dashboard | **Done** (queue, journal, goal, sweeps) |
-| 4 — Intraday monitor | Not started |
+| 4 — Intraday monitor | **Done** (target/stop/EOD alerts) |
+| 5 — Learning + CIO | Not started |

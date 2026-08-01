@@ -193,6 +193,23 @@ tr:hover td {
   color: #93c5fd;
 }
 
+.badge.alert-target_hit,
+.badge.alert-near_target {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.badge.alert-stop_hit,
+.badge.alert-near_stop {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.badge.alert-eod_flatten {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
 .badge.approved,
 .badge.armed {
   background: rgba(245, 158, 11, 0.15);

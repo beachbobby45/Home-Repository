@@ -1,4 +1,4 @@
-"""FastAPI dashboard — Phase 3 (queue, journal, goal, sweeps)."""
+"""FastAPI dashboard — Phase 3–4 (queue, journal, goal, sweeps, monitor)."""
 
 from __future__ import annotations
 
@@ -21,6 +21,13 @@ from investment_agent.account import (
 from investment_agent.config import Settings
 from investment_agent.db import connect, init_db
 from investment_agent.journal import insert_trade, list_trades, trade_to_dict
+from investment_agent.monitor import (
+    acknowledge_alert,
+    enrich_queue_item,
+    get_latest_quotes,
+    list_active_alerts,
+    run_monitor_cycle,
+)
 from investment_agent.stock_team import (
     advance_queue_state,
     card_to_dict,
@@ -33,7 +40,7 @@ from investment_agent.stock_team import (
 DASHBOARD_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
-app = FastAPI(title="AI Investment Agent Dashboard", version="0.3.0")
+app = FastAPI(title="AI Investment Agent Dashboard", version="0.4.0")
 app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR / "static")), name="static")
 
 
@@ -93,7 +100,36 @@ def api_summary(conn=Depends(_db)) -> dict[str, Any]:
 
 @app.get("/api/queue")
 def api_queue(conn=Depends(_db)) -> list[dict]:
-    return list_queue(conn)
+    quotes = get_latest_quotes(conn)
+    items = list_queue(conn)
+    return [enrich_queue_item(conn, item, quotes) for item in items]
+
+
+@app.get("/api/alerts")
+def api_alerts(conn=Depends(_db)) -> list[dict]:
+    return list_active_alerts(conn)
+
+
+@app.post("/api/monitor/run")
+def api_monitor_run(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    result = run_monitor_cycle(conn)
+    conn.commit()
+    return result
+
+
+@app.post("/api/alerts/{alert_id}/acknowledge")
+def api_ack_alert(
+    alert_id: int,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    result = acknowledge_alert(conn, alert_id)
+    if result.get("ok"):
+        conn.commit()
+    return result
 
 
 @app.get("/api/candidates")

@@ -148,6 +148,26 @@ CREATE TABLE IF NOT EXISTS trade_journal (
 
 CREATE INDEX IF NOT EXISTS idx_trade_journal_executed
   ON trade_journal(executed_at);
+
+CREATE TABLE IF NOT EXISTS price_alerts (
+  id INTEGER PRIMARY KEY,
+  queue_id INTEGER,
+  ticker TEXT NOT NULL,
+  alert_type TEXT NOT NULL,
+  entry_price REAL,
+  current_price REAL,
+  target_price REAL,
+  stop_price REAL,
+  pnl_pct REAL,
+  message TEXT NOT NULL,
+  acknowledged INTEGER NOT NULL DEFAULT 0,
+  alert_date TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (queue_id) REFERENCES queue_items(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_alerts_active
+  ON price_alerts(acknowledged, alert_date, ticker);
 """
 
 

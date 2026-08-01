@@ -63,6 +63,32 @@
     </section>
 
     <section>
+      <h2>Intraday Alerts</h2>
+      <div class="actions">
+        <button class="btn" id="run-monitor">Run monitor</button>
+        <button class="btn secondary" id="refresh-alerts">Refresh alerts</button>
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Ticker</th>
+              <th>Alert</th>
+              <th>Price</th>
+              <th>P&amp;L</th>
+              <th>Message</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="alerts-body">
+            <tr><td colspan="7" class="empty">Loading alerts…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
       <h2>Trade Queue</h2>
       <div class="actions">
         <button class="btn" id="sync-queue">Sync from screener</button>
@@ -74,6 +100,8 @@
             <tr>
               <th>Ticker</th>
               <th>State</th>
+              <th>Live</th>
+              <th>P&amp;L</th>
               <th>Entry</th>
               <th>Target +1.13%</th>
               <th>Stop −0.50%</th>
@@ -83,7 +111,7 @@
             </tr>
           </thead>
           <tbody id="queue-body">
-            <tr><td colspan="8" class="empty">Loading queue…</td></tr>
+            <tr><td colspan="10" class="empty">Loading queue…</td></tr>
           </tbody>
         </table>
       </div>
@@ -207,17 +235,50 @@
       document.getElementById("sweep-preview").innerHTML = sweepHtml;
     }
 
+    const fmtPctLive = (n) => n == null ? "—" : (Number(n) >= 0 ? "+" : "") + Number(n).toFixed(2) + "%";
+
+    async function loadAlerts() {
+      const alerts = await api("/api/alerts");
+      const body = document.getElementById("alerts-body");
+      if (!alerts.length) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">No active alerts — run monitor on in-trade positions</td></tr>';
+        return;
+      }
+      body.innerHTML = alerts.map((a) => `
+        <tr>
+          <td>${a.created_at?.slice(0, 16) || ""}</td>
+          <td><strong>${a.ticker}</strong></td>
+          <td><span class="badge alert-${(a.alert_type || '').toLowerCase()}">${a.alert_type}</span></td>
+          <td>$${fmt(a.current_price)}</td>
+          <td>${fmtPctLive(a.pnl_pct)}</td>
+          <td class="thesis">${a.message || ""}</td>
+          <td><button class="btn secondary btn-sm" data-ack="${a.id}">Ack</button></td>
+        </tr>
+      `).join("");
+      body.querySelectorAll("[data-ack]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await api(`/api/alerts/${btn.dataset.ack}/acknowledge`, { method: "POST" });
+            toast("Alert acknowledged");
+            await loadAlerts();
+          } catch (e) { toast(e.message); }
+        });
+      });
+    }
+
     async function loadQueue() {
       const items = await api("/api/queue");
       const body = document.getElementById("queue-body");
       if (!items.length) {
-        body.innerHTML = '<tr><td colspan="8" class="empty">Queue empty — run ingest then Sync from screener</td></tr>';
+        body.innerHTML = '<tr><td colspan="10" class="empty">Queue empty — run ingest then Sync from screener</td></tr>';
         return;
       }
       body.innerHTML = items.map((q) => `
         <tr>
           <td><strong>${q.ticker}</strong></td>
           <td><span class="badge ${q.state}">${q.state}</span></td>
+          <td>${q.current_price != null ? "$" + fmt(q.current_price) : "—"}</td>
+          <td>${q.pnl_pct != null ? fmtPctLive(q.pnl_pct) : "—"}</td>
           <td>$${fmt(q.entry_price)}</td>
           <td>$${fmt(q.target_price)}</td>
           <td>$${fmt(q.stop_price)}</td>
@@ -258,8 +319,17 @@
     }
 
     async function refreshAll() {
-      await Promise.all([loadSummary(), loadQueue(), loadJournal()]);
+      await Promise.all([loadSummary(), loadAlerts(), loadQueue(), loadJournal()]);
     }
+
+    document.getElementById("run-monitor").addEventListener("click", async () => {
+      try {
+        const r = await api("/api/monitor/run", { method: "POST" });
+        toast(`Monitor: ${r.new_alerts} new alert(s)`);
+        await refreshAll();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("refresh-alerts").addEventListener("click", () => loadAlerts().catch((e) => toast(e.message)));
 
     document.getElementById("refresh-all").addEventListener("click", () => refreshAll().catch((e) => toast(e.message)));
     document.getElementById("sync-queue").addEventListener("click", async () => {
