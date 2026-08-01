@@ -74,4 +74,4 @@ PYTHONPATH=src python3 scripts/verify_dashboard.py --seed   # 34 checks incl. sc
 | 2–3 — Screener + dashboard | **Done** (queue, journal, goal, sweeps) |
 | 4 — Intraday monitor | **Done** (target/stop/EOD alerts) |
 | 5 — Learning + CIO | **Done** (daily report, rule-based CIO panel) |
-| 6 — $5M scenario visualizer | Not started |
+| 6 — $5M scenario visualizer | **Done** (journal timeline + projections) |

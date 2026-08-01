@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from investment_agent.db import (
     init_db,
     insert_macro,
+    insert_ohlcv_rows,
     insert_quote,
     insert_regime_snapshot,
     insert_ticker_metrics,
@@ -30,6 +31,54 @@ def _target(entry: float) -> float:
 
 def _stop(entry: float) -> float:
     return round(entry * (1 - STOP_PCT / 100), 2)
+
+
+def _seed_ohlcv_history(conn: sqlite3.Connection, tickers: list[str], end: datetime) -> None:
+    """~25 trading days of synthetic daily bars ending the day before `end`."""
+    tradeables = [t for t in tickers if t not in ("SPY", "DIA", "QQQ")]
+    base_prices = {
+        "AAPL": 100.0,
+        "MSFT": 420.0,
+        "NVDA": 100.0,
+        "META": 500.0,
+        "AMD": 160.0,
+        "TSLA": 250.0,
+        "IWM": 220.0,
+    }
+    prior_day = (end - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    for ticker in tickers:
+        base = base_prices.get(ticker, 100.0)
+        rows: list[dict] = []
+        for offset in range(25, 0, -1):
+            day = (end - timedelta(days=offset)).strftime("%Y-%m-%d")
+            close = base * (1 + 0.002 * ((25 - offset) % 5 - 2))
+            if ticker in tradeables and day == prior_day:
+                open_px = close
+                high = open_px * 1.018
+                low = open_px * 0.992
+            elif ticker in tradeables:
+                open_px = close * 0.998
+                swing = 0.025 if ticker in ("AAPL", "NVDA", "AMD", "META") else 0.015
+                high = open_px * (1 + swing / 2)
+                low = open_px * (1 - swing / 2)
+            else:
+                open_px = close * 0.999
+                high = close * 1.004
+                low = close * 0.996
+            rows.append(
+                {
+                    "ticker": ticker,
+                    "date": day,
+                    "open": round(open_px, 2),
+                    "high": round(high, 2),
+                    "low": round(low, 2),
+                    "close": round(close, 2),
+                    "volume": 5_000_000,
+                    "source": "demo",
+                }
+            )
+        insert_ohlcv_rows(conn, rows)
 
 
 def seed_demo_db(db_path: Path | None = None) -> Path:
@@ -61,6 +110,7 @@ def seed_demo_db(db_path: Path | None = None) -> Path:
             "app_settings",
             "quotes",
             "ticker_metrics",
+            "ohlcv_daily",
             "macro_snapshots",
             "regime_snapshots",
             "ingest_log",
@@ -68,6 +118,7 @@ def seed_demo_db(db_path: Path | None = None) -> Path:
             conn.execute(f"DELETE FROM {table}")
 
         upsert_watchlist(conn, tickers)
+        _seed_ohlcv_history(conn, tickers, end=NOW)
 
         insert_macro(conn, "VIXCLS", NOW.strftime("%Y-%m-%d"), 18.25, NOW_ISO)
         insert_regime_snapshot(

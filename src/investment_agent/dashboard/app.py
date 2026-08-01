@@ -20,10 +20,18 @@ from investment_agent.account import (
 )
 from investment_agent.cio import build_cio_summary
 from investment_agent.config import Settings
+from investment_agent.historical import (
+    build_historical_summary,
+    evaluate_period,
+    evaluate_prior_day,
+    evaluate_trading_day,
+    pull_historical_data,
+)
 from investment_agent.learning import (
     generate_learning_report,
     get_learning_report,
     get_or_generate_learning_report,
+    list_learning_report_dates,
     save_learning_report,
 )
 from investment_agent.db import connect, init_db
@@ -48,7 +56,7 @@ from investment_agent.stock_team import (
 DASHBOARD_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
-app = FastAPI(title="AI Investment Agent Dashboard", version="0.6.0")
+app = FastAPI(title="AI Investment Agent Dashboard", version="0.7.0")
 app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR / "static")), name="static")
 
 
@@ -114,20 +122,67 @@ def api_cio_summary(conn=Depends(_db)) -> dict[str, Any]:
 
 
 @app.get("/api/learning/report")
-def api_learning_report(conn=Depends(_db)) -> dict[str, Any]:
-    report = get_or_generate_learning_report(conn)
-    return report
+def api_learning_report(
+    conn=Depends(_db),
+    date: str | None = None,
+) -> dict[str, Any]:
+    return get_or_generate_learning_report(conn, report_date=date)
+
+
+@app.get("/api/learning/history")
+def api_learning_history(conn=Depends(_db), limit: int = 30) -> dict[str, Any]:
+    return {"dates": list_learning_report_dates(conn, limit=limit)}
 
 
 @app.post("/api/learning/generate")
 def api_learning_generate(
     conn=Depends(_db),
+    date: str | None = None,
     _: None = Depends(_require_api_key),
 ) -> dict:
-    report = generate_learning_report(conn)
+    report = generate_learning_report(conn, report_date=date)
     report_id = save_learning_report(conn, report)
     conn.commit()
     return {"ok": True, "id": report_id, "report": report}
+
+
+@app.get("/api/historical/summary")
+def api_historical_summary(conn=Depends(_db)) -> dict[str, Any]:
+    return build_historical_summary(conn)
+
+
+@app.get("/api/historical/evaluate")
+def api_historical_evaluate(
+    conn=Depends(_db),
+    date: str | None = None,
+) -> dict[str, Any]:
+    if date:
+        return evaluate_trading_day(conn, date)
+    result = evaluate_prior_day(conn)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No historical bars — run historical pull first")
+    return result
+
+
+@app.get("/api/historical/period")
+def api_historical_period(
+    start_date: str,
+    end_date: str,
+    conn=Depends(_db),
+) -> dict[str, Any]:
+    return evaluate_period(conn, start_date, end_date)
+
+
+@app.post("/api/historical/pull")
+def api_historical_pull(
+    conn=Depends(_db),
+    lookback_days: int = 60,
+    _: None = Depends(_require_api_key),
+) -> dict:
+    settings = Settings.from_env()
+    result = pull_historical_data(settings, db_path=None, lookback_days=lookback_days)
+    conn.commit()
+    return result
 
 
 @app.get("/api/summary")

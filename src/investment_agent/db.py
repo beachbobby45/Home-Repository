@@ -289,6 +289,65 @@ def insert_ticker_metrics(conn: sqlite3.Connection, row: dict[str, Any]) -> None
     )
 
 
+def get_active_watchlist(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute(
+        "SELECT ticker FROM watchlist WHERE active = 1 ORDER BY ticker"
+    ).fetchall()
+    return [row["ticker"] for row in rows]
+
+
+def get_ohlcv_bars(
+    conn: sqlite3.Connection,
+    ticker: str,
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int | None = None,
+) -> list[sqlite3.Row]:
+    """Daily OHLCV rows for a ticker, sorted ascending by date."""
+    clauses = ["ticker = ?"]
+    params: list[Any] = [ticker.upper()]
+    if start_date:
+        clauses.append("date >= ?")
+        params.append(start_date)
+    if end_date:
+        clauses.append("date <= ?")
+        params.append(end_date)
+    sql = f"""
+        SELECT ticker, date, open, high, low, close, volume, source
+        FROM ohlcv_daily
+        WHERE {' AND '.join(clauses)}
+        ORDER BY date ASC
+    """
+    if limit is not None:
+        sql = f"""
+            SELECT * FROM (
+                SELECT ticker, date, open, high, low, close, volume, source
+                FROM ohlcv_daily
+                WHERE {' AND '.join(clauses)}
+                ORDER BY date DESC
+                LIMIT ?
+            ) sub ORDER BY date ASC
+        """
+        params.append(limit)
+    return conn.execute(sql, params).fetchall()
+
+
+def get_ohlcv_coverage(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT ticker,
+               MIN(date) AS first_date,
+               MAX(date) AS last_date,
+               COUNT(*) AS bar_count
+        FROM ohlcv_daily
+        GROUP BY ticker
+        ORDER BY ticker
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def log_ingest(
     conn: sqlite3.Connection, component: str, status: str, detail: str = ""
 ) -> None:

@@ -153,12 +153,42 @@
     </section>
 
     <section>
+      <h2>Historical Analysis</h2>
+      <p class="brief" style="margin:0 0 0.75rem">Limited OHLCV history for prior-day screener replay and period evaluation.</p>
+      <div class="actions">
+        <button class="btn secondary" id="pull-historical">Pull history (60d)</button>
+        <button class="btn secondary" id="refresh-historical">Refresh view</button>
+      </div>
+      <div class="card" id="historical-panel">
+        <div id="historical-summary" class="brief">Loading…</div>
+        <div class="grid grid-4" id="historical-stats"></div>
+        <h3 style="margin:1rem 0 0.5rem">Prior day vs historical view</h3>
+        <div id="prior-day-eval" class="brief">Loading…</div>
+        <table style="margin-top:0.75rem;width:100%" id="prior-day-table-wrap">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Predicted range</th>
+              <th>Actual range</th>
+              <th>Screened?</th>
+              <th>Simulated</th>
+            </tr>
+          </thead>
+          <tbody id="prior-day-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
       <h2>Learning Report</h2>
       <div class="actions">
+        <label for="learning-date" class="brief" style="margin-right:0.5rem">Report date</label>
+        <input type="date" id="learning-date" />
         <button class="btn" id="generate-learning">Generate report</button>
       </div>
       <div class="card" id="learning-panel">
         <div id="learning-highlights" class="brief">Loading…</div>
+        <div id="continual-learning" class="brief" style="margin-bottom:0.75rem"></div>
         <div class="learning-grid" id="learning-details"></div>
       </div>
     </section>
@@ -380,16 +410,68 @@
       `).join("");
     }
 
+    async function loadHistorical() {
+      const summary = await api("/api/historical/summary");
+      const el = document.getElementById("historical-summary");
+      if (!summary.has_data) {
+        el.textContent = "No historical bars stored — click Pull history or run scripts/run_historical.py pull.";
+        document.getElementById("historical-stats").innerHTML = "";
+        document.getElementById("prior-day-eval").textContent = "—";
+        document.getElementById("prior-day-table").innerHTML = "<tr><td colspan='5' class='empty'>No data</td></tr>";
+        return;
+      }
+      el.textContent = `${summary.ticker_count} ticker(s), ${summary.total_bars} bars (${summary.earliest_date} → ${summary.latest_date})`;
+      document.getElementById("historical-stats").innerHTML = `
+        <div class="card"><h2>Tickers</h2><div class="metric small">${summary.ticker_count}</div></div>
+        <div class="card"><h2>Total bars</h2><div class="metric small">${summary.total_bars}</div></div>
+        <div class="card"><h2>From</h2><div class="metric small">${summary.earliest_date}</div></div>
+        <div class="card"><h2>Through</h2><div class="metric small">${summary.latest_date}</div></div>
+      `;
+      const prior = await api("/api/historical/evaluate");
+      const pe = document.getElementById("prior-day-eval");
+      const s = prior.summary || {};
+      pe.textContent = `${prior.eval_date}: ${s.screened_count || 0} screener match(es) — `
+        + `${s.simulated_targets || 0} target(s), ${s.simulated_stops || 0} stop(s), `
+        + `${s.simulated_neither || 0} neither (daily-bar approximation).`;
+      const matches = prior.screened_matches || [];
+      document.getElementById("prior-day-table").innerHTML = matches.length
+        ? matches.map((m) => `
+          <tr>
+            <td>${m.ticker}</td>
+            <td>${m.predicted_avg_range_pct}%</td>
+            <td>${m.actual_range_pct}%</td>
+            <td>${m.would_screen ? "Yes" : "No"}</td>
+            <td>${m.simulated_outcome || "—"}</td>
+          </tr>`).join("")
+        : "<tr><td colspan='5' class='empty'>No screened matches on prior day</td></tr>";
+    }
+
     async function loadLearning() {
-      const r = await api("/api/learning/report");
+      const dateInput = document.getElementById("learning-date");
+      const q = dateInput.value ? `?date=${dateInput.value}` : "";
+      const r = await api(`/api/learning/report${q}`);
+      if (!dateInput.value && r.report_date) dateInput.value = r.report_date;
       const hl = document.getElementById("learning-highlights");
       hl.innerHTML = (r.highlights || []).length
         ? `<ul>${r.highlights.map((h) => `<li>${h}</li>`).join("")}</ul>`
         : "<span class='empty'>No highlights yet — log trades and run ingest.</span>";
+      const cl = r.continual_learning || {};
+      const j = cl.journal || {};
+      document.getElementById("continual-learning").innerHTML = cl.note
+        ? `<strong>Continual learning (${cl.lookback_days || 30}d):</strong> `
+          + `${j.round_trips_closed || 0} closed trips, ${j.win_rate_pct ?? "—"}% win rate, `
+          + `net $${fmt(j.total_net_pnl || 0)}; `
+          + `${cl.reports_saved || 0} saved report(s).`
+        : "";
       const details = document.getElementById("learning-details");
+      const prior = r.prior_day_evaluation;
+      const priorRows = prior && prior.screened_matches ? prior.screened_matches : [];
       const sections = [
+        ["Today's journal", r.today_journal, (p) => `${p.side} ${p.shares} ${p.ticker} @ $${p.price}`],
+        ["Today's round trips", r.today_round_trips, (p) => `${p.ticker}: ${p.note}`],
         ["Active positions", r.active_positions, (p) => `${p.ticker}: ${p.note}`],
-        ["Round trips", r.round_trips, (p) => `${p.ticker}: ${p.note}`],
+        ["Recent round trips", r.round_trips, (p) => `${p.ticker}: ${p.note}`],
+        ["Prior day screened", priorRows, (p) => `${p.ticker}: pred ${p.predicted_avg_range_pct}% → actual ${p.actual_range_pct}% (${p.simulated_outcome})`],
         ["Watchlist", r.watchlist_insights, (p) => `${p.ticker}: ${p.note}`],
       ];
       details.innerHTML = sections.map(([title, rows, fmt]) => {
@@ -461,12 +543,25 @@
     }
 
     async function refreshAll() {
-      await Promise.all([loadSummary(), loadScenario(), loadCio(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
+      await Promise.all([loadSummary(), loadScenario(), loadCio(), loadHistorical(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
     }
+
+    document.getElementById("pull-historical").addEventListener("click", async () => {
+      try {
+        const r = await api("/api/historical/pull?lookback_days=60", { method: "POST" });
+        toast(`Pulled ${r.bars_inserted || 0} bar(s)`);
+        await loadHistorical();
+        await loadLearning();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("refresh-historical").addEventListener("click", () => loadHistorical().catch((e) => toast(e.message)));
+    document.getElementById("learning-date").addEventListener("change", () => loadLearning().catch((e) => toast(e.message)));
 
     document.getElementById("generate-learning").addEventListener("click", async () => {
       try {
-        await api("/api/learning/generate", { method: "POST" });
+        const dateInput = document.getElementById("learning-date");
+        const q = dateInput.value ? `?date=${dateInput.value}` : "";
+        await api(`/api/learning/generate${q}`, { method: "POST" });
         toast("Learning report saved");
         await loadLearning();
         await loadCio();

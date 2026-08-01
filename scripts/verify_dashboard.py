@@ -167,6 +167,19 @@ def verify(db_path: Path) -> dict:
             record("GET /api/learning/report", r.status_code == 200, "")
             record("learning.active_positions", len(learning.get("active_positions", [])) >= 1, "")
             record("learning.round_trips", len(learning.get("round_trips", [])) >= 1, "")
+            record("learning.continual", "continual_learning" in learning, "")
+            record("learning.prior_day", learning.get("prior_day_evaluation") is not None, "")
+
+            r = client.get("/api/historical/summary")
+            hist = r.json()
+            record("GET /api/historical/summary", r.status_code == 200 and hist.get("has_data"), "")
+
+            r = client.get("/api/historical/evaluate")
+            prior = r.json()
+            record("GET /api/historical/evaluate", r.status_code == 200 and prior.get("eval_date"), "")
+
+            r = client.get("/api/learning/history")
+            record("GET /api/learning/history", r.status_code == 200 and "dates" in r.json(), "")
 
             r = client.post("/api/learning/generate")
             gen = r.json()

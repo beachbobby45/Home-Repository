@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from investment_agent.historical import evaluate_prior_day
 from investment_agent.journal import get_completed_round_trips, get_open_positions
 from investment_agent.liquidity import SWING_TARGET_PCT
 from investment_agent.monitor import get_latest_quotes, pnl_pct
@@ -74,9 +75,11 @@ def _analyze_active_positions(conn: sqlite3.Connection, quotes: dict[str, float]
     return items
 
 
-def _analyze_round_trips(conn: sqlite3.Connection) -> list[dict]:
+def _analyze_round_trips(conn: sqlite3.Connection, report_date: str | None = None) -> list[dict]:
     items: list[dict] = []
-    for trip in get_completed_round_trips(conn, limit=30):
+    for trip in get_completed_round_trips(conn, limit=50):
+        if report_date and trip["sell_at"][:10] != report_date:
+            continue
         q = _queue_for(conn, trip.get("queue_id"))
         rec_entry = float(q["entry_price"]) if q and q["entry_price"] else trip["buy_price"]
         target = float(q["target_price"]) if q and q["target_price"] else rec_entry * (1 + TARGET_PCT / 100)
@@ -94,6 +97,7 @@ def _analyze_round_trips(conn: sqlite3.Connection) -> list[dict]:
                 "sell_price": trip["sell_price"],
                 "net_pnl": trip["net_pnl"],
                 "same_day": trip["same_day"],
+                "sell_date": trip["sell_at"][:10],
                 "recommended_entry": rec_entry,
                 "entry_delta_pct": entry_delta_pct,
                 "target_price": target,
@@ -108,7 +112,106 @@ def _analyze_round_trips(conn: sqlite3.Connection) -> list[dict]:
                 ),
             }
         )
+        if len(items) >= 30:
+            break
     return items
+
+
+def _journal_legs_for_date(conn: sqlite3.Connection, report_date: str) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, ticker, side, shares, price, fee, executed_at, notes
+        FROM trade_journal
+        WHERE substr(executed_at, 1, 10) = ?
+        ORDER BY executed_at ASC, id ASC
+        """,
+        (report_date,),
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "ticker": row["ticker"],
+            "side": row["side"],
+            "shares": row["shares"],
+            "price": row["price"],
+            "fee": row["fee"],
+            "executed_at": row["executed_at"],
+            "notes": row["notes"],
+        }
+        for row in rows
+    ]
+
+
+def _build_continual_learning(conn: sqlite3.Connection, *, lookback_days: int = 30) -> dict:
+    """Aggregate journal + saved reports across recent days."""
+    cutoff = (datetime.now(ET) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    trips = get_completed_round_trips(conn, limit=200)
+    recent_trips = [t for t in trips if t["sell_at"][:10] >= cutoff]
+    wins = sum(1 for t in recent_trips if t["net_pnl"] > 0)
+    total_net = sum(t["net_pnl"] for t in recent_trips)
+    same_day = sum(1 for t in recent_trips if t["same_day"])
+
+    report_rows = conn.execute(
+        """
+        SELECT report_date, payload_json
+        FROM learning_reports
+        WHERE report_date >= ?
+        ORDER BY report_date DESC
+        """,
+        (cutoff,),
+    ).fetchall()
+
+    range_errors: list[float] = []
+    prior_screened = 0
+    prior_targets = 0
+    for row in report_rows:
+        payload = json.loads(row["payload_json"])
+        prior = payload.get("prior_day_evaluation")
+        if not prior:
+            continue
+        summary = prior.get("summary") or {}
+        prior_screened += summary.get("screened_count", 0)
+        prior_targets += summary.get("simulated_targets", 0)
+        for t in prior.get("all_tickers") or []:
+            if t.get("range_delta_pct") is not None:
+                range_errors.append(abs(float(t["range_delta_pct"])))
+
+    saved_dates = [row["report_date"] for row in report_rows]
+    return {
+        "lookback_days": lookback_days,
+        "cutoff_date": cutoff,
+        "reports_saved": len(saved_dates),
+        "saved_report_dates": saved_dates[:10],
+        "journal": {
+            "round_trips_closed": len(recent_trips),
+            "win_rate_pct": round(100.0 * wins / max(len(recent_trips), 1), 1),
+            "total_net_pnl": round(total_net, 2),
+            "same_day_pct": round(100.0 * same_day / max(len(recent_trips), 1), 1),
+        },
+        "historical_accuracy": {
+            "avg_range_error_pct": round(sum(range_errors) / len(range_errors), 2)
+            if range_errors
+            else None,
+            "prior_day_screened_setups": prior_screened,
+            "prior_day_simulated_targets": prior_targets,
+        },
+        "note": (
+            f"Last {lookback_days}d: {len(recent_trips)} closed round trip(s), "
+            f"{len(saved_dates)} saved learning report(s)."
+        ),
+    }
+
+
+def list_learning_report_dates(conn: sqlite3.Connection, limit: int = 30) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT report_date FROM learning_reports
+        ORDER BY report_date DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [row["report_date"] for row in rows]
 
 
 def _analyze_watchlist(conn: sqlite3.Connection, quotes: dict[str, float]) -> list[dict]:
@@ -221,22 +324,47 @@ def generate_learning_report(
     conn: sqlite3.Connection,
     report_date: str | None = None,
 ) -> dict:
-    """Build daily learning report from journal, queue, metrics, regime."""
+    """Build daily learning report from journal, queue, metrics, regime, and history."""
     day = report_date or _today_et()
     quotes = get_latest_quotes(conn)
 
     active = _analyze_active_positions(conn, quotes)
-    round_trips = _analyze_round_trips(conn)
+    today_round_trips = _analyze_round_trips(conn, report_date=day)
+    recent_round_trips = _analyze_round_trips(conn)
     watchlist = _analyze_watchlist(conn, quotes)
     regime = _regime_stats(conn)
     multi_round = _multi_round_same_day(conn, day)
+    today_journal = _journal_legs_for_date(conn, day)
+    prior_day = evaluate_prior_day(conn, reference_date=day)
+    continual = _build_continual_learning(conn)
 
     eod_open = [a for a in active if a.get("queue_state") in ("in_trade", "eod")]
 
     highlights: list[str] = []
-    if round_trips:
-        wins = sum(1 for r in round_trips if r["net_pnl"] > 0)
-        highlights.append(f"{len(round_trips)} round trip(s) logged; {wins} profitable after fees.")
+    if today_round_trips:
+        wins = sum(1 for r in today_round_trips if r["net_pnl"] > 0)
+        highlights.append(
+            f"Today: {len(today_round_trips)} round trip(s) closed; {wins} profitable after fees."
+        )
+    elif recent_round_trips:
+        wins = sum(1 for r in recent_round_trips if r["net_pnl"] > 0)
+        highlights.append(
+            f"Recent: {len(recent_round_trips)} round trip(s) logged; {wins} profitable after fees."
+        )
+    if today_journal:
+        highlights.append(f"Today: {len(today_journal)} journal leg(s) logged.")
+    if prior_day and prior_day.get("summary"):
+        s = prior_day["summary"]
+        highlights.append(
+            f"Prior day ({prior_day['eval_date']}): {s['screened_count']} screener match(es), "
+            f"{s['simulated_targets']} simulated target(s), {s['simulated_stops']} stop(s)."
+        )
+    if continual["journal"]["round_trips_closed"]:
+        highlights.append(
+            f"Continual ({continual['lookback_days']}d): "
+            f"{continual['journal']['win_rate_pct']}% win rate, "
+            f"net ${continual['journal']['total_net_pnl']:+.2f}."
+        )
     if active:
         highlights.append(f"{len(active)} open position(s) — review target/stop and EOD flat rule.")
     if eod_open:
@@ -259,11 +387,15 @@ def generate_learning_report(
         "generated_at": _utc_now_iso(),
         "highlights": highlights,
         "active_positions": active,
-        "round_trips": round_trips,
+        "round_trips": recent_round_trips,
+        "today_round_trips": today_round_trips,
+        "today_journal": today_journal,
         "watchlist_insights": watchlist,
         "regime_stats": regime,
         "multi_round_same_day": multi_round,
         "eod_open_positions": eod_open,
+        "prior_day_evaluation": prior_day,
+        "continual_learning": continual,
         "claude_ready": False,
     }
 
@@ -297,8 +429,12 @@ def get_learning_report(conn: sqlite3.Connection, report_date: str | None = None
     return None
 
 
-def get_or_generate_learning_report(conn: sqlite3.Connection) -> dict:
-    cached = get_learning_report(conn)
+def get_or_generate_learning_report(
+    conn: sqlite3.Connection,
+    report_date: str | None = None,
+) -> dict:
+    day = report_date or _today_et()
+    cached = get_learning_report(conn, day)
     if cached:
         return cached
-    return generate_learning_report(conn)
+    return generate_learning_report(conn, report_date=day)
