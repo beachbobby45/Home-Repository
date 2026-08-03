@@ -136,6 +136,9 @@ def _simulate_trading_day(
     cash: float,
     buy_fee: float,
     sell_fee: float,
+    target_pct: float = TARGET_PCT,
+    stop_pct: float = STOP_PCT,
+    max_trades: int | None = None,
 ) -> tuple[list[BacktestTrade], float]:
     """One position at a time; multiple round trips; rotate through ranked qualifiers."""
     master = index_bars.get("SPY") or next(iter(ticker_bars.values()), [])
@@ -184,6 +187,8 @@ def _simulate_trading_day(
                 )
             )
             position = None
+            if max_trades is not None and len(trades) >= max_trades:
+                break
             # rotate to back of queue so other ranked names get turns same day
             if closed_ticker in queue:
                 queue.remove(closed_ticker)
@@ -217,8 +222,8 @@ def _simulate_trading_day(
                 entry_ts=tbars[i]["ts"],
                 entry_price=entry_price,
                 shares=float(shares),
-                target=entry_price * (1 + TARGET_PCT / 100),
-                stop=entry_price * (1 - STOP_PCT / 100),
+                target=entry_price * (1 + target_pct / 100),
+                stop=entry_price * (1 - stop_pct / 100),
                 buy_fee=buy_fee,
             )
             break
@@ -301,6 +306,9 @@ def run_intraday_backtest(
     bar_interval: str = "5m",
     buy_fee: float = DEFAULT_BUY_FEE,
     sell_fee: float = DEFAULT_SELL_FEE,
+    target_pct: float = TARGET_PCT,
+    stop_pct: float = STOP_PCT,
+    max_trades_per_day: int | None = None,
     intraday_cache: dict[str, list[dict]] | None = None,
 ) -> BacktestResult:
     start_date, end_date = date_range_for_period(lookback_days)
@@ -368,6 +376,9 @@ def run_intraday_backtest(
                 cash=cash,
                 buy_fee=buy_fee,
                 sell_fee=sell_fee,
+                target_pct=target_pct,
+                stop_pct=stop_pct,
+                max_trades=max_trades_per_day,
             )
             all_trades.extend(day_trades)
 
@@ -410,9 +421,10 @@ def run_intraday_backtest(
         spy_return_pct=_spy_return(conn, start_date, end_date),
         assumptions=[
             f"Top {top_n} tickers by {lookback_days}d rank score; Yahoo {bar_interval} bars (not tick data).",
-            "Entry at 5m bar open; exit on first touch of +1.13% / −0.50% (stop wins if both in same bar).",
+            f"Entry at {bar_interval} bar open; exit on first touch of +{target_pct}% / −{stop_pct}% (stop wins if both in same bar).",
             "Step 3 qualification from daily bars (liquidity + ~3% swing band) per day.",
-            "One position at a time; multiple round trips/day; rotates through ranked qualifiers.",
+            "One position at a time; multiple round trips/day; rotates through ranked qualifiers."
+            + (f"; max {max_trades_per_day} trades/day." if max_trades_per_day else "."),
             f"Fees: ${buy_fee:.0f} buy + ${sell_fee:.0f} sell per round trip.",
             "Regime gate: no new entries when SPY/DIA/QQQ all below session open.",
         ],

@@ -69,7 +69,11 @@ def get_intraday_bars(
 ) -> list[dict]:
     """Fetch intraday OHLCV bars (default 5m — supports ~60d on Yahoo free tier)."""
     sym = symbol.upper()
-    period = f"{max(lookback_days, 5)}d"
+    # Yahoo free tier: 1m limited to ~7 calendar days per request
+    if interval == "1m":
+        period = f"{min(max(lookback_days, 1), 7)}d"
+    else:
+        period = f"{max(lookback_days, 5)}d"
     df = yf.download(sym, period=period, interval=interval, progress=False, auto_adjust=False)
     if df is None or df.empty:
         raise ValueError(f"No intraday bars returned for {sym}")
