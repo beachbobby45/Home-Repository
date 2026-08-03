@@ -62,6 +62,7 @@ def test_full_dashboard_flow_with_demo_data():
 
             # Summary
             summary = client.get("/api/summary").json()
+            assert summary["trading_mode"] == "paper"
             assert abs(summary["tradable_cash"] - expected["tradable_cash"]) < 0.02
             assert summary["vix"] == expected["vix"]
             assert summary["regime"]["summary"].startswith("Regime OK")
@@ -120,6 +121,11 @@ def test_full_dashboard_flow_with_demo_data():
                 json={"ticker": "AMD", "side": "BUY", "shares": 5, "price": 160.0},
             ).json()
             assert trade["ok"] is True
+            assert trade["trading_mode"] == "paper"
+
+            journal_after = client.get("/api/journal").json()
+            latest = journal_after[0]
+            assert latest["notes"].startswith("[PAPER]")
 
             # Tax rate
             tax = client.put("/api/settings/tax-rate", json={"tax_rate": 0.28}).json()
@@ -145,6 +151,14 @@ def test_full_dashboard_flow_with_demo_data():
             gen = client.post("/api/learning/generate").json()
             assert gen["ok"] is True
             assert gen["report"]["highlights"]
+
+            cleared = client.post("/api/journal/clear").json()
+            assert cleared["ok"] is True
+            assert cleared["removed"] >= 1
+            assert client.get("/api/journal").json() == []
+
+            mode = client.put("/api/settings/trading-mode", json={"mode": "live"}).json()
+            assert mode["mode"] == "live"
 
 
 def test_verify_dashboard_script_matches_integration():

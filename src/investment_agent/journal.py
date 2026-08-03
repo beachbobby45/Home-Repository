@@ -336,3 +336,11 @@ def get_completed_round_trips(conn: sqlite3.Connection, limit: int = 50) -> list
     _, completed = _fifo_ledger(conn)
     completed.sort(key=lambda r: r["sell_at"], reverse=True)
     return completed[:limit]
+
+
+def clear_all_trades(conn: sqlite3.Connection) -> int:
+    """Delete every row in trade_journal. Returns number of rows removed."""
+    row = conn.execute("SELECT COUNT(*) AS c FROM trade_journal").fetchone()
+    count = int(row["c"]) if row else 0
+    conn.execute("DELETE FROM trade_journal")
+    return count

@@ -23,6 +23,7 @@
   </header>
 
   <main>
+    <div id="trading-mode-banner" class="banner paper">Loading trading mode…</div>
     <div id="regime-banner" class="banner ok">Loading regime…</div>
 
     <section class="trading-day-section">
@@ -331,6 +332,22 @@
 
     <section>
       <h2>Trade Journal</h2>
+      <p class="brief" style="margin:0 0 0.75rem">
+        Log E*TRADE fills here. While in <strong>PAPER</strong> mode, all entries are practice data — switch to
+        <strong>LIVE</strong> only when you are ready for real-money tracking.
+      </p>
+      <div class="card journal-toolbar">
+        <div class="journal-mode-row">
+          <label for="trading-mode">Trading mode</label>
+          <select id="trading-mode">
+            <option value="paper">PAPER — test / practice journal</option>
+            <option value="live">LIVE — real E*TRADE fills</option>
+          </select>
+          <button class="btn secondary btn-sm" type="button" id="save-trading-mode">Save mode</button>
+          <span class="brief" id="trading-mode-status"></span>
+        </div>
+        <button class="btn secondary btn-sm" type="button" id="clear-journal">Clear all journal entries</button>
+      </div>
       <div class="card">
         <form id="trade-form">
           <div class="form-row">
@@ -568,8 +585,23 @@
       }
     }
 
+    function updateTradingModeBanner(mode) {
+      const banner = document.getElementById("trading-mode-banner");
+      if (mode === "live") {
+        banner.className = "banner live";
+        banner.textContent =
+          "LIVE TRADING — journal entries are treated as real E*TRADE fills. Only switch here when you are ready.";
+      } else {
+        banner.className = "banner paper";
+        banner.textContent =
+          "PAPER TRADING — journal entries are practice data for testing the dashboard and process. Not real money.";
+      }
+    }
+
     async function loadSummary() {
       const s = await api("/api/summary");
+      updateTradingModeBanner(s.trading_mode || "paper");
+      document.getElementById("trading-mode").value = s.trading_mode || "paper";
       document.getElementById("goal-pct").textContent = fmtPct(s.goal_pct);
       document.getElementById("goal-bar").style.width = Math.min(100, s.goal_pct) + "%";
       document.getElementById("goal-label").textContent =
@@ -1137,6 +1169,40 @@
         await api("/api/settings/tax-rate", { method: "PUT", body: JSON.stringify({ tax_rate: rate }) });
         toast("Tax rate saved");
         await loadSummary();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("save-trading-mode").addEventListener("click", async () => {
+      const select = document.getElementById("trading-mode");
+      const mode = select.value;
+      const status = document.getElementById("trading-mode-status");
+      if (mode === "live") {
+        const ok = window.confirm(
+          "Switch to LIVE mode? New journal entries will be tagged as real E*TRADE fills. Continue?"
+        );
+        if (!ok) {
+          await loadSummary();
+          return;
+        }
+      }
+      try {
+        const r = await api("/api/settings/trading-mode", { method: "PUT", body: JSON.stringify({ mode }) });
+        status.textContent = r.mode === "live" ? "LIVE mode saved." : "PAPER mode saved.";
+        toast(r.mode === "live" ? "LIVE trading mode enabled" : "PAPER trading mode enabled");
+        await refreshAll();
+      } catch (e) {
+        status.textContent = "";
+        toast(e.message);
+      }
+    });
+    document.getElementById("clear-journal").addEventListener("click", async () => {
+      const ok = window.confirm(
+        "Clear ALL journal entries? This resets cash/P&L to the $10K basis and cannot be undone."
+      );
+      if (!ok) return;
+      try {
+        const r = await api("/api/journal/clear", { method: "POST" });
+        toast(`Cleared ${r.removed} journal entr${r.removed === 1 ? "y" : "ies"}`);
+        await refreshAll();
       } catch (e) { toast(e.message); }
     });
     document.getElementById("apply-sweep").addEventListener("click", async () => {

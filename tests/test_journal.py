@@ -13,9 +13,11 @@ sys.path.insert(0, str(ROOT / "src"))
 from investment_agent.db import init_db
 from investment_agent.finance import ORIGINAL_BASIS
 from investment_agent.journal import (
+    clear_all_trades,
     compute_monthly_realized_net,
     insert_trade,
     journal_cash_balance,
+    list_trades,
 )
 
 
@@ -84,6 +86,24 @@ def test_monthly_realized_net_includes_fees():
         net = compute_monthly_realized_net(conn, "2026-07")
         # Gross +11.3, fees 14 → net −2.7
         assert abs(net - (-2.7)) < 0.01
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
+def test_clear_all_trades_resets_cash_to_basis():
+    conn, path = _conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        insert_trade(conn, ticker="AAPL", side="BUY", shares=10, price=100, fee=7)
+        insert_trade(conn, ticker="AAPL", side="SELL", shares=10, price=110, fee=7)
+        conn.commit()
+        assert journal_cash_balance(conn) != ORIGINAL_BASIS
+        removed = clear_all_trades(conn)
+        conn.commit()
+        assert removed == 2
+        assert list_trades(conn) == []
+        assert journal_cash_balance(conn) == ORIGINAL_BASIS
     finally:
         conn.close()
         path.unlink(missing_ok=True)

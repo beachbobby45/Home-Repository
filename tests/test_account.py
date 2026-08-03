@@ -13,6 +13,9 @@ sys.path.insert(0, str(ROOT / "src"))
 from investment_agent.account import (
     apply_month_end_sweep,
     build_dashboard_summary,
+    format_journal_notes,
+    get_trading_mode,
+    set_trading_mode,
     set_setting,
 )
 from investment_agent.db import init_db, insert_regime_snapshot
@@ -83,6 +86,29 @@ def test_dashboard_summary_regime_and_tax_rate():
         summary = build_dashboard_summary(conn)
         assert summary.block_new_longs is True
         assert summary.tax_rate == 0.30
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
+def test_trading_mode_defaults_to_paper():
+    conn, path = _conn()
+    try:
+        assert get_trading_mode(conn) == "paper"
+        summary = build_dashboard_summary(conn)
+        assert summary.trading_mode == "paper"
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
+def test_set_trading_mode_and_journal_note_tagging():
+    conn, path = _conn()
+    try:
+        assert set_trading_mode(conn, "live") == "live"
+        assert format_journal_notes("E*TRADE fill", "live") == "[LIVE] E*TRADE fill"
+        assert format_journal_notes("[PAPER] already tagged", "live") == "[PAPER] already tagged"
+        assert format_journal_notes(None, "paper") == "[PAPER]"
     finally:
         conn.close()
         path.unlink(missing_ok=True)

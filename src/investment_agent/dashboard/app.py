@@ -15,8 +15,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from investment_agent.account import (
     apply_month_end_sweep,
     build_dashboard_summary,
+    format_journal_notes,
     get_tax_rate,
+    get_trading_mode,
     set_setting,
+    set_trading_mode,
     summary_to_dict,
 )
 from investment_agent.cio import build_cio_summary
@@ -44,7 +47,7 @@ from investment_agent.period_screener import (
     date_range_for_period,
 )
 from investment_agent.db import connect, init_db
-from investment_agent.journal import insert_trade, list_trades, trade_to_dict
+from investment_agent.journal import clear_all_trades, insert_trade, list_trades, trade_to_dict
 from investment_agent.scenario import build_scenario_visualizer
 from investment_agent.watchlist import (
     compute_universe_stats,
@@ -114,6 +117,10 @@ class TradeCreate(BaseModel):
 
 class TaxRateUpdate(BaseModel):
     tax_rate: float = Field(ge=0, le=1)
+
+
+class TradingModeUpdate(BaseModel):
+    mode: str
 
 
 class QueueStateUpdate(BaseModel):
@@ -420,6 +427,7 @@ def api_journal_create(
     conn=Depends(_db),
     _: None = Depends(_require_api_key),
 ) -> dict:
+    mode = get_trading_mode(conn)
     trade_id = insert_trade(
         conn,
         ticker=body.ticker,
@@ -428,11 +436,40 @@ def api_journal_create(
         price=body.price,
         fee=body.fee,
         executed_at=body.executed_at,
-        notes=body.notes,
+        notes=format_journal_notes(body.notes, mode),
         queue_id=body.queue_id,
     )
     conn.commit()
-    return {"ok": True, "id": trade_id}
+    return {"ok": True, "id": trade_id, "trading_mode": mode}
+
+
+@app.post("/api/journal/clear")
+def api_journal_clear(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    removed = clear_all_trades(conn)
+    conn.commit()
+    return {"ok": True, "removed": removed}
+
+
+@app.get("/api/settings/trading-mode")
+def api_get_trading_mode(conn=Depends(_db)) -> dict:
+    return {"mode": get_trading_mode(conn)}
+
+
+@app.put("/api/settings/trading-mode")
+def api_set_trading_mode(
+    body: TradingModeUpdate,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    try:
+        mode = set_trading_mode(conn, body.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    conn.commit()
+    return {"ok": True, "mode": mode}
 
 
 @app.put("/api/settings/tax-rate")

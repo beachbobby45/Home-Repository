@@ -39,6 +39,11 @@ from investment_agent.strategy import (
     TARGET_PCT,
 )
 
+TRADING_MODE_KEY = "trading_mode"
+TRADING_MODE_PAPER = "paper"
+TRADING_MODE_LIVE = "live"
+VALID_TRADING_MODES = frozenset({TRADING_MODE_PAPER, TRADING_MODE_LIVE})
+
 
 @dataclass(frozen=True)
 class DashboardSummary:
@@ -64,6 +69,7 @@ class DashboardSummary:
     growth_tier: dict
     growth_plan: list[dict]
     strategy_rules: dict
+    trading_mode: str
 
 
 def _month_key(dt: datetime | None = None) -> str:
@@ -97,6 +103,30 @@ def get_tax_rate(conn: sqlite3.Connection) -> float:
         return float(raw)
     except ValueError:
         return DEFAULT_TAX_RESERVE_RATE
+
+
+def get_trading_mode(conn: sqlite3.Connection) -> str:
+    raw = get_setting(conn, TRADING_MODE_KEY, TRADING_MODE_PAPER).lower().strip()
+    return raw if raw in VALID_TRADING_MODES else TRADING_MODE_PAPER
+
+
+def set_trading_mode(conn: sqlite3.Connection, mode: str) -> str:
+    normalized = mode.lower().strip()
+    if normalized not in VALID_TRADING_MODES:
+        raise ValueError(f"trading_mode must be one of: {', '.join(sorted(VALID_TRADING_MODES))}")
+    set_setting(conn, TRADING_MODE_KEY, normalized)
+    return normalized
+
+
+def format_journal_notes(notes: str | None, mode: str) -> str | None:
+    """Prefix journal notes with [PAPER] or [LIVE] unless already tagged."""
+    prefix = "[PAPER]" if mode == TRADING_MODE_PAPER else "[LIVE]"
+    if notes is None or not notes.strip():
+        return prefix
+    upper = notes.strip().upper()
+    if upper.startswith("[PAPER]") or upper.startswith("[LIVE]"):
+        return notes.strip()
+    return f"{prefix} {notes.strip()}"
 
 
 def get_jar_balance(conn: sqlite3.Connection, jar_type: str) -> float:
@@ -271,6 +301,7 @@ def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
             "milestone_daily_goal": DAILY_TARGET_MILESTONE_GOAL,
             "milestone_at_balance": DAILY_TARGET_MILESTONE_AT,
         },
+        trading_mode=get_trading_mode(conn),
     )
 
 
@@ -299,4 +330,5 @@ def summary_to_dict(summary: DashboardSummary) -> dict:
         "growth_tier": summary.growth_tier,
         "growth_plan": summary.growth_plan,
         "strategy": summary.strategy_rules,
+        "trading_mode": summary.trading_mode,
     }
