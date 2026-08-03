@@ -10,42 +10,42 @@ from zoneinfo import ZoneInfo
 
 from investment_agent.finance import DEFAULT_BUY_FEE, DEFAULT_SELL_FEE, ORIGINAL_BASIS
 
-ET = ZoneInfo("America/New_York")
+PT = ZoneInfo("America/Los_Angeles")
 
 
-def today_et_str() -> str:
-    return datetime.now(ET).strftime("%Y-%m-%d")
+def today_pt_str() -> str:
+    return datetime.now(PT).strftime("%Y-%m-%d")
 
 
 def _parse_executed_at(executed_at: str) -> datetime:
     ts = executed_at.replace("Z", "+00:00")
     dt = datetime.fromisoformat(ts)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=ET)
+        dt = dt.replace(tzinfo=PT)
     return dt
 
 
-def _executed_date_et(executed_at: str) -> str:
+def _executed_date_pt(executed_at: str) -> str:
     try:
-        return _parse_executed_at(executed_at).astimezone(ET).strftime("%Y-%m-%d")
+        return _parse_executed_at(executed_at).astimezone(PT).strftime("%Y-%m-%d")
     except ValueError:
         return executed_at[:10]
 
 
-def build_executed_at_et(date_key: str, time_hm: str) -> str:
-    """Combine YYYY-MM-DD and HH:MM as America/New_York (E*TRADE audit log times)."""
+def build_executed_at_pt(date_key: str, time_hm: str) -> str:
+    """Combine YYYY-MM-DD and HH:MM as Pacific Time (E*TRADE audit log times)."""
     parts = time_hm.strip().split(":")
     if len(parts) < 2:
         raise ValueError("time must be HH:MM")
     hour, minute = int(parts[0]), int(parts[1])
     second = int(parts[2]) if len(parts) > 2 else 0
     y, m, d = map(int, date_key.split("-"))
-    dt = datetime(y, m, d, hour, minute, second, tzinfo=ET)
+    dt = datetime(y, m, d, hour, minute, second, tzinfo=PT)
     return dt.replace(microsecond=0).isoformat()
 
 
 def normalize_executed_at(executed_at: str) -> str:
-    """Store timezone-aware ISO; naive values are interpreted as Eastern Time."""
+    """Store timezone-aware ISO; naive values are interpreted as Pacific Time."""
     return _parse_executed_at(executed_at).replace(microsecond=0).isoformat()
 
 
@@ -53,10 +53,10 @@ def resolve_executed_at(
     *,
     executed_at: str | None = None,
     executed_date: str | None = None,
-    executed_time_et: str | None = None,
+    executed_time_pt: str | None = None,
 ) -> str | None:
-    if executed_date and executed_time_et:
-        return build_executed_at_et(executed_date, executed_time_et)
+    if executed_date and executed_time_pt:
+        return build_executed_at_pt(executed_date, executed_time_pt)
     if executed_at:
         return normalize_executed_at(executed_at)
     return None
@@ -174,8 +174,8 @@ def compute_total_fees(conn: sqlite3.Connection) -> float:
 
 
 def compute_today_realized_net(conn: sqlite3.Connection, date_key: str | None = None) -> float:
-    """FIFO matched round-trip P&L for closed trades on YYYY-MM-DD (America/New_York)."""
-    when = date_key or today_et_str()
+    """FIFO matched round-trip P&L for closed trades on YYYY-MM-DD (Pacific Time)."""
+    when = date_key or today_pt_str()
     rows = conn.execute(
         """
         SELECT ticker, side, shares, price, fee, executed_at
@@ -188,7 +188,7 @@ def compute_today_realized_net(conn: sqlite3.Connection, date_key: str | None = 
     realized = 0.0
 
     for row in rows:
-        if _executed_date_et(row["executed_at"]) != when:
+        if _executed_date_pt(row["executed_at"]) != when:
             continue
         ticker = row["ticker"]
         if row["side"] == "BUY":

@@ -118,7 +118,7 @@ class TradeCreate(BaseModel):
     fee: float | None = None
     executed_at: str | None = None
     executed_date: str | None = None
-    executed_time_et: str | None = None
+    executed_time_pt: str | None = None
     notes: str | None = None
     queue_id: int | None = None
 
@@ -440,7 +440,7 @@ def api_journal_create(
         executed_at = resolve_executed_at(
             executed_at=body.executed_at,
             executed_date=body.executed_date,
-            executed_time_et=body.executed_time_et,
+            executed_time_pt=body.executed_time_pt,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

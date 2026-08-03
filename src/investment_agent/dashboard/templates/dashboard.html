@@ -375,11 +375,11 @@
               <input id="t-fee" type="number" step="0.01" min="0" placeholder="7" />
             </div>
             <div>
-              <label for="t-date">Trade date (ET)</label>
+              <label for="t-date">Trade date (Pacific)</label>
               <input id="t-date" type="date" required />
             </div>
             <div>
-              <label for="t-time" id="t-time-label">Time of purchase (ET)</label>
+              <label for="t-time" id="t-time-label">Time of purchase (Pacific)</label>
               <input id="t-time" type="time" step="1" required placeholder="From E*TRADE audit log" />
             </div>
             <div>
@@ -394,8 +394,8 @@
         <table>
           <thead>
             <tr>
-              <th>Date (ET)</th>
-              <th>Time (ET)</th>
+              <th>Date (Pacific)</th>
+              <th>Time (Pacific)</th>
               <th>Ticker</th>
               <th>Side</th>
               <th>Shares</th>
@@ -417,7 +417,7 @@
   <script>
     const fmt = (n) => n == null ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtPct = (n) => n == null ? "—" : Number(n).toFixed(4) + "%";
-    const ET = "America/New_York";
+    const PT = "America/Los_Angeles";
 
     function parseIsoDate(iso) {
       if (!iso) return null;
@@ -425,17 +425,17 @@
       const m = iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2})?)/);
       if (m) {
         const month = parseInt(m[1].slice(5, 7), 10);
-        const offset = (month >= 4 && month <= 10) ? "-04:00" : "-05:00";
+        const offset = (month >= 4 && month <= 10) ? "-07:00" : "-08:00";
         return new Date(`${m[1]}T${m[2]}${offset}`);
       }
       return new Date(iso);
     }
 
-    function fmtDateET(iso) {
+    function fmtDatePT(iso) {
       if (!iso) return "—";
       const d = parseIsoDate(iso);
       return d.toLocaleString("en-US", {
-        timeZone: ET,
+        timeZone: PT,
         weekday: "short",
         month: "short",
         day: "numeric",
@@ -443,21 +443,22 @@
       });
     }
 
-    function fmtTimeET(iso) {
+    function fmtTimePT(iso) {
       if (!iso) return "—";
       const d = parseIsoDate(iso);
       return d.toLocaleString("en-US", {
-        timeZone: ET,
+        timeZone: PT,
         hour: "numeric",
         minute: "2-digit",
         second: "2-digit",
         hour12: true,
-      }) + " ET";
+        timeZoneName: "short",
+      });
     }
 
-    function fmtDateTimeET(iso) {
+    function fmtDateTimePT(iso) {
       if (!iso) return "—";
-      return `${fmtDateET(iso)} · ${fmtTimeET(iso)}`;
+      return `${fmtDatePT(iso)} · ${fmtTimePT(iso)}`;
     }
 
     function fmtSessionPhase(phase) {
@@ -472,19 +473,19 @@
       return labels[phase] || (phase || "—").replace(/_/g, " ");
     }
 
-    function todayEtDateInput() {
-      return new Intl.DateTimeFormat("en-CA", { timeZone: ET }).format(new Date());
+    function todayPtDateInput() {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: PT }).format(new Date());
     }
 
     function initJournalForm() {
-      document.getElementById("t-date").value = todayEtDateInput();
+      document.getElementById("t-date").value = todayPtDateInput();
       updateTradeTimeLabel();
     }
 
     function updateTradeTimeLabel() {
       const side = document.getElementById("t-side").value;
       document.getElementById("t-time-label").textContent =
-        side === "SELL" ? "Time of sell (ET)" : "Time of purchase (ET)";
+        side === "SELL" ? "Time of sell (Pacific)" : "Time of purchase (Pacific)";
     }
 
     function toast(msg, ms = 3200) {
@@ -598,7 +599,7 @@
       document.getElementById("verdict-headline").textContent = td.headline || "—";
       document.getElementById("verdict-detail").textContent = td.detail || "";
       document.getElementById("verdict-asof").textContent =
-        `Session: ${fmtSessionPhase(td.session_phase)} · ${fmtDateTimeET(td.as_of_et)}`;
+        `Session: ${fmtSessionPhase(td.session_phase)} · ${fmtDateTimePT(td.as_of_et)}`;
 
       const pick = td.top_pick;
       const pickEl = document.getElementById("top-pick-body");
@@ -612,7 +613,7 @@
             · Hit rate <strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
           <div class="entry-highlight">Buy at (live entry) <strong>$${fmt(entry)}</strong>
             ${pick.intraday_change_pct != null ? " · <span class='brief'>" + fmtPctLive(pick.intraday_change_pct) + " from open</span>" : ""}
-            ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + fmtDateTimeET(pick.quote_as_of) + "</span>" : ""}</div>
+            ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + fmtDateTimePT(pick.quote_as_of) + "</span>" : ""}</div>
           <div>Shares <strong>${pick.recommended_shares ?? "—"}</strong>
             · Notional <strong>$${fmt(pick.notional)}</strong>
             · Total cost <strong>$${fmt(pick.total_cost)}</strong></div>
@@ -759,7 +760,7 @@
       }
       body.innerHTML = alerts.map((a) => `
         <tr>
-          <td>${fmtDateTimeET(a.created_at)}</td>
+          <td>${fmtDateTimePT(a.created_at)}</td>
           <td><strong>${a.ticker}</strong></td>
           <td><span class="badge alert-${(a.alert_type || '').toLowerCase()}">${a.alert_type}</span></td>
           <td>$${fmt(a.current_price)}</td>
@@ -820,8 +821,8 @@
       }
       body.innerHTML = trades.map((t) => `
         <tr>
-          <td>${fmtDateET(t.executed_at)}</td>
-          <td><strong>${fmtTimeET(t.executed_at)}</strong></td>
+          <td>${fmtDatePT(t.executed_at)}</td>
+          <td><strong>${fmtTimePT(t.executed_at)}</strong></td>
           <td><strong>${t.ticker}</strong></td>
           <td>${t.side}</td>
           <td>${t.shares}</td>
@@ -1303,7 +1304,7 @@
         shares: Number(document.getElementById("t-shares").value),
         price: Number(document.getElementById("t-price").value),
         executed_date: document.getElementById("t-date").value,
-        executed_time_et: document.getElementById("t-time").value,
+        executed_time_pt: document.getElementById("t-time").value,
         notes: document.getElementById("t-notes").value || null,
       };
       if (feeVal) payload.fee = Number(feeVal);
