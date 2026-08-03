@@ -13,11 +13,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from investment_agent.db import init_db
 from investment_agent.finance import ORIGINAL_BASIS
 from investment_agent.journal import (
+    build_executed_at_et,
     clear_all_trades,
     compute_monthly_realized_net,
     insert_trade,
     journal_cash_balance,
     list_trades,
+    resolve_executed_at,
 )
 
 
@@ -107,3 +109,18 @@ def test_clear_all_trades_resets_cash_to_basis():
     finally:
         conn.close()
         path.unlink(missing_ok=True)
+
+
+def test_build_executed_at_et_combines_date_and_time():
+    iso = build_executed_at_et("2026-08-03", "10:15")
+    assert iso.startswith("2026-08-03T10:15:00")
+    assert "-04:00" in iso or "-05:00" in iso
+
+
+def test_resolve_executed_at_prefers_audit_fields():
+    resolved = resolve_executed_at(
+        executed_date="2026-08-03",
+        executed_time_et="14:30",
+    )
+    assert resolved is not None
+    assert "2026-08-03T14:30:00" in resolved

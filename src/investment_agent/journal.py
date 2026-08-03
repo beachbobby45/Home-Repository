@@ -17,15 +17,49 @@ def today_et_str() -> str:
     return datetime.now(ET).strftime("%Y-%m-%d")
 
 
+def _parse_executed_at(executed_at: str) -> datetime:
+    ts = executed_at.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(ts)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ET)
+    return dt
+
+
 def _executed_date_et(executed_at: str) -> str:
     try:
-        ts = executed_at.replace("Z", "+00:00")
-        dt = datetime.fromisoformat(ts)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(ET).strftime("%Y-%m-%d")
+        return _parse_executed_at(executed_at).astimezone(ET).strftime("%Y-%m-%d")
     except ValueError:
         return executed_at[:10]
+
+
+def build_executed_at_et(date_key: str, time_hm: str) -> str:
+    """Combine YYYY-MM-DD and HH:MM as America/New_York (E*TRADE audit log times)."""
+    parts = time_hm.strip().split(":")
+    if len(parts) < 2:
+        raise ValueError("time must be HH:MM")
+    hour, minute = int(parts[0]), int(parts[1])
+    second = int(parts[2]) if len(parts) > 2 else 0
+    y, m, d = map(int, date_key.split("-"))
+    dt = datetime(y, m, d, hour, minute, second, tzinfo=ET)
+    return dt.replace(microsecond=0).isoformat()
+
+
+def normalize_executed_at(executed_at: str) -> str:
+    """Store timezone-aware ISO; naive values are interpreted as Eastern Time."""
+    return _parse_executed_at(executed_at).replace(microsecond=0).isoformat()
+
+
+def resolve_executed_at(
+    *,
+    executed_at: str | None = None,
+    executed_date: str | None = None,
+    executed_time_et: str | None = None,
+) -> str | None:
+    if executed_date and executed_time_et:
+        return build_executed_at_et(executed_date, executed_time_et)
+    if executed_at:
+        return normalize_executed_at(executed_at)
+    return None
 
 
 @dataclass(frozen=True)
@@ -64,7 +98,11 @@ def insert_trade(
         raise ValueError("shares and price must be positive")
     side_n = _normalize_side(side)
     default_fee = DEFAULT_BUY_FEE if side_n == "BUY" else DEFAULT_SELL_FEE
-    when = executed_at or datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    when = (
+        normalize_executed_at(executed_at)
+        if executed_at
+        else datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    )
     cur = conn.execute(
         """
         INSERT INTO trade_journal

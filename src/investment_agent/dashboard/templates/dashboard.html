@@ -375,6 +375,14 @@
               <input id="t-fee" type="number" step="0.01" min="0" placeholder="7" />
             </div>
             <div>
+              <label for="t-date">Trade date (ET)</label>
+              <input id="t-date" type="date" required />
+            </div>
+            <div>
+              <label for="t-time" id="t-time-label">Time of purchase (ET)</label>
+              <input id="t-time" type="time" step="1" required placeholder="From E*TRADE audit log" />
+            </div>
+            <div>
               <label for="t-notes">Notes</label>
               <input id="t-notes" placeholder="E*TRADE fill" />
             </div>
@@ -386,7 +394,8 @@
         <table>
           <thead>
             <tr>
-              <th>Time</th>
+              <th>Date (ET)</th>
+              <th>Time (ET)</th>
               <th>Ticker</th>
               <th>Side</th>
               <th>Shares</th>
@@ -396,7 +405,7 @@
             </tr>
           </thead>
           <tbody id="journal-body">
-            <tr><td colspan="7" class="empty">Loading journal…</td></tr>
+            <tr><td colspan="8" class="empty">Loading journal…</td></tr>
           </tbody>
         </table>
       </div>
@@ -408,6 +417,75 @@
   <script>
     const fmt = (n) => n == null ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtPct = (n) => n == null ? "—" : Number(n).toFixed(4) + "%";
+    const ET = "America/New_York";
+
+    function parseIsoDate(iso) {
+      if (!iso) return null;
+      if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso)) return new Date(iso);
+      const m = iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2})?)/);
+      if (m) {
+        const month = parseInt(m[1].slice(5, 7), 10);
+        const offset = (month >= 4 && month <= 10) ? "-04:00" : "-05:00";
+        return new Date(`${m[1]}T${m[2]}${offset}`);
+      }
+      return new Date(iso);
+    }
+
+    function fmtDateET(iso) {
+      if (!iso) return "—";
+      const d = parseIsoDate(iso);
+      return d.toLocaleString("en-US", {
+        timeZone: ET,
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+
+    function fmtTimeET(iso) {
+      if (!iso) return "—";
+      const d = parseIsoDate(iso);
+      return d.toLocaleString("en-US", {
+        timeZone: ET,
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      }) + " ET";
+    }
+
+    function fmtDateTimeET(iso) {
+      if (!iso) return "—";
+      return `${fmtDateET(iso)} · ${fmtTimeET(iso)}`;
+    }
+
+    function fmtSessionPhase(phase) {
+      const labels = {
+        weekend: "Weekend",
+        pre_market: "Pre-market",
+        opening_wait: "Opening wait (30 min gate)",
+        trade_window: "Trade window",
+        late_day: "Late day (manage only)",
+        after_hours: "After hours",
+      };
+      return labels[phase] || (phase || "—").replace(/_/g, " ");
+    }
+
+    function todayEtDateInput() {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: ET }).format(new Date());
+    }
+
+    function initJournalForm() {
+      document.getElementById("t-date").value = todayEtDateInput();
+      updateTradeTimeLabel();
+    }
+
+    function updateTradeTimeLabel() {
+      const side = document.getElementById("t-side").value;
+      document.getElementById("t-time-label").textContent =
+        side === "SELL" ? "Time of sell (ET)" : "Time of purchase (ET)";
+    }
 
     function toast(msg, ms = 3200) {
       const el = document.getElementById("toast");
@@ -507,6 +585,7 @@
         initApiKeyBar();
       }
       await refreshAll();
+      initJournalForm();
     }
 
     async function loadTradingDay() {
@@ -519,7 +598,7 @@
       document.getElementById("verdict-headline").textContent = td.headline || "—";
       document.getElementById("verdict-detail").textContent = td.detail || "";
       document.getElementById("verdict-asof").textContent =
-        `Session: ${td.session_phase?.replace("_", " ") || "—"} · ${td.as_of_et ? td.as_of_et.slice(0, 19) : ""} ET`;
+        `Session: ${fmtSessionPhase(td.session_phase)} · ${fmtDateTimeET(td.as_of_et)}`;
 
       const pick = td.top_pick;
       const pickEl = document.getElementById("top-pick-body");
@@ -533,7 +612,7 @@
             · Hit rate <strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
           <div class="entry-highlight">Buy at (live entry) <strong>$${fmt(entry)}</strong>
             ${pick.intraday_change_pct != null ? " · <span class='brief'>" + fmtPctLive(pick.intraday_change_pct) + " from open</span>" : ""}
-            ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + pick.quote_as_of.slice(0, 19) + "</span>" : ""}</div>
+            ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + fmtDateTimeET(pick.quote_as_of) + "</span>" : ""}</div>
           <div>Shares <strong>${pick.recommended_shares ?? "—"}</strong>
             · Notional <strong>$${fmt(pick.notional)}</strong>
             · Total cost <strong>$${fmt(pick.total_cost)}</strong></div>
@@ -680,7 +759,7 @@
       }
       body.innerHTML = alerts.map((a) => `
         <tr>
-          <td>${a.created_at?.slice(0, 16) || ""}</td>
+          <td>${fmtDateTimeET(a.created_at)}</td>
           <td><strong>${a.ticker}</strong></td>
           <td><span class="badge alert-${(a.alert_type || '').toLowerCase()}">${a.alert_type}</span></td>
           <td>$${fmt(a.current_price)}</td>
@@ -736,12 +815,13 @@
       const trades = await api("/api/journal");
       const body = document.getElementById("journal-body");
       if (!trades.length) {
-        body.innerHTML = '<tr><td colspan="7" class="empty">No trades logged yet</td></tr>';
+        body.innerHTML = '<tr><td colspan="8" class="empty">No trades logged yet</td></tr>';
         return;
       }
       body.innerHTML = trades.map((t) => `
         <tr>
-          <td>${t.executed_at?.slice(0, 16) || ""}</td>
+          <td>${fmtDateET(t.executed_at)}</td>
+          <td><strong>${fmtTimeET(t.executed_at)}</strong></td>
           <td><strong>${t.ticker}</strong></td>
           <td>${t.side}</td>
           <td>${t.shares}</td>
@@ -1213,6 +1293,7 @@
         await refreshAll();
       } catch (e) { toast(e.message); }
     });
+    document.getElementById("t-side").addEventListener("change", updateTradeTimeLabel);
     document.getElementById("trade-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const feeVal = document.getElementById("t-fee").value;
@@ -1221,6 +1302,8 @@
         side: document.getElementById("t-side").value,
         shares: Number(document.getElementById("t-shares").value),
         price: Number(document.getElementById("t-price").value),
+        executed_date: document.getElementById("t-date").value,
+        executed_time_et: document.getElementById("t-time").value,
         notes: document.getElementById("t-notes").value || null,
       };
       if (feeVal) payload.fee = Number(feeVal);
@@ -1228,6 +1311,7 @@
         await api("/api/journal", { method: "POST", body: JSON.stringify(payload) });
         toast("Trade logged");
         e.target.reset();
+        initJournalForm();
         await refreshAll();
       } catch (err) { toast(err.message); }
     });

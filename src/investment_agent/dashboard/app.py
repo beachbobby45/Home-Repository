@@ -47,7 +47,13 @@ from investment_agent.period_screener import (
     date_range_for_period,
 )
 from investment_agent.db import connect, init_db
-from investment_agent.journal import clear_all_trades, insert_trade, list_trades, trade_to_dict
+from investment_agent.journal import (
+    clear_all_trades,
+    insert_trade,
+    list_trades,
+    resolve_executed_at,
+    trade_to_dict,
+)
 from investment_agent.scenario import build_scenario_visualizer
 from investment_agent.watchlist import (
     compute_universe_stats,
@@ -111,6 +117,8 @@ class TradeCreate(BaseModel):
     price: float = Field(gt=0)
     fee: float | None = None
     executed_at: str | None = None
+    executed_date: str | None = None
+    executed_time_et: str | None = None
     notes: str | None = None
     queue_id: int | None = None
 
@@ -428,6 +436,14 @@ def api_journal_create(
     _: None = Depends(_require_api_key),
 ) -> dict:
     mode = get_trading_mode(conn)
+    try:
+        executed_at = resolve_executed_at(
+            executed_at=body.executed_at,
+            executed_date=body.executed_date,
+            executed_time_et=body.executed_time_et,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     trade_id = insert_trade(
         conn,
         ticker=body.ticker,
@@ -435,7 +451,7 @@ def api_journal_create(
         shares=body.shares,
         price=body.price,
         fee=body.fee,
-        executed_at=body.executed_at,
+        executed_at=executed_at,
         notes=format_journal_notes(body.notes, mode),
         queue_id=body.queue_id,
     )
