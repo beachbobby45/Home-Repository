@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from investment_agent.config import Settings
@@ -46,12 +46,72 @@ DEFAULT_TICKERS = [
 MACRO_SERIES = ["VIXCLS"]
 
 
+def _parse_iso_age_hours(iso_ts: str | None) -> float | None:
+    if not iso_ts:
+        return None
+    try:
+        ts = iso_ts.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - dt.astimezone(timezone.utc)
+        return age.total_seconds() / 3600.0
+    except ValueError:
+        return None
+
+
+def _needs_quote_refresh(
+    conn: sqlite3.Connection,
+    symbol: str,
+    *,
+    stale_hours: float,
+    force_symbols: set[str] | None = None,
+) -> bool:
+    if force_symbols and symbol in force_symbols:
+        return True
+    row = conn.execute(
+        """
+        SELECT captured_at FROM quotes
+        WHERE ticker = ?
+        ORDER BY captured_at DESC
+        LIMIT 1
+        """,
+        (symbol,),
+    ).fetchone()
+    age = _parse_iso_age_hours(row["captured_at"] if row else None)
+    return age is None or age >= stale_hours
+
+
+def _needs_bars_refresh(
+    conn: sqlite3.Connection,
+    symbol: str,
+    *,
+    stale_hours: float,
+    force_symbols: set[str] | None = None,
+) -> bool:
+    if force_symbols and symbol in force_symbols:
+        return True
+    metrics = conn.execute(
+        """
+        SELECT computed_at FROM ticker_metrics
+        WHERE ticker = ?
+        ORDER BY computed_at DESC
+        LIMIT 1
+        """,
+        (symbol,),
+    ).fetchone()
+    age = _parse_iso_age_hours(metrics["computed_at"] if metrics else None)
+    return age is None or age >= stale_hours
+
+
 def run_ingest(
     settings: Settings,
     tickers: list[str] | None = None,
     db_path: Path | None = None,
     lookback_days: int = 60,
     tradable_cash: float = ORIGINAL_BASIS,
+    incremental: bool = False,
+    stale_hours: float = 20.0,
 ) -> dict:
     """Fetch macro + quotes + daily bars; compute liquidity/range metrics + regime."""
     path = init_db(db_path)
@@ -63,8 +123,18 @@ def run_ingest(
             symbols = get_active_watchlist(raw)
         if not symbols:
             symbols = [t.upper() for t in DEFAULT_TICKERS]
-    summary: dict = {"db_path": str(path), "tickers": symbols, "errors": []}
+    summary: dict = {
+        "db_path": str(path),
+        "tickers": symbols,
+        "errors": [],
+        "incremental": incremental,
+        "quotes_refreshed": 0,
+        "quotes_skipped": 0,
+        "bars_refreshed": 0,
+        "bars_skipped": 0,
+    }
     index_quotes: dict = {}
+    force = set(REGIME_SYMBOLS)
 
     with sqlite3.connect(path) as raw:
         conn = raw
@@ -86,6 +156,30 @@ def run_ingest(
         fh = FinnhubClient(settings.finnhub_api_key)
         try:
             for symbol in symbols:
+                if incremental and not _needs_quote_refresh(
+                    conn, symbol, stale_hours=stale_hours, force_symbols=force
+                ):
+                    summary["quotes_skipped"] += 1
+                    if symbol in REGIME_SYMBOLS:
+                        row = conn.execute(
+                            """
+                            SELECT price, open, prev_close FROM quotes
+                            WHERE ticker = ?
+                            ORDER BY captured_at DESC
+                            LIMIT 1
+                            """,
+                            (symbol,),
+                        ).fetchone()
+                        if row:
+                            index_quotes[symbol] = index_quote_from_finnhub(
+                                symbol,
+                                {
+                                    "c": row["price"],
+                                    "o": row["open"] or row["price"],
+                                    "pc": row["prev_close"] or row["price"],
+                                },
+                            )
+                    continue
                 try:
                     q = fh.get_quote(symbol)
                     insert_quote(
@@ -100,6 +194,7 @@ def run_ingest(
                             "prev_close": float(q.get("pc") or 0) or None,
                         },
                     )
+                    summary["quotes_refreshed"] += 1
                     if symbol in REGIME_SYMBOLS:
                         index_quotes[symbol] = index_quote_from_finnhub(symbol, q)
                     log_ingest(conn, "finnhub", "ok", f"quote {symbol}")
@@ -111,6 +206,11 @@ def run_ingest(
 
         # --- yfinance daily bars (Finnhub /stock/candle requires paid tier) ---
         for symbol in symbols:
+            if incremental and not _needs_bars_refresh(
+                conn, symbol, stale_hours=stale_hours, force_symbols=force
+            ):
+                summary["bars_skipped"] += 1
+                continue
             try:
                 candles = get_daily_bars(symbol, lookback_days=lookback_days)
                 insert_ohlcv_rows(conn, candles)
@@ -157,6 +257,7 @@ def run_ingest(
                     },
                 )
                 log_ingest(conn, "yfinance", "ok", symbol)
+                summary["bars_refreshed"] += 1
             except Exception as exc:
                 log_ingest(conn, "yfinance", "error", f"{symbol}: {exc}")
                 summary["errors"].append(f"bars {symbol}: {exc}")

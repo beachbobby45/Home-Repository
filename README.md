@@ -52,9 +52,11 @@ PYTHONPATH=src python3 scripts/run_monitor.py
 
 # Phase 7 — watchlist + period screener (no Claude)
 PYTHONPATH=src python3 scripts/manage_watchlist.py load-preset sp100
+PYTHONPATH=src python3 scripts/manage_watchlist.py load-preset sp500   # ~506 tickers
 PYTHONPATH=src python3 scripts/run_historical.py pull --lookback-days 60
 PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save
-PYTHONPATH=src python3 scripts/run_ingest.py   # refresh live metrics after pull
+PYTHONPATH=src python3 scripts/run_ingest.py              # full refresh (first run)
+PYTHONPATH=src python3 scripts/run_ingest.py --incremental   # daily morning ingest
 
 # Learning + CIO summary (Phase 5, no Claude)
 PYTHONPATH=src python3 scripts/run_learning.py
@@ -81,4 +83,4 @@ PYTHONPATH=src python3 scripts/verify_dashboard.py --seed   # 34 checks incl. sc
 | 4 — Intraday monitor | **Done** (target/stop/EOD alerts) |
 | 5 — Learning + CIO | **Done** (daily report, rule-based CIO panel) |
 | 6 — $5M scenario visualizer | **Done** (journal timeline + projections) |
-| 7 — Expandable watchlist + period screener | **Done** (sp100 preset, ranked candidates, dashboard) |
+| 7 — Expandable watchlist + period screener | **Done** (sp100/sp500 presets, incremental ingest, ranked candidates, dashboard) |

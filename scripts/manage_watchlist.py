@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.db import connect, init_db
 from investment_agent.watchlist import (
+    PRESETS,
     compute_universe_stats,
     deactivate_ticker,
     get_active_watchlist_details,
@@ -31,7 +32,7 @@ def main() -> None:
     sub.add_parser("presets", help="List available presets")
 
     load = sub.add_parser("load-preset", help="Load a preset into active watchlist")
-    load.add_argument("name", choices=["starter10", "sp100"])
+    load.add_argument("name", choices=sorted(PRESETS.keys()))
     load.add_argument(
         "--replace",
         action="store_true",

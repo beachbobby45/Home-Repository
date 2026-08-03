@@ -17,6 +17,7 @@ UNIVERSE_DIR = REPO_ROOT / "universe"
 PRESETS: dict[str, str] = {
     "starter10": "Starter 10 (default ingest list)",
     "sp100": "S&P 100 liquid subset (~100 tickers)",
+    "sp500": "S&P 500 full index (~500 tickers + regime ETFs)",
 }
 
 

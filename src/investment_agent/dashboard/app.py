@@ -78,6 +78,7 @@ from investment_agent.stock_team import (
     set_queue_state,
     sync_queue_from_screener,
 )
+from investment_agent.ingest import run_ingest
 from investment_agent.trading_day import (
     build_trading_day_status,
     clear_pinned_pick,
@@ -159,6 +160,12 @@ class ValidateTradeBody(BaseModel):
     ticker: str
     price: float = Field(gt=0)
     shares: float | None = Field(default=None, gt=0)
+
+
+class IngestRunBody(BaseModel):
+    incremental: bool = False
+    lookback_days: int = 60
+    stale_hours: float = 20.0
 
 
 def _db():
@@ -540,6 +547,26 @@ def api_load_preset(
     result = load_preset_into_watchlist(conn, body.preset, replace=body.replace)
     conn.commit()
     return result
+
+
+@app.post("/api/ingest/run")
+def api_ingest_run(
+    body: IngestRunBody | None = None,
+    _: None = Depends(_require_api_key),
+) -> dict:
+    settings = Settings.from_env()
+    if not settings.fred_api_key or not settings.finnhub_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="FRED_API_KEY and FINNHUB_API_KEY required in .env",
+        )
+    opts = body or IngestRunBody()
+    return run_ingest(
+        settings,
+        incremental=opts.incremental,
+        lookback_days=opts.lookback_days,
+        stale_hours=opts.stale_hours,
+    )
 
 
 @app.post("/api/watchlist/import")

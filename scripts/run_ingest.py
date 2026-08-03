@@ -35,6 +35,17 @@ def main() -> None:
         default=60,
         help="Daily history window (default: 60)",
     )
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Skip symbols with fresh quotes/bars (default: full refresh)",
+    )
+    parser.add_argument(
+        "--stale-hours",
+        type=float,
+        default=20.0,
+        help="Age threshold for incremental mode (default: 20)",
+    )
     args = parser.parse_args()
 
     settings = Settings.from_env()
@@ -47,6 +58,8 @@ def main() -> None:
         tickers=args.tickers,
         db_path=args.db,
         lookback_days=args.lookback_days,
+        incremental=args.incremental,
+        stale_hours=args.stale_hours,
     )
     print(json.dumps(summary, indent=2))
     sys.exit(0 if summary.get("ok") else 1)

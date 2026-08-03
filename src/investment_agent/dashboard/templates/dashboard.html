@@ -269,9 +269,12 @@
 
     <section>
       <h2>Watchlist &amp; Period Screener</h2>
-      <p class="brief" style="margin:0 0 0.75rem">Expand universe, scan last N days for Step 3 matches, rank candidates (pre-Claude).</p>
+      <p class="brief" style="margin:0 0 0.75rem">Expand universe, scan last N days for Step 3 matches, rank candidates (pre-Claude). Use <strong>Daily ingest</strong> once per morning for the full watchlist; <strong>Refresh live data</strong> (top bar) only updates regime + top picks.</p>
       <div class="actions">
         <button class="btn secondary" id="load-sp100">Load SP100 preset</button>
+        <button class="btn secondary" id="load-sp500">Load S&amp;P 500</button>
+        <button class="btn secondary" id="run-daily-ingest">Daily ingest (incremental)</button>
+        <button class="btn secondary" id="run-full-ingest">Full ingest (all symbols)</button>
         <button class="btn secondary" id="run-period-screener">Run 14d screener</button>
         <button class="btn secondary" id="refresh-ranked">Refresh ranked</button>
       </div>
@@ -1165,6 +1168,39 @@
         toast(`Loaded ${r.tickers_loaded} tickers (${r.tickers_activated} active)`);
         await loadRankedAndStats();
       } catch (e) { toast(e.message); }
+    });
+    document.getElementById("load-sp500").addEventListener("click", async () => {
+      if (!confirm("Load ~500 S&P 500 tickers into the watchlist? Existing tickers stay active.")) return;
+      try {
+        const r = await api("/api/watchlist/load-preset", {
+          method: "POST",
+          body: JSON.stringify({ preset: "sp500", replace: false }),
+        });
+        toast(`Loaded ${r.tickers_loaded} tickers (${r.tickers_activated} active). Run Full ingest once, then Daily ingest each morning.`);
+        await loadRankedAndStats();
+      } catch (e) { toast(e.message); }
+    });
+    async function runIngest(incremental) {
+      const label = incremental ? "Daily incremental ingest" : "Full ingest";
+      toast(`${label} started — this may take several minutes for large universes…`);
+      const r = await api("/api/ingest/run", {
+        method: "POST",
+        body: JSON.stringify({ incremental, lookback_days: 60, stale_hours: 20 }),
+        timeoutMs: incremental ? 600000 : 900000,
+      });
+      const q = r.quotes_refreshed ?? 0;
+      const qs = r.quotes_skipped ?? 0;
+      const b = r.bars_refreshed ?? 0;
+      const bs = r.bars_skipped ?? 0;
+      toast(`${label} done: ${q} quotes refreshed (${qs} skipped), ${b} bars refreshed (${bs} skipped)`);
+      await refreshAll();
+    }
+    document.getElementById("run-daily-ingest").addEventListener("click", async () => {
+      try { await runIngest(true); } catch (e) { toast(e.message); }
+    });
+    document.getElementById("run-full-ingest").addEventListener("click", async () => {
+      if (!confirm("Full ingest refreshes every active watchlist symbol. Continue?")) return;
+      try { await runIngest(false); } catch (e) { toast(e.message); }
     });
     document.getElementById("run-period-screener").addEventListener("click", async () => {
       try {
