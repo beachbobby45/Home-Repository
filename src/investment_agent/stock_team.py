@@ -7,12 +7,17 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from investment_agent.account import build_dashboard_summary
+from investment_agent.finance import (
+    DEFAULT_BUY_FEE,
+    daily_profit_target,
+    sell_price_for_net_target,
+    target_move_pct,
+)
 from investment_agent.journal import journal_cash_balance
 from investment_agent.strategy import (
     ACTIVE_QUEUE_STATES,
     REGIME_ONLY_TICKERS,
     STOP_PCT,
-    TARGET_PCT,
 )
 
 
@@ -76,7 +81,17 @@ def build_analysis_card(
     if suggested_size <= 0:
         return None
 
-    target = last_quote * (1 + TARGET_PCT / 100)
+    target_net = daily_profit_target(tradable_cash)
+    shares = int((suggested_size - DEFAULT_BUY_FEE) / last_quote) if last_quote > 0 else 0
+    if shares <= 0:
+        return None
+    target = sell_price_for_net_target(
+        entry_price=last_quote,
+        shares=shares,
+        net_target=target_net,
+    )
+    target = round(target, 2)
+    target_pct = target_move_pct(last_quote, target)
     stop = last_quote * (1 - STOP_PCT / 100)
     avg_range = float(row["avg_range_pct"] or 0)
     swing_note = (
@@ -87,7 +102,7 @@ def build_analysis_card(
 
     thesis = (
         f"{ticker}: {swing_note}. Liquidity cap ${liquidity_cap:,.0f}. "
-        f"Entry ~${last_quote:.2f} → target +{TARGET_PCT}% ${target:.2f}, "
+        f"Entry ~${last_quote:.2f} → sell ${target:.2f} (+{target_pct:.2f}% / ${target_net:.0f} net/day), "
         f"stop −{STOP_PCT}% ${stop:.2f}. "
         f"Size ${suggested_size:,.0f} (min of cap and tradable cash). "
         f"Execute in E*TRADE; log fill in journal."
@@ -101,7 +116,7 @@ def build_analysis_card(
         suggested_size=suggested_size,
         entry_price=last_quote,
         target_price=target,
-        stop_price=stop,
+        stop_price=round(stop, 2),
         thesis_summary=thesis,
     )
 

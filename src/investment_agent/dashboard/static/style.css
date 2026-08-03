@@ -302,6 +302,83 @@ main {
   font-size: 0.95rem;
 }
 
+.trade-math-panel {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.trade-math-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.65rem;
+}
+
+.trade-math-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 800px) {
+  .trade-math-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.trade-math-box {
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.trade-math-box.buy {
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.trade-math-box.stop {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.trade-math-box.sell {
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.trade-math-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.25rem;
+}
+
+.trade-math-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.trade-math-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+.second-pick-block {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--border);
+}
+
+.second-pick-block h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .planned-trade-form {
   display: flex;
   flex-wrap: wrap;

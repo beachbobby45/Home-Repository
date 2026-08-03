@@ -41,6 +41,27 @@ def round_trip_fees(
     return buy_fee + sell_fee
 
 
+def sell_price_for_net_target(
+    *,
+    entry_price: float,
+    shares: int,
+    net_target: float,
+    buy_fee: float = DEFAULT_BUY_FEE,
+    sell_fee: float = DEFAULT_SELL_FEE,
+) -> float:
+    """Limit price where selling ``shares`` nets ``net_target`` after round-trip fees."""
+    if entry_price <= 0 or shares <= 0 or net_target <= 0:
+        return entry_price
+    gross_needed = net_target + buy_fee + sell_fee
+    return entry_price + gross_needed / shares
+
+
+def target_move_pct(entry_price: float, target_price: float) -> float:
+    if entry_price <= 0:
+        return 0.0
+    return ((target_price - entry_price) / entry_price) * 100.0
+
+
 def goal_progress_pct(
     tradable_balance: float,
     goal: float = GOAL_ACCOUNT_VALUE,

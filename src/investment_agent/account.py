@@ -36,7 +36,6 @@ from investment_agent.strategy import (
     MAX_TRADES_PER_DAY,
     STOP_DAY_AFTER_STOP,
     STOP_PCT,
-    TARGET_PCT,
 )
 
 TRADING_MODE_KEY = "trading_mode"
@@ -289,7 +288,7 @@ def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
         growth_tier=next_growth_tier(tradable),
         growth_plan=growth_plan_milestones(),
         strategy_rules={
-            "target_pct": TARGET_PCT,
+            "daily_net_target": daily_target,
             "stop_pct": STOP_PCT,
             "max_trades_per_day": MAX_TRADES_PER_DAY,
             "entry_delay_minutes": ENTRY_DELAY_MINUTES,

@@ -12,6 +12,8 @@ from investment_agent.finance import (
     DEFAULT_SELL_FEE,
     daily_profit_target,
     round_trip_fees,
+    sell_price_for_net_target,
+    target_move_pct,
 )
 from investment_agent.journal import (
     compute_today_realized_net,
@@ -20,7 +22,7 @@ from investment_agent.journal import (
 )
 from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.regime import REGIME_SYMBOLS
-from investment_agent.strategy import ENTRY_DELAY_MINUTES, ENTRY_WINDOW_ET, STOP_PCT, TARGET_PCT
+from investment_agent.strategy import ENTRY_DELAY_MINUTES, ENTRY_WINDOW_ET, STOP_PCT
 
 ET = ZoneInfo("America/New_York")
 MARKET_OPEN = time(9, 30)
@@ -249,32 +251,41 @@ def compute_trade_plan(
     deploy_dollar: float,
     buy_fee: float = DEFAULT_BUY_FEE,
     sell_fee: float = DEFAULT_SELL_FEE,
-    target_pct: float = TARGET_PCT,
+    net_target: float | None = None,
     stop_pct: float = STOP_PCT,
 ) -> dict:
-    """Shares, target/stop prices, and net P&L at exit levels for a full-size entry."""
+    """Shares, Growth-Plan sell price, stop price, and net P&L at each exit."""
     if entry_price <= 0 or deploy_dollar <= 0:
         return {}
     shares = int((deploy_dollar - buy_fee) / entry_price)
     if shares <= 0:
         return {}
-    target_px = entry_price * (1 + target_pct / 100)
+    daily_goal = net_target if net_target is not None else daily_profit_target(deploy_dollar)
     stop_px = entry_price * (1 - stop_pct / 100)
+    target_px = sell_price_for_net_target(
+        entry_price=entry_price,
+        shares=shares,
+        net_target=daily_goal,
+        buy_fee=buy_fee,
+        sell_fee=sell_fee,
+    )
+    target_px = round(target_px, 2)
     notional = shares * entry_price
     total_cost = notional + buy_fee
-    net_at_target = shares * (target_px - entry_price) - buy_fee - sell_fee
-    net_at_stop = shares * (stop_px - entry_price) - buy_fee - sell_fee
+    net_at_target = round(shares * (target_px - entry_price) - buy_fee - sell_fee, 2)
+    net_at_stop = round(shares * (stop_px - entry_price) - buy_fee - sell_fee, 2)
     return {
         "entry_price": round(entry_price, 2),
         "shares": shares,
         "notional": round(notional, 2),
         "total_cost": round(total_cost, 2),
-        "target_price": round(target_px, 2),
+        "target_price": target_px,
         "stop_price": round(stop_px, 2),
-        "target_pct": target_pct,
+        "target_pct": round(target_move_pct(entry_price, target_px), 2),
         "stop_pct": stop_pct,
-        "net_at_target": round(net_at_target, 2),
-        "net_at_stop": round(net_at_stop, 2),
+        "net_target": round(daily_goal, 2),
+        "net_at_target": net_at_target,
+        "net_at_stop": net_at_stop,
         "fees_round_trip": round_trip_fees(buy_fee, sell_fee),
     }
 
@@ -302,20 +313,35 @@ def validate_planned_trade(
         deploy = build_dashboard_summary(conn).tradable_cash
 
     if shares is not None and shares > 0:
-        plan = compute_trade_plan(entry_price=planned_price, deploy_dollar=planned_price * shares + DEFAULT_BUY_FEE)
+        remaining = max(day_status["daily_target"] - day_status.get("today_realized_net", 0), 0)
+        plan = compute_trade_plan(
+            entry_price=planned_price,
+            deploy_dollar=planned_price * shares + DEFAULT_BUY_FEE,
+            net_target=remaining or day_status["daily_target"],
+        )
         plan["shares"] = int(shares)
         plan["notional"] = round(planned_price * shares, 2)
         plan["total_cost"] = round(plan["notional"] + DEFAULT_BUY_FEE, 2)
-        # recompute exits for explicit share count
-        target_px = planned_price * (1 + TARGET_PCT / 100)
         stop_px = planned_price * (1 - STOP_PCT / 100)
         s = int(shares)
+        daily_goal = remaining or day_status["daily_target"]
+        target_px = sell_price_for_net_target(
+            entry_price=planned_price,
+            shares=s,
+            net_target=daily_goal,
+        )
         plan["target_price"] = round(target_px, 2)
         plan["stop_price"] = round(stop_px, 2)
+        plan["target_pct"] = round(target_move_pct(planned_price, target_px), 2)
         plan["net_at_target"] = round(s * (target_px - planned_price) - DEFAULT_BUY_FEE - DEFAULT_SELL_FEE, 2)
         plan["net_at_stop"] = round(s * (stop_px - planned_price) - DEFAULT_BUY_FEE - DEFAULT_SELL_FEE, 2)
     else:
-        plan = compute_trade_plan(entry_price=planned_price, deploy_dollar=deploy)
+        remaining = max(day_status["daily_target"] - day_status.get("today_realized_net", 0), 0)
+        plan = compute_trade_plan(
+            entry_price=planned_price,
+            deploy_dollar=deploy,
+            net_target=remaining or day_status["daily_target"],
+        )
 
     checks: list[dict] = []
     verdict = "GO"
@@ -357,12 +383,13 @@ def validate_planned_trade(
 
     daily_target = day_status["daily_target"]
     if plan.get("net_at_target") is not None:
-        if plan["net_at_target"] >= daily_target * 0.85:
-            checks.append({"name": "Target P&L", "ok": True, "message": f"Net at target ~${plan['net_at_target']:.2f} (goal ${daily_target:.0f}/day)"})
+        goal = plan.get("net_target") or daily_target
+        if plan["net_at_target"] >= goal * 0.98:
+            checks.append({"name": "Target P&L", "ok": True, "message": f"Sell nets ~${plan['net_at_target']:.2f} (Growth Plan ${goal:.0f}/day)"})
         else:
             if verdict == "GO":
                 verdict = "CAUTION"
-            checks.append({"name": "Target P&L", "ok": None, "message": f"Net at target ~${plan['net_at_target']:.2f} — below ${daily_target:.0f} day goal on this size"})
+            checks.append({"name": "Target P&L", "ok": None, "message": f"Sell nets ~${plan['net_at_target']:.2f} — below ${goal:.0f} day goal on this size"})
 
     if not plan:
         verdict = "NO_GO"
@@ -382,6 +409,42 @@ def validate_planned_trade(
         "live_price": round(live_price, 2) if live_price else None,
         "plan": plan,
         "day_status_verdict": day_status["verdict"],
+    }
+
+
+def _build_pick_detail(
+    pick: dict,
+    *,
+    quote: dict | None,
+    deploy: float,
+    net_target: float,
+) -> dict:
+    live_entry = float(quote["price"]) if quote else None
+    stale_entry = pick.get("entry_price")
+    entry = live_entry or stale_entry
+    plan = compute_trade_plan(entry_price=entry, deploy_dollar=deploy, net_target=net_target) if entry else {}
+    return {
+        "ticker": pick["ticker"],
+        "rank_score": pick.get("score"),
+        "hit_rate_pct": pick.get("hit_rate_pct"),
+        "source": pick.get("source"),
+        "live_pass_today": bool(pick.get("live_pass_today")),
+        "recommended_entry": plan.get("entry_price") or (round(entry, 2) if entry else None),
+        "entry_price": plan.get("entry_price") or (round(entry, 2) if entry else None),
+        "target_price": plan.get("target_price"),
+        "stop_price": plan.get("stop_price"),
+        "target_pct": plan.get("target_pct"),
+        "recommended_shares": plan.get("shares"),
+        "notional": plan.get("notional"),
+        "total_cost": plan.get("total_cost"),
+        "net_target": plan.get("net_target"),
+        "net_at_target": plan.get("net_at_target"),
+        "net_at_stop": plan.get("net_at_stop"),
+        "suggested_size": deploy,
+        "quote_price": live_entry,
+        "quote_as_of": quote.get("captured_at") if quote else None,
+        "stale_entry_price": round(stale_entry, 2) if stale_entry and live_entry and abs(stale_entry - live_entry) > 0.01 else None,
+        "thesis_summary": pick.get("thesis_summary"),
     }
 
 
@@ -561,36 +624,33 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     )
 
     pick_detail = None
+    second_pick_detail = None
+    remaining_net = max(daily_target - today_net, 0)
     if pick:
-        # Recommended entry always follows latest live quote when available
-        live_entry = float(pick_quote["price"]) if pick_quote else None
-        stale_entry = pick.get("entry_price")
-        entry = live_entry or stale_entry
-        deploy = float(pick.get("suggested_size") or summary.tradable_cash)
-        plan = compute_trade_plan(entry_price=entry, deploy_dollar=deploy) if entry else {}
-        pick_detail = {
-            "ticker": pick["ticker"],
-            "rank_score": pick.get("score"),
-            "hit_rate_pct": pick.get("hit_rate_pct"),
-            "source": pick.get("source"),
-            "live_pass_today": bool(pick.get("live_pass_today")),
-            "recommended_entry": plan.get("entry_price") or (round(entry, 2) if entry else None),
-            "entry_price": plan.get("entry_price") or (round(entry, 2) if entry else None),
-            "target_price": plan.get("target_price"),
-            "stop_price": plan.get("stop_price"),
-            "recommended_shares": plan.get("shares"),
-            "notional": plan.get("notional"),
-            "total_cost": plan.get("total_cost"),
-            "net_at_target": plan.get("net_at_target"),
-            "net_at_stop": plan.get("net_at_stop"),
-            "suggested_size": deploy,
-            "intraday_change_pct": round(pick_change, 3) if pick_change is not None else None,
-            "opening_range_pct": round(pick_range, 3) if pick_range is not None else None,
-            "quote_price": live_entry,
-            "quote_as_of": pick_quote.get("captured_at") if pick_quote else None,
-            "stale_entry_price": round(stale_entry, 2) if stale_entry and live_entry and abs(stale_entry - live_entry) > 0.01 else None,
-            "thesis_summary": pick.get("thesis_summary"),
-        }
+        pick_detail = _build_pick_detail(
+            pick,
+            quote=pick_quote,
+            deploy=float(pick.get("suggested_size") or summary.tradable_cash),
+            net_target=remaining_net or daily_target,
+        )
+        if pick_change is not None:
+            pick_detail["intraday_change_pct"] = round(pick_change, 3)
+        if pick_range is not None:
+            pick_detail["opening_range_pct"] = round(pick_range, 3)
+
+    next_live = _next_ranked(conn, pick["ticker"] if pick else None)
+    if next_live:
+        second_row = next_live[0]
+        full_second = next((r for r in build_ranked_candidates(conn, period_days=14)["ranked"] if r["ticker"] == second_row["ticker"]), second_row)
+        second_quote = quotes.get(second_row["ticker"])
+        if second_quote is None and second_row["ticker"]:
+            second_quote = _latest_quote_rows(conn, [second_row["ticker"]]).get(second_row["ticker"])
+        second_pick_detail = _build_pick_detail(
+            {**full_second, "source": "ranked_#2"},
+            quote=second_quote,
+            deploy=float(full_second.get("suggested_size") or summary.tradable_cash),
+            net_target=remaining_net or daily_target,
+        )
 
     return {
         "as_of_et": now.replace(microsecond=0).isoformat(),
@@ -608,9 +668,11 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "can_second_trade": can_second_trade,
         "open_positions": open_positions,
         "top_pick": pick_detail,
-        "next_ranked": _next_ranked(conn, pick["ticker"] if pick else None),
+        "second_pick": second_pick_detail,
+        "next_ranked": next_live,
+        "remaining_daily_net": round(remaining_net, 2),
         "strategy": {
-            "target_pct": TARGET_PCT,
+            "daily_net_target": daily_target,
             "stop_pct": STOP_PCT,
             "entry_delay_minutes": ENTRY_DELAY_MINUTES,
             "entry_window_et": ENTRY_WINDOW_ET,

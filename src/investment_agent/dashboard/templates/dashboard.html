@@ -43,10 +43,34 @@
             <div class="brief" id="verdict-asof"></div>
           </div>
         </div>
+        <div class="trade-math-panel" id="trade-math-panel" hidden>
+          <div class="trade-math-title">Your trade math <span class="brief" id="trade-math-goal"></span></div>
+          <div class="trade-math-grid">
+            <div class="trade-math-box buy">
+              <div class="trade-math-label">Buy at</div>
+              <div class="trade-math-value" id="math-buy">—</div>
+              <div class="trade-math-sub" id="math-shares">—</div>
+            </div>
+            <div class="trade-math-box stop">
+              <div class="trade-math-label">Stop loss (−0.75%)</div>
+              <div class="trade-math-value" id="math-stop">—</div>
+              <div class="trade-math-sub" id="math-stop-net">—</div>
+            </div>
+            <div class="trade-math-box sell">
+              <div class="trade-math-label">Sell for Growth Plan</div>
+              <div class="trade-math-value" id="math-sell">—</div>
+              <div class="trade-math-sub" id="math-sell-net">—</div>
+            </div>
+          </div>
+        </div>
         <div class="grid grid-2" style="margin-top:1rem">
           <div class="top-pick-card" id="top-pick-card">
-            <h3>Today&apos;s top pick</h3>
+            <h3>#1 — Today&apos;s top pick</h3>
             <div id="top-pick-body" class="brief">Loading…</div>
+            <div id="second-pick-block" class="second-pick-block" hidden>
+              <h3>#2 — Next pick if #1 fails or for 2nd trade</h3>
+              <div id="second-pick-body" class="brief">—</div>
+            </div>
           </div>
           <div>
             <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Planned purchase check</h3>
@@ -589,6 +613,48 @@
       initJournalForm();
     }
 
+    function renderPickBlock(pick, td) {
+      if (!pick) return "<span class='empty'>No live pick — run ingest + ranked screener</span>";
+      const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
+      const netGoal = pick.net_target ?? td.daily_target;
+      return `
+        <div class="top-pick-ticker">${pick.ticker} <span class="brief">(${pick.source})</span></div>
+        <div>Rank score <strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong>
+          · Hit rate <strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
+        <div class="entry-highlight">Buy at <strong>$${fmt(entry)}</strong>
+          ${pick.intraday_change_pct != null ? " · <span class='brief'>" + fmtPctLive(pick.intraday_change_pct) + " from open</span>" : ""}
+          ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + fmtDateTimePT(pick.quote_as_of) + "</span>" : ""}</div>
+        <div>Shares <strong>${pick.recommended_shares ?? "—"}</strong>
+          · Notional <strong>$${fmt(pick.notional)}</strong></div>
+        <div>Stop −0.75% <strong>$${fmt(pick.stop_price)}</strong>
+          <span class="brief">(net ~$${fmt(pick.net_at_stop)})</span></div>
+        <div>Sell for <strong>$${fmt(netGoal)} net</strong> at <strong>$${fmt(pick.target_price)}</strong>
+          <span class="brief">(+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)})</span></div>
+      `;
+    }
+
+    function renderTradeMath(pick, td) {
+      const panel = document.getElementById("trade-math-panel");
+      if (!pick) {
+        panel.hidden = true;
+        return;
+      }
+      panel.hidden = false;
+      const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
+      const netGoal = pick.net_target ?? td.daily_target;
+      document.getElementById("trade-math-goal").textContent =
+        `(Growth Plan: $${fmt(netGoal)} net after $14 fees · stop −0.75%)`;
+      document.getElementById("math-buy").textContent = "$" + fmt(entry);
+      document.getElementById("math-shares").textContent =
+        `${pick.recommended_shares ?? "—"} shares · deploy $${fmt(pick.suggested_size)}`;
+      document.getElementById("math-stop").textContent = "$" + fmt(pick.stop_price);
+      document.getElementById("math-stop-net").textContent =
+        `net ~$${fmt(pick.net_at_stop)} if stopped`;
+      document.getElementById("math-sell").textContent = "$" + fmt(pick.target_price);
+      document.getElementById("math-sell-net").textContent =
+        `+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)}`;
+    }
+
     async function loadTradingDay() {
       const td = await api("/api/trading-day/status");
       const badge = document.getElementById("verdict-badge");
@@ -603,34 +669,29 @@
 
       const pick = td.top_pick;
       const pickEl = document.getElementById("top-pick-body");
+      renderTradeMath(pick, td);
       if (!pick) {
         pickEl.innerHTML = "<span class='empty'>No live pick — run ingest + ranked screener</span>";
+        document.getElementById("second-pick-block").hidden = true;
       } else {
-        const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
-        pickEl.innerHTML = `
-          <div class="top-pick-ticker">${pick.ticker} <span class="brief">(${pick.source})</span></div>
-          <div>Rank score <strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong>
-            · Hit rate <strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
-          <div class="entry-highlight">Buy at (live entry) <strong>$${fmt(entry)}</strong>
-            ${pick.intraday_change_pct != null ? " · <span class='brief'>" + fmtPctLive(pick.intraday_change_pct) + " from open</span>" : ""}
-            ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + fmtDateTimePT(pick.quote_as_of) + "</span>" : ""}</div>
-          <div>Shares <strong>${pick.recommended_shares ?? "—"}</strong>
-            · Notional <strong>$${fmt(pick.notional)}</strong>
-            · Total cost <strong>$${fmt(pick.total_cost)}</strong></div>
-          <div>Sell target +1.5% <strong>$${fmt(pick.target_price)}</strong>
-            <span class="brief">(net ~+$${fmt(pick.net_at_target)})</span></div>
-          <div>Stop −0.75% <strong>$${fmt(pick.stop_price)}</strong>
-            <span class="brief">(net ~$${fmt(pick.net_at_stop)})</span></div>
-          <div>Deploy size <strong>$${fmt(pick.suggested_size)}</strong> · Today P&amp;L
-            <strong>${(td.today_realized_net >= 0 ? "+" : "") + "$" + fmt(td.today_realized_net)}</strong>
-            / $${fmt(td.daily_target)}</div>
-        `;
+        pickEl.innerHTML = renderPickBlock(pick, td);
         const planTicker = document.getElementById("plan-ticker");
         const planPrice = document.getElementById("plan-price");
         const planShares = document.getElementById("plan-shares");
+        const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
         if (planTicker && !planTicker.dataset.userEdited) planTicker.value = pick.ticker;
         if (planPrice && !planPrice.dataset.userEdited) planPrice.value = entry != null ? Number(entry).toFixed(2) : "";
         if (planShares && !planShares.dataset.userEdited && pick.recommended_shares) planShares.value = pick.recommended_shares;
+
+        const second = td.second_pick;
+        const secondBlock = document.getElementById("second-pick-block");
+        const secondEl = document.getElementById("second-pick-body");
+        if (second) {
+          secondBlock.hidden = false;
+          secondEl.innerHTML = renderPickBlock(second, td);
+        } else {
+          secondBlock.hidden = true;
+        }
       }
 
       const checks = document.getElementById("trading-checks");
@@ -645,7 +706,8 @@
       let hintText = "";
       if (td.stopped_out_today) hintText = "Stop-out logged — done for the day per plan.";
       else if (td.daily_target_met) hintText = "Daily target reached — protect gains, no new entries.";
-      else if (td.can_second_trade) hintText = "Win logged — optional 2nd trade from next ranked name before 2:30 PM ET.";
+      else if (td.can_second_trade) hintText = "Win logged — optional 2nd trade: use #2 pick below before 2:30 PM ET.";
+      else if (td.second_pick) hintText = "If #1 fails before target: watch #" + td.second_pick.ticker + " (shown below).";
       else if (next.length) hintText = "If top pick fails: " + next.map((n) => n.ticker).join(" → ");
       hint.textContent = hintText;
 
@@ -705,10 +767,12 @@
         : "At top growth tier shown";
 
       const st = s.strategy || {};
+      const dailyNet = st.daily_net_target ?? s.daily_target ?? 150;
       document.getElementById("strategy-rules").innerHTML = [
-        `Target <strong>+${st.target_pct ?? 1.5}%</strong> · Stop <strong>−${st.stop_pct ?? 0.75}%</strong>`,
-        `Max <strong>${st.max_trades_per_day ?? 2}</strong> trades/day · <strong>${st.entry_delay_minutes ?? 30}m</strong> entry delay`,
-        `Entry window <strong>${st.entry_window_et ?? "10:00–14:30"}</strong> ET · Stop day after stop-out`,
+        `Sell for <strong>$${fmt(dailyNet)} net/day</strong> (Growth Plan — scales +$50 per $5K)`,
+        `Stop <strong>−${st.stop_pct ?? 0.75}%</strong> · Max <strong>${st.max_trades_per_day ?? 2}</strong> trades/day`,
+        `<strong>${st.entry_delay_minutes ?? 30}m</strong> entry delay · Window <strong>${st.entry_window_et ?? "10:00–14:30"}</strong> ET`,
+        `Stop day after stop-out · Trade #2 only after a win on #1`,
       ].join("<br>");
 
       const plan = s.growth_plan || [];
@@ -1216,7 +1280,7 @@
             const cls = c.ok === true ? "ok" : c.ok === false ? "bad" : "wait";
             return `<li class="check-${cls}"><span class="check-icon">${icon}</span> ${c.message}</li>`;
           }).join("")}</ul>
-          ${p.shares ? `<div style="margin-top:0.5rem">At $${fmt(price)} × ${p.shares} sh → target $${fmt(p.target_price)} (net ~+$${fmt(p.net_at_target)}) · stop $${fmt(p.stop_price)} (net ~$${fmt(p.net_at_stop)})</div>` : ""}
+          ${p.shares ? `<div style="margin-top:0.5rem">At $${fmt(price)} × ${p.shares} sh → sell $${fmt(p.target_price)} (${p.target_pct != null ? Number(p.target_pct).toFixed(2) + "%" : "—"} / $${fmt(p.net_target)} net) · stop $${fmt(p.stop_price)}</div>` : ""}
         `;
         toast(r.headline, 5000);
       } catch (err) { toast(err.message, 6000); }
