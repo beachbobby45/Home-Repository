@@ -25,6 +25,37 @@
   <main>
     <div id="regime-banner" class="banner ok">Loading regime…</div>
 
+    <section class="trading-day-section">
+      <div class="trading-day-header">
+        <h2>Trading Day Control</h2>
+        <div class="actions">
+          <button class="btn" id="refresh-trading-day">Refresh live data</button>
+          <button class="btn secondary btn-sm" id="pin-top-pick">Pin top pick to queue</button>
+        </div>
+      </div>
+      <div class="card trading-day-panel" id="trading-day-panel">
+        <div class="trading-verdict" id="trading-verdict">
+          <div class="verdict-badge" id="verdict-badge">—</div>
+          <div>
+            <div class="verdict-headline" id="verdict-headline">Loading…</div>
+            <div class="brief" id="verdict-detail"></div>
+            <div class="brief" id="verdict-asof"></div>
+          </div>
+        </div>
+        <div class="grid grid-2" style="margin-top:1rem">
+          <div class="top-pick-card" id="top-pick-card">
+            <h3>Today&apos;s top pick</h3>
+            <div id="top-pick-body" class="brief">Loading…</div>
+          </div>
+          <div>
+            <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Go / no-go checks</h3>
+            <ul class="check-list" id="trading-checks"></ul>
+            <div class="brief" id="rotation-hint" style="margin-top:0.75rem"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div class="grid grid-4">
       <div class="card">
         <h2>$5M Goal</h2>
@@ -432,6 +463,68 @@
       await refreshAll();
     }
 
+    async function loadTradingDay() {
+      const td = await api("/api/trading-day/status");
+      const badge = document.getElementById("verdict-badge");
+      const panel = document.getElementById("trading-day-panel");
+      badge.textContent = td.verdict.replace("_", " ");
+      badge.className = "verdict-badge " + (td.verdict || "").toLowerCase();
+      panel.className = "card trading-day-panel verdict-" + (td.verdict || "").toLowerCase();
+      document.getElementById("verdict-headline").textContent = td.headline || "—";
+      document.getElementById("verdict-detail").textContent = td.detail || "";
+      document.getElementById("verdict-asof").textContent =
+        `Session: ${td.session_phase?.replace("_", " ") || "—"} · ${td.as_of_et ? td.as_of_et.slice(0, 19) : ""} ET`;
+
+      const pick = td.top_pick;
+      const pickEl = document.getElementById("top-pick-body");
+      if (!pick) {
+        pickEl.innerHTML = "<span class='empty'>No live pick — run ingest + ranked screener</span>";
+      } else {
+        pickEl.innerHTML = `
+          <div class="top-pick-ticker">${pick.ticker} <span class="brief">(${pick.source})</span></div>
+          <div>Rank score <strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong>
+            · Hit rate <strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
+          <div>Live ${pick.quote_price != null ? "$" + fmt(pick.quote_price) : "—"}
+            ${pick.intraday_change_pct != null ? " · <strong>" + fmtPctLive(pick.intraday_change_pct) + "</strong> from open" : ""}</div>
+          <div>Target +1.5% <strong>$${fmt(pick.target_price)}</strong> · Stop −0.75% <strong>$${fmt(pick.stop_price)}</strong></div>
+          <div>Size <strong>$${fmt(pick.suggested_size)}</strong> · Today P&amp;L
+            <strong>${(td.today_realized_net >= 0 ? "+" : "") + "$" + fmt(td.today_realized_net)}</strong>
+            / $${fmt(td.daily_target)}</div>
+        `;
+      }
+
+      const checks = document.getElementById("trading-checks");
+      checks.innerHTML = (td.checks || []).map((c) => {
+        const icon = c.ok === true ? "✓" : c.ok === false ? "✗" : "◐";
+        const cls = c.ok === true ? "ok" : c.ok === false ? "bad" : "wait";
+        return `<li class="check-${cls}"><span class="check-icon">${icon}</span> <strong>${c.name}</strong>: ${c.message}</li>`;
+      }).join("");
+
+      const hint = document.getElementById("rotation-hint");
+      const next = td.next_ranked || [];
+      let hintText = "";
+      if (td.stopped_out_today) hintText = "Stop-out logged — done for the day per plan.";
+      else if (td.daily_target_met) hintText = "Daily target reached — protect gains, no new entries.";
+      else if (td.can_second_trade) hintText = "Win logged — optional 2nd trade from next ranked name before 2:30 PM ET.";
+      else if (next.length) hintText = "If top pick fails: " + next.map((n) => n.ticker).join(" → ");
+      hint.textContent = hintText;
+
+      const banner = document.getElementById("regime-banner");
+      if (td.verdict === "NO_GO") {
+        banner.className = "banner block";
+        banner.textContent = td.headline + " — " + (td.detail || "");
+      } else if (td.verdict === "WAIT") {
+        banner.className = "banner wait";
+        banner.textContent = td.headline + " — " + (td.detail || "");
+      } else if (td.verdict === "CAUTION") {
+        banner.className = "banner caution";
+        banner.textContent = td.headline + " — " + (td.detail || "");
+      } else {
+        banner.className = "banner ok";
+        banner.textContent = td.headline + " — " + (td.detail || "");
+      }
+    }
+
     async function loadSummary() {
       const s = await api("/api/summary");
       document.getElementById("goal-pct").textContent = fmtPct(s.goal_pct);
@@ -491,15 +584,6 @@
       document.getElementById("tax-jar").textContent = "$" + fmt(s.tax_jar);
       document.getElementById("market-brief").textContent = s.market_brief;
       document.getElementById("tax-rate").value = Math.round(s.tax_rate * 100);
-
-      const banner = document.getElementById("regime-banner");
-      if (s.block_new_longs) {
-        banner.className = "banner block";
-        banner.textContent = s.regime?.summary || "Regime: no new longs";
-      } else {
-        banner.className = "banner ok";
-        banner.textContent = s.regime?.summary || "Regime data unavailable — run ingest";
-      }
 
       const sp = s.sweep_preview;
       let sweepHtml = sp.applies
@@ -849,7 +933,7 @@
     }
 
     async function refreshAll() {
-      await Promise.all([loadSummary(), loadScenario(), loadCio(), loadRankedAndStats(), loadHistorical(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
+      await Promise.all([loadTradingDay(), loadSummary(), loadScenario(), loadCio(), loadRankedAndStats(), loadHistorical(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
     }
 
     document.getElementById("load-sp100").addEventListener("click", async () => {
@@ -928,6 +1012,31 @@
       } catch (e) { toast(e.message); }
     });
     document.getElementById("refresh-alerts").addEventListener("click", () => loadAlerts().catch((e) => toast(e.message)));
+
+    document.getElementById("refresh-trading-day").addEventListener("click", async () => {
+      try {
+        toast("Refreshing live quotes + regime…");
+        const r = await api("/api/trading-day/refresh", { method: "POST" });
+        if (!r.refresh?.ok) {
+          toast(r.refresh?.error || "Refresh partial — check FINNHUB_API_KEY in .env", 5000);
+        } else {
+          toast(`Live data updated (${(r.refresh.updated || []).length} symbols)`);
+        }
+        await refreshAll();
+      } catch (e) { toast(e.message); }
+    });
+
+    document.getElementById("pin-top-pick").addEventListener("click", async () => {
+      try {
+        const td = await api("/api/trading-day/status");
+        const ticker = td.top_pick?.ticker;
+        if (!ticker) { toast("No top pick to pin"); return; }
+        await api("/api/trading-day/pin-pick", { method: "POST", body: JSON.stringify({ ticker }) });
+        const pr = await api(`/api/screener/promote/${ticker}`, { method: "POST" });
+        toast(pr.message || `Pinned ${ticker} and added to queue`);
+        await refreshAll();
+      } catch (e) { toast(e.message); }
+    });
 
     document.getElementById("refresh-all").addEventListener("click", () => refreshAll().catch((e) => toast(e.message)));
     document.getElementById("sync-queue").addEventListener("click", async () => {

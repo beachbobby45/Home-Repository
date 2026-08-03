@@ -1,0 +1,482 @@
+"""Intraday trading day status — go/no-go gate, top pick, live refresh."""
+
+from __future__ import annotations
+
+import sqlite3
+from datetime import datetime, time, timezone
+from zoneinfo import ZoneInfo
+
+from investment_agent.account import build_dashboard_summary, get_setting, set_setting
+from investment_agent.finance import daily_profit_target
+from investment_agent.journal import (
+    compute_today_realized_net,
+    get_completed_round_trips,
+    get_open_positions,
+)
+from investment_agent.period_screener import build_ranked_candidates
+from investment_agent.regime import REGIME_SYMBOLS
+from investment_agent.strategy import ENTRY_DELAY_MINUTES, ENTRY_WINDOW_ET, STOP_PCT, TARGET_PCT
+
+ET = ZoneInfo("America/New_York")
+MARKET_OPEN = time(9, 30)
+ENTRY_READY = time(10, 0)  # 30 min after open
+ENTRY_CUTOFF = time(14, 30)
+MARKET_CLOSE = time(16, 0)
+QUOTE_STALE_MINUTES = 20
+TOP_PICK_MAX_DROP_PCT = 0.50  # down more than 0.5% from open → caution
+TOP_PICK_NO_GO_DROP_PCT = 0.75  # aligns with stop width
+
+
+def now_et() -> datetime:
+    return datetime.now(ET)
+
+
+def today_et_str() -> str:
+    return now_et().strftime("%Y-%m-%d")
+
+
+def session_phase(when: datetime | None = None) -> str:
+    now = when or now_et()
+    if now.weekday() >= 5:
+        return "weekend"
+    t = now.time()
+    if t < MARKET_OPEN:
+        return "pre_market"
+    if t < ENTRY_READY:
+        return "opening_wait"
+    if t < ENTRY_CUTOFF:
+        return "trade_window"
+    if t < MARKET_CLOSE:
+        return "late_day"
+    return "after_hours"
+
+
+def _latest_quote_rows(conn: sqlite3.Connection, tickers: list[str]) -> dict[str, dict]:
+    if not tickers:
+        return {}
+    placeholders = ",".join("?" for _ in tickers)
+    rows = conn.execute(
+        f"""
+        SELECT q.ticker, q.price, q.open, q.high, q.low, q.prev_close, q.captured_at
+        FROM quotes q
+        INNER JOIN (
+          SELECT ticker, MAX(captured_at) AS max_at
+          FROM quotes
+          WHERE ticker IN ({placeholders})
+          GROUP BY ticker
+        ) latest ON q.ticker = latest.ticker AND q.captured_at = latest.max_at
+        """,
+        tickers,
+    ).fetchall()
+    return {
+        row["ticker"]: {
+            "price": float(row["price"]),
+            "open": float(row["open"]) if row["open"] else None,
+            "high": float(row["high"]) if row["high"] else None,
+            "low": float(row["low"]) if row["low"] else None,
+            "prev_close": float(row["prev_close"]) if row["prev_close"] else None,
+            "captured_at": row["captured_at"],
+        }
+        for row in rows
+    }
+
+
+def _quote_age_minutes(captured_at: str | None) -> float | None:
+    if not captured_at:
+        return None
+    try:
+        ts = captured_at.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - dt.astimezone(timezone.utc)
+        return age.total_seconds() / 60.0
+    except ValueError:
+        return None
+
+
+def _intraday_change_pct(quote: dict) -> float | None:
+    price = quote.get("price")
+    open_px = quote.get("open")
+    prev = quote.get("prev_close")
+    if price is None:
+        return None
+    if open_px and open_px > 0:
+        return ((price - open_px) / open_px) * 100.0
+    if prev and prev > 0:
+        return ((price - prev) / prev) * 100.0
+    return None
+
+
+def _opening_range_pct(quote: dict) -> float | None:
+    """Approximate session range vs open using quote high/low."""
+    open_px = quote.get("open")
+    high = quote.get("high")
+    low = quote.get("low")
+    if not open_px or open_px <= 0 or high is None or low is None:
+        return None
+    return ((high - low) / open_px) * 100.0
+
+
+def get_top_pick(conn: sqlite3.Connection) -> dict | None:
+    pinned = get_setting(conn, "pinned_pick_ticker", "").strip().upper()
+    ranked = build_ranked_candidates(conn, period_days=14)["ranked"]
+    live = [r for r in ranked if r.get("live_pass_today")]
+
+    if pinned:
+        match = next((r for r in live if r["ticker"] == pinned), None)
+        if match:
+            return {**match, "source": "pinned"}
+        # pinned but not live — still surface with warning
+        row = next((r for r in ranked if r["ticker"] == pinned), None)
+        if row:
+            return {**row, "source": "pinned_not_live", "live_pass_today": False}
+
+    if not live:
+        return None
+    return {**live[0], "source": "ranked_#1"}
+
+
+def stopped_out_today(conn: sqlite3.Connection, date_key: str | None = None) -> bool:
+    """True if any closed round trip today lost money (stop-out day)."""
+    day = date_key or today_et_str()
+    for trip in get_completed_round_trips(conn, limit=200):
+        sell_day = trip["sell_at"][:10]
+        try:
+            dt = datetime.fromisoformat(trip["sell_at"].replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            sell_day = dt.astimezone(ET).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+        if sell_day != day:
+            continue
+        if trip["net_pnl"] < -20:
+            return True
+    return False
+
+
+def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
+    """Fetch fresh Finnhub quotes for regime indices, top pick, queue, and open positions."""
+    from investment_agent.db import insert_quote, insert_regime_snapshot, log_ingest
+    from investment_agent.providers.finnhub import FinnhubClient, utc_now_iso as fh_now
+    from investment_agent.regime import evaluate_regime, index_quote_from_finnhub
+
+    symbols: set[str] = set(REGIME_SYMBOLS)
+    pick = get_top_pick(conn)
+    if pick:
+        symbols.add(pick["ticker"])
+
+    rows = conn.execute(
+        "SELECT DISTINCT ticker FROM queue_items WHERE state NOT IN ('closed')"
+    ).fetchall()
+    symbols.update(row["ticker"] for row in rows)
+    for pos in get_open_positions(conn):
+        symbols.add(pos["ticker"])
+
+    errors: list[str] = []
+    updated: list[str] = []
+    index_quotes = {}
+
+    if not settings.finnhub_api_key:
+        return {
+            "ok": False,
+            "error": "FINNHUB_API_KEY not set — add to .env to refresh live quotes",
+            "symbols_requested": sorted(symbols),
+        }
+
+    fh = FinnhubClient(settings.finnhub_api_key)
+    try:
+        for symbol in sorted(symbols):
+            try:
+                q = fh.get_quote(symbol)
+                insert_quote(
+                    conn,
+                    {
+                        "ticker": symbol,
+                        "captured_at": fh_now(),
+                        "price": float(q["c"]),
+                        "open": float(q.get("o") or 0) or None,
+                        "high": float(q.get("h") or 0) or None,
+                        "low": float(q.get("l") or 0) or None,
+                        "prev_close": float(q.get("pc") or 0) or None,
+                    },
+                )
+                updated.append(symbol)
+                if symbol in REGIME_SYMBOLS:
+                    index_quotes[symbol] = index_quote_from_finnhub(symbol, q)
+            except Exception as exc:
+                errors.append(f"{symbol}: {exc}")
+                log_ingest(conn, "finnhub", "error", f"refresh {symbol}: {exc}")
+
+        if len(index_quotes) == len(REGIME_SYMBOLS):
+            snap = evaluate_regime(index_quotes, fh_now())
+            insert_regime_snapshot(
+                conn,
+                {
+                    "captured_at": snap.captured_at,
+                    "spy_change_pct": snap.spy_change_pct,
+                    "dia_change_pct": snap.dia_change_pct,
+                    "qqq_change_pct": snap.qqq_change_pct,
+                    "all_indices_down": snap.all_indices_down,
+                    "block_new_longs": snap.block_new_longs,
+                    "summary": snap.summary,
+                },
+            )
+    finally:
+        fh.close()
+
+    return {
+        "ok": len(updated) > 0,
+        "updated": updated,
+        "errors": errors,
+        "symbols_requested": sorted(symbols),
+    }
+
+
+def build_trading_day_status(conn: sqlite3.Connection) -> dict:
+    """Go/no-go panel for intraday manual trading."""
+    now = now_et()
+    phase = session_phase(now)
+    summary = build_dashboard_summary(conn)
+    day = today_et_str()
+    today_net = compute_today_realized_net(conn, day)
+    daily_target = summary.daily_target
+    target_met = today_net >= daily_target
+    stopped = stopped_out_today(conn, day)
+    open_positions = get_open_positions(conn)
+    pick = get_top_pick(conn)
+
+    watch: list[str] = list(REGIME_SYMBOLS)
+    if pick:
+        watch.append(pick["ticker"])
+    quotes = _latest_quote_rows(conn, watch)
+
+    regime_quote_ages = [
+        _quote_age_minutes(quotes[s]["captured_at"])
+        for s in REGIME_SYMBOLS
+        if s in quotes
+    ]
+    max_age = max(regime_quote_ages) if regime_quote_ages else None
+    quotes_stale = max_age is None or max_age > QUOTE_STALE_MINUTES
+
+    pick_quote = quotes.get(pick["ticker"]) if pick else None
+    pick_change = _intraday_change_pct(pick_quote) if pick_quote else None
+    pick_range = _opening_range_pct(pick_quote) if pick_quote else None
+
+    checks: list[dict] = []
+    verdict = "GO"
+    headline = "Good to trade"
+    detail = "Conditions favor taking the top ranked setup after the 30-minute gate."
+
+    def add_check(name: str, ok: bool | None, message: str, *, blocking: bool = False):
+        checks.append({"name": name, "ok": ok, "message": message, "blocking": blocking})
+
+    if phase == "weekend":
+        verdict = "NO_GO"
+        headline = "Market closed (weekend)"
+        detail = "No intraday session — review ranked list for Monday."
+        add_check("Session", False, "Weekend — market closed", blocking=True)
+    elif phase == "pre_market":
+        verdict = "WAIT"
+        headline = "Pre-market — wait for open"
+        detail = f"Market opens 9:30 AM ET. First entry window after {ENTRY_READY.strftime('%H:%M')} ET ({ENTRY_DELAY_MINUTES} min delay)."
+        add_check("Session", None, "Pre-market", blocking=True)
+    elif phase == "opening_wait":
+        verdict = "WAIT"
+        headline = "Opening period — wait for 30-minute gate"
+        mins_left = int(
+            (
+                datetime.combine(now.date(), ENTRY_READY, tzinfo=ET) - now
+            ).total_seconds()
+            // 60
+        )
+        detail = f"Let the opening chop settle. Entry gate opens in ~{max(mins_left, 0)} min (10:00 AM ET)."
+        add_check("30-minute gate", None, f"Wait until {ENTRY_READY.strftime('%H:%M')} ET", blocking=True)
+    elif phase in ("late_day", "after_hours"):
+        verdict = "NO_GO"
+        headline = "Too late for new entries"
+        detail = f"Entry window was {ENTRY_WINDOW_ET} ET. Manage open positions only."
+        add_check("Entry window", False, "Past 2:30 PM ET cutoff", blocking=True)
+    else:
+        add_check(
+            "30-minute gate",
+            True,
+            f"Past {ENTRY_READY.strftime('%H:%M')} ET — opening period complete",
+        )
+        add_check("Entry window", True, f"Within {ENTRY_WINDOW_ET} ET window")
+
+    if summary.block_new_longs:
+        verdict = "NO_GO"
+        headline = "Regime blocks new longs"
+        detail = summary.regime["summary"] if summary.regime else "SPY/DIA/QQQ all down intraday."
+        add_check("Regime", False, detail, blocking=True)
+    elif phase in ("trade_window", "opening_wait", "pre_market"):
+        regime_msg = summary.regime["summary"] if summary.regime else "Run refresh for live regime"
+        add_check("Regime", True, regime_msg)
+
+    if quotes_stale:
+        if verdict == "GO":
+            verdict = "CAUTION"
+        headline = headline if verdict != "GO" else "Refresh live data"
+        detail = "Quote data is stale — click Refresh live before deciding."
+        add_check(
+            "Live quotes",
+            False,
+            f"Last quote {max_age:.0f} min ago (refresh needed)" if max_age else "No quotes — run refresh",
+            blocking=False,
+        )
+    else:
+        add_check("Live quotes", True, f"Updated within {max_age:.0f} min")
+
+    if target_met:
+        verdict = "NO_GO"
+        headline = "Daily target hit — stop trading"
+        detail = f"Today net ${today_net:,.2f} ≥ ${daily_target:,.0f} goal. Protect the green day."
+        add_check("Daily target", True, f"${today_net:,.2f} / ${daily_target:,.0f}", blocking=True)
+    else:
+        remaining = daily_target - today_net
+        add_check(
+            "Daily target",
+            None,
+            f"${today_net:,.2f} of ${daily_target:,.2f} (${remaining:,.2f} to go)",
+        )
+
+    if stopped:
+        verdict = "NO_GO"
+        headline = "Stop-out day — done for today"
+        detail = "A losing round trip was logged today. No revenge trades."
+        add_check("Stop-out rule", False, "Loss logged today — no more entries", blocking=True)
+    else:
+        add_check("Stop-out rule", True, "No stop-out logged today")
+
+    if open_positions:
+        if verdict == "GO":
+            verdict = "CAUTION"
+        pos = open_positions[0]
+        detail = f"Open position in {pos['ticker']} — finish before a new full-size entry."
+        add_check(
+            "Open position",
+            None,
+            f"{pos['ticker']}: {pos['shares']:.0f} sh @ ${pos['avg_cost']:.2f}",
+        )
+    else:
+        add_check("Open position", True, "Flat — ready for one full-size entry")
+
+    if pick is None:
+        if verdict in ("GO", "CAUTION"):
+            verdict = "NO_GO"
+        headline = "No live top pick"
+        detail = "No ticker passes Step 3 today — run ingest and refresh ranked screener."
+        add_check("Top pick", False, "No live ranked candidate", blocking=True)
+    else:
+        pick_ok = True
+        pick_msg = f"{pick['ticker']} (score {pick.get('score', 0):.3f}, hit {pick.get('hit_rate_pct', 0):.0f}%)"
+        if not pick.get("live_pass_today"):
+            pick_ok = False
+            pick_msg += " — not live Step 3 today"
+        if pick_change is not None:
+            pick_msg += f" · {pick_change:+.2f}% from open"
+            if pick_change <= -TOP_PICK_NO_GO_DROP_PCT:
+                pick_ok = False
+                if verdict == "GO":
+                    verdict = "NO_GO"
+                headline = f"{pick['ticker']} weak at open"
+                detail = f"Top pick down {pick_change:.2f}% from open — skip or wait for next ranked name."
+            elif pick_change <= -TOP_PICK_MAX_DROP_PCT:
+                pick_ok = False
+                if verdict == "GO":
+                    verdict = "CAUTION"
+                detail = f"{pick['ticker']} slightly weak ({pick_change:+.2f}%) — extra caution."
+        if pick_range is not None and pick_range < 0.4 and phase == "trade_window":
+            pick_msg += f" · tight {pick_range:.2f}% range (chop)"
+        add_check("Top pick", pick_ok if pick_ok else False, pick_msg, blocking=not pick_ok and pick_change is not None and pick_change <= -TOP_PICK_NO_GO_DROP_PCT)
+
+    if summary.vix is not None and summary.vix >= 22:
+        if verdict == "GO":
+            verdict = "CAUTION"
+        add_check("VIX", False, f"VIX {summary.vix:.1f} — elevated volatility")
+    elif summary.vix is not None:
+        add_check("VIX", True, f"VIX {summary.vix:.1f}")
+
+    # Second trade only if target not met and no stop
+    can_second_trade = (
+        not target_met
+        and not stopped
+        and not summary.block_new_longs
+        and phase == "trade_window"
+        and today_net > 0
+        and not open_positions
+    )
+
+    pick_detail = None
+    if pick:
+        entry = pick.get("entry_price") or pick_quote["price"] if pick_quote else None
+        target_px = entry * (1 + TARGET_PCT / 100) if entry else pick.get("target_price")
+        stop_px = entry * (1 - STOP_PCT / 100) if entry else pick.get("stop_price")
+        pick_detail = {
+            "ticker": pick["ticker"],
+            "rank_score": pick.get("score"),
+            "hit_rate_pct": pick.get("hit_rate_pct"),
+            "source": pick.get("source"),
+            "live_pass_today": bool(pick.get("live_pass_today")),
+            "entry_price": entry,
+            "target_price": target_px,
+            "stop_price": stop_px,
+            "suggested_size": pick.get("suggested_size"),
+            "intraday_change_pct": round(pick_change, 3) if pick_change is not None else None,
+            "opening_range_pct": round(pick_range, 3) if pick_range is not None else None,
+            "quote_price": pick_quote["price"] if pick_quote else None,
+            "thesis_summary": pick.get("thesis_summary"),
+        }
+
+    return {
+        "as_of_et": now.replace(microsecond=0).isoformat(),
+        "date_et": day,
+        "session_phase": phase,
+        "verdict": verdict,
+        "headline": headline,
+        "detail": detail,
+        "checks": checks,
+        "today_realized_net": round(today_net, 2),
+        "daily_target": daily_target,
+        "daily_target_met": target_met,
+        "stopped_out_today": stopped,
+        "can_enter_new": verdict in ("GO", "CAUTION") and not open_positions and not target_met and not stopped,
+        "can_second_trade": can_second_trade,
+        "open_positions": open_positions,
+        "top_pick": pick_detail,
+        "next_ranked": _next_ranked(conn, pick["ticker"] if pick else None),
+        "strategy": {
+            "target_pct": TARGET_PCT,
+            "stop_pct": STOP_PCT,
+            "entry_delay_minutes": ENTRY_DELAY_MINUTES,
+            "entry_window_et": ENTRY_WINDOW_ET,
+        },
+    }
+
+
+def _next_ranked(conn: sqlite3.Connection, after_ticker: str | None) -> list[dict]:
+    ranked = build_ranked_candidates(conn, period_days=14)["ranked"]
+    live = [r for r in ranked if r.get("live_pass_today")]
+    if after_ticker:
+        live = [r for r in live if r["ticker"] != after_ticker]
+    return [
+        {
+            "ticker": r["ticker"],
+            "rank_score": r.get("score"),
+            "hit_rate_pct": r.get("hit_rate_pct"),
+        }
+        for r in live[:5]
+    ]
+
+
+def pin_top_pick(conn: sqlite3.Connection, ticker: str) -> dict:
+    sym = ticker.upper().strip()
+    set_setting(conn, "pinned_pick_ticker", sym)
+    return {"ok": True, "pinned_pick_ticker": sym}
+
+
+def clear_pinned_pick(conn: sqlite3.Connection) -> dict:
+    set_setting(conn, "pinned_pick_ticker", "")
+    return {"ok": True, "pinned_pick_ticker": ""}

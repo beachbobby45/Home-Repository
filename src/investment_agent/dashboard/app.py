@@ -69,6 +69,12 @@ from investment_agent.stock_team import (
     set_queue_state,
     sync_queue_from_screener,
 )
+from investment_agent.trading_day import (
+    build_trading_day_status,
+    clear_pinned_pick,
+    pin_top_pick,
+    refresh_live_quotes,
+)
 
 DASHBOARD_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DASHBOARD_DIR.parents[2]
@@ -127,6 +133,10 @@ class PeriodScreenerBody(BaseModel):
     min_days_screened: int = 1
     min_hit_rate_pct: float | None = None
     save: bool = True
+
+
+class PinPickBody(BaseModel):
+    ticker: str
 
 
 def _db():
@@ -264,6 +274,45 @@ def api_historical_pull(
 def api_summary(conn=Depends(_db)) -> dict[str, Any]:
     summary = build_dashboard_summary(conn)
     return summary_to_dict(summary)
+
+
+@app.get("/api/trading-day/status")
+def api_trading_day_status(conn=Depends(_db)) -> dict[str, Any]:
+    return build_trading_day_status(conn)
+
+
+@app.post("/api/trading-day/refresh")
+def api_trading_day_refresh(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    settings = Settings.from_env()
+    refresh = refresh_live_quotes(conn, settings)
+    if refresh.get("ok"):
+        conn.commit()
+    status = build_trading_day_status(conn)
+    return {"refresh": refresh, "status": status}
+
+
+@app.post("/api/trading-day/pin-pick")
+def api_trading_day_pin(
+    body: PinPickBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    result = pin_top_pick(conn, body.ticker)
+    conn.commit()
+    return {**result, "status": build_trading_day_status(conn)}
+
+
+@app.post("/api/trading-day/clear-pin")
+def api_trading_day_clear_pin(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    result = clear_pinned_pick(conn)
+    conn.commit()
+    return {**result, "status": build_trading_day_status(conn)}
 
 
 @app.get("/api/queue")

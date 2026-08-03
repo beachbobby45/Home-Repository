@@ -161,6 +161,120 @@ main {
   gap: 1rem;
 }
 
+.banner.wait {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+}
+
+.banner.caution {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fcd34d;
+}
+
+.trading-day-section {
+  margin-top: 1rem;
+}
+
+.trading-day-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.trading-day-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.trading-day-panel {
+  border-width: 2px;
+}
+
+.trading-day-panel.verdict-go {
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.trading-day-panel.verdict-wait {
+  border-color: rgba(59, 130, 246, 0.55);
+}
+
+.trading-day-panel.verdict-caution {
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
+.trading-day-panel.verdict-no_go {
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+.trading-verdict {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.verdict-badge {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  background: var(--surface2);
+}
+
+.verdict-badge.go { background: rgba(34, 197, 94, 0.2); color: var(--green); }
+.verdict-badge.wait { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.verdict-badge.caution { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+.verdict-badge.no_go { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+
+.verdict-headline {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.top-pick-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.top-pick-ticker {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.check-list li {
+  padding: 0.35rem 0;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.check-list li:last-child {
+  border-bottom: none;
+}
+
+.check-icon {
+  display: inline-block;
+  width: 1.1rem;
+}
+
+.check-ok { color: var(--green); }
+.check-bad { color: var(--red); }
+.check-wait { color: #93c5fd; }
+
 .grid-4 {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }

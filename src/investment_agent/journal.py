@@ -6,8 +6,26 @@ import sqlite3
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from investment_agent.finance import DEFAULT_BUY_FEE, DEFAULT_SELL_FEE, ORIGINAL_BASIS
+
+ET = ZoneInfo("America/New_York")
+
+
+def today_et_str() -> str:
+    return datetime.now(ET).strftime("%Y-%m-%d")
+
+
+def _executed_date_et(executed_at: str) -> str:
+    try:
+        ts = executed_at.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ET).strftime("%Y-%m-%d")
+    except ValueError:
+        return executed_at[:10]
 
 
 @dataclass(frozen=True)
@@ -118,22 +136,22 @@ def compute_total_fees(conn: sqlite3.Connection) -> float:
 
 
 def compute_today_realized_net(conn: sqlite3.Connection, date_key: str | None = None) -> float:
-    """FIFO matched round-trip P&L for closed trades on YYYY-MM-DD (UTC date prefix)."""
-    when = date_key or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    """FIFO matched round-trip P&L for closed trades on YYYY-MM-DD (America/New_York)."""
+    when = date_key or today_et_str()
     rows = conn.execute(
         """
         SELECT ticker, side, shares, price, fee, executed_at
         FROM trade_journal
-        WHERE date(executed_at) = date(?)
         ORDER BY executed_at ASC, id ASC
-        """,
-        (when,),
+        """
     ).fetchall()
 
     buys: dict[str, deque] = {}
     realized = 0.0
 
     for row in rows:
+        if _executed_date_et(row["executed_at"]) != when:
+            continue
         ticker = row["ticker"]
         if row["side"] == "BUY":
             buys.setdefault(ticker, deque()).append(
