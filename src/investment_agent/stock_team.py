@@ -126,7 +126,8 @@ def screen_candidates(conn: sqlite3.Connection) -> list[AnalysisCard]:
 
 def sync_queue_from_screener(conn: sqlite3.Connection, *, max_items: int = 5) -> dict:
     """
-    Add top screener picks to queue as 'watching' if not already active.
+    Add top ranked live Step 3 passers to queue as 'watching' if not already active.
+    Uses 14d period rank score (not range proximity alone).
     Respects regime block (returns message, does not add when blocked).
     """
     summary = build_dashboard_summary(conn)
@@ -140,45 +141,85 @@ def sync_queue_from_screener(conn: sqlite3.Connection, *, max_items: int = 5) ->
         }
 
     active = _active_queue_tickers(conn)
-    live = screen_candidates(conn)
-    candidates = [c for c in live if c.ticker not in active]
+    from investment_agent.period_screener import build_ranked_candidates
+
+    ranked = build_ranked_candidates(conn, period_days=14)["ranked"]
+    live_ranked = [r for r in ranked if r.get("live_pass_today")]
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     added_tickers: list[str] = []
 
-    for card in candidates[:max_items]:
-        conn.execute(
-            """
-            INSERT INTO queue_items
-              (ticker, state, suggested_size, entry_price, target_price, stop_price,
-               avg_range_pct, liquidity_cap, thesis_summary, created_at, updated_at)
-            VALUES (?, 'watching', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                card.ticker,
-                card.suggested_size,
-                card.entry_price,
-                card.target_price,
-                card.stop_price,
-                card.avg_range_pct,
-                card.liquidity_cap,
-                card.thesis_summary,
-                now,
-                now,
-            ),
-        )
-        added_tickers.append(card.ticker)
+    if live_ranked:
+        live_count = len(live_ranked)
+        pending = [r for r in live_ranked if r["ticker"] not in active]
+        for row in pending[:max_items]:
+            conn.execute(
+                """
+                INSERT INTO queue_items
+                  (ticker, state, suggested_size, entry_price, target_price, stop_price,
+                   avg_range_pct, liquidity_cap, thesis_summary, created_at, updated_at)
+                VALUES (?, 'watching', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["ticker"],
+                    row.get("suggested_size") or row.get("liquidity_cap") or 0,
+                    row.get("entry_price"),
+                    row.get("target_price"),
+                    row.get("stop_price"),
+                    row.get("avg_range_pct"),
+                    row.get("liquidity_cap"),
+                    row.get("thesis_summary") or "",
+                    now,
+                    now,
+                ),
+            )
+            added_tickers.append(row["ticker"])
+        live_names_source = live_ranked
+    else:
+        # No period history yet — fall back to live screener sorted by ~3% range
+        live_cards = screen_candidates(conn)
+        live_count = len(live_cards)
+        pending = [c for c in live_cards if c.ticker not in active]
+        for card in pending[:max_items]:
+            conn.execute(
+                """
+                INSERT INTO queue_items
+                  (ticker, state, suggested_size, entry_price, target_price, stop_price,
+                   avg_range_pct, liquidity_cap, thesis_summary, created_at, updated_at)
+                VALUES (?, 'watching', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    card.ticker,
+                    card.suggested_size,
+                    card.entry_price,
+                    card.target_price,
+                    card.stop_price,
+                    card.avg_range_pct,
+                    card.liquidity_cap,
+                    card.thesis_summary,
+                    now,
+                    now,
+                ),
+            )
+            added_tickers.append(card.ticker)
+        live_names_source = live_cards
 
     added = len(added_tickers)
-    already = len(live) - len(candidates)
+    already = live_count - len(pending)
+
     if added:
-        message = f"Added {added} ticker(s) to queue: {', '.join(added_tickers)}."
-    elif not live:
+        message = (
+            f"Added {added} ticker(s) by 14d rank score: {', '.join(added_tickers)}."
+        )
+    elif not live_count:
         message = "No tickers pass Step 3 today — run ingest after loading your watchlist."
-    elif already >= len(live):
-        live_names = ", ".join(c.ticker for c in live[:8])
+    elif already >= live_count:
+        live_names = ", ".join(
+            (r["ticker"] if isinstance(r, dict) else r.ticker)
+            for r in live_names_source[:8]
+        )
         suffix = f" ({live_names})" if live_names else ""
         message = (
-            f"Nothing to add — all {len(live)} live screener candidate(s) "
+            f"Nothing to add — all {live_count} live ranked candidate(s) "
             f"are already in the queue{suffix}."
         )
     else:
@@ -187,7 +228,7 @@ def sync_queue_from_screener(conn: sqlite3.Connection, *, max_items: int = 5) ->
     return {
         "ok": True,
         "added": added,
-        "live_count": len(live),
+        "live_count": live_count,
         "already_in_queue": already,
         "added_tickers": added_tickers,
         "message": message,

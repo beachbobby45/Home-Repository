@@ -42,7 +42,7 @@ def build_cio_summary(conn: sqlite3.Connection) -> dict:
     if dash.monthly_realized_net <= 0 and dash.total_fees_paid > 0:
         action_items.append(
             f"Month net ${dash.monthly_realized_net:.2f} after ${dash.total_fees_paid:.2f} fees — "
-            "fees matter at $7/$7; aim for +1.13% targets."
+            "fees matter at $7/$7; aim for +1.5% targets."
         )
     if not action_items:
         action_items.append("No urgent actions — run ingest + monitor to stay current.")
