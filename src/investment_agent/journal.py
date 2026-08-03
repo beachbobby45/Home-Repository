@@ -117,6 +117,51 @@ def compute_total_fees(conn: sqlite3.Connection) -> float:
     return float(row["total"]) if row else 0.0
 
 
+def compute_today_realized_net(conn: sqlite3.Connection, date_key: str | None = None) -> float:
+    """FIFO matched round-trip P&L for closed trades on YYYY-MM-DD (UTC date prefix)."""
+    when = date_key or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    rows = conn.execute(
+        """
+        SELECT ticker, side, shares, price, fee, executed_at
+        FROM trade_journal
+        WHERE date(executed_at) = date(?)
+        ORDER BY executed_at ASC, id ASC
+        """,
+        (when,),
+    ).fetchall()
+
+    buys: dict[str, deque] = {}
+    realized = 0.0
+
+    for row in rows:
+        ticker = row["ticker"]
+        if row["side"] == "BUY":
+            buys.setdefault(ticker, deque()).append(
+                {"shares": float(row["shares"]), "price": float(row["price"]), "fee": float(row["fee"])}
+            )
+            continue
+
+        remaining = float(row["shares"])
+        sell_price = float(row["price"])
+        sell_shares = float(row["shares"])
+        sell_fee_total = float(row["fee"])
+        queue = buys.setdefault(ticker, deque())
+
+        while remaining > 1e-9 and queue:
+            buy = queue[0]
+            matched = min(remaining, buy["shares"])
+            buy_fee = buy["fee"] * (matched / buy["shares"])
+            sell_fee = sell_fee_total * (matched / sell_shares)
+            realized += (sell_price - buy["price"]) * matched - buy_fee - sell_fee
+            remaining -= matched
+            buy["shares"] -= matched
+            buy["fee"] -= buy_fee
+            if buy["shares"] <= 1e-9:
+                queue.popleft()
+
+    return realized
+
+
 def compute_monthly_realized_net(conn: sqlite3.Connection, month_key: str) -> float:
     """FIFO matched round-trip P&L for closed trades in YYYY-MM."""
     rows = conn.execute(

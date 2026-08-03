@@ -55,7 +55,7 @@ def test_target_stop_prices():
 
 
 def test_pnl_pct():
-    assert abs(pnl_pct(100, 101.13) - 1.13) < 0.01
+    assert abs(pnl_pct(100, 101.5) - 1.5) < 0.01
 
 
 def test_target_hit_creates_alert():

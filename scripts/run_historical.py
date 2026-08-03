@@ -18,7 +18,6 @@ from investment_agent.historical import (
     evaluate_trading_day,
     pull_historical_data,
 )
-from investment_agent.ingest import DEFAULT_TICKERS
 
 
 def main() -> None:

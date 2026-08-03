@@ -66,7 +66,7 @@ def _seed_minimal_history(path: Path) -> tuple[str, str]:
 def test_open_based_range_and_simulation():
     assert open_based_range_pct(100, 103, 97) == 6.0
     assert simulate_intraday_outcome(100, 102, 99) == "target"
-    assert simulate_intraday_outcome(100, 101, 99.4) == "stop"
+    assert simulate_intraday_outcome(100, 101, 99.2) == "stop"
     assert simulate_intraday_outcome(100, 100.5, 99.8) == "neither"
 
 

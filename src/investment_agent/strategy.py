@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-TARGET_PCT = 1.13
-STOP_PCT = 0.50
+TARGET_PCT = 1.50
+STOP_PCT = 0.75
+MAX_TRADES_PER_DAY = 2
+ENTRY_DELAY_MINUTES = 30
+STOP_DAY_AFTER_STOP = True
+ENTRY_WINDOW_ET = "10:00–14:30"
 
 QUEUE_STATES = (
     "watching",

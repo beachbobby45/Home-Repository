@@ -7,19 +7,36 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from investment_agent.finance import (
+    DAILY_TARGET_BASE,
+    DAILY_TARGET_EVERY,
+    DAILY_TARGET_MILESTONE_AT,
+    DAILY_TARGET_MILESTONE_GOAL,
+    DAILY_TARGET_STEP,
     DEFAULT_BUY_FEE,
     DEFAULT_SELL_FEE,
     DEFAULT_TAX_RESERVE_RATE,
     GOAL_ACCOUNT_VALUE,
     ORIGINAL_BASIS,
     compute_month_end_sweep,
+    daily_profit_target,
     goal_progress_pct,
+    growth_plan_milestones,
+    next_growth_tier,
     round_trip_fees,
 )
 from investment_agent.journal import (
     compute_monthly_realized_net,
+    compute_today_realized_net,
     compute_total_fees,
     journal_cash_balance,
+)
+from investment_agent.strategy import (
+    ENTRY_DELAY_MINUTES,
+    ENTRY_WINDOW_ET,
+    MAX_TRADES_PER_DAY,
+    STOP_DAY_AFTER_STOP,
+    STOP_PCT,
+    TARGET_PCT,
 )
 
 
@@ -41,6 +58,12 @@ class DashboardSummary:
     regime: dict | None
     market_brief: str
     block_new_longs: bool
+    daily_target: float
+    today_realized_net: float
+    today_target_progress_pct: float
+    growth_tier: dict
+    growth_plan: list[dict]
+    strategy_rules: dict
 
 
 def _month_key(dt: datetime | None = None) -> str:
@@ -203,6 +226,9 @@ def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
     sweep = compute_month_end_sweep(realized, tax_rate=tax_rate)
     vix = latest_vix(conn)
     regime = latest_regime(conn)
+    daily_target = daily_profit_target(tradable)
+    today_net = compute_today_realized_net(conn)
+    today_progress = (today_net / daily_target * 100.0) if daily_target > 0 else 0.0
 
     return DashboardSummary(
         tradable_cash=tradable,
@@ -227,6 +253,24 @@ def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
         regime=regime,
         market_brief=build_market_brief(vix, regime),
         block_new_longs=bool(regime and regime.get("block_new_longs")),
+        daily_target=daily_target,
+        today_realized_net=today_net,
+        today_target_progress_pct=today_progress,
+        growth_tier=next_growth_tier(tradable),
+        growth_plan=growth_plan_milestones(),
+        strategy_rules={
+            "target_pct": TARGET_PCT,
+            "stop_pct": STOP_PCT,
+            "max_trades_per_day": MAX_TRADES_PER_DAY,
+            "entry_delay_minutes": ENTRY_DELAY_MINUTES,
+            "entry_window_et": ENTRY_WINDOW_ET,
+            "stop_day_after_stop": STOP_DAY_AFTER_STOP,
+            "daily_target_base": DAILY_TARGET_BASE,
+            "daily_target_step": DAILY_TARGET_STEP,
+            "daily_target_every": DAILY_TARGET_EVERY,
+            "milestone_daily_goal": DAILY_TARGET_MILESTONE_GOAL,
+            "milestone_at_balance": DAILY_TARGET_MILESTONE_AT,
+        },
     )
 
 
@@ -249,4 +293,10 @@ def summary_to_dict(summary: DashboardSummary) -> dict:
         "regime": summary.regime,
         "market_brief": summary.market_brief,
         "block_new_longs": summary.block_new_longs,
+        "daily_target": summary.daily_target,
+        "today_realized_net": summary.today_realized_net,
+        "today_target_progress_pct": summary.today_target_progress_pct,
+        "growth_tier": summary.growth_tier,
+        "growth_plan": summary.growth_plan,
+        "strategy": summary.strategy_rules,
     }

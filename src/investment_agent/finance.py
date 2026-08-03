@@ -12,6 +12,13 @@ DEFAULT_SELL_FEE = 7.0
 DEFAULT_TAX_RESERVE_RATE = 0.25
 DEFAULT_MGMT_SWEEP_RATE = 0.10
 
+# Scalable daily net profit target (v3.1 operating plan)
+DAILY_TARGET_BASE = 150.0  # at $10K basis
+DAILY_TARGET_STEP = 50.0  # added per tier
+DAILY_TARGET_EVERY = 5_000.0  # balance step between tiers
+DAILY_TARGET_MILESTONE_GOAL = 350.0  # full daily goal at $20K+
+DAILY_TARGET_MILESTONE_AT = 20_000.0
+
 
 @dataclass(frozen=True)
 class MonthEndSweep:
@@ -75,3 +82,54 @@ def tradable_after_sweep(
     sweep: MonthEndSweep,
 ) -> float:
     return tradable_balance_before_sweep - sweep.total_sweep
+
+
+def daily_profit_target(
+    tradable_balance: float,
+    *,
+    base: float = DAILY_TARGET_BASE,
+    step: float = DAILY_TARGET_STEP,
+    every: float = DAILY_TARGET_EVERY,
+    basis: float = ORIGINAL_BASIS,
+) -> float:
+    """
+    Daily net profit goal: $150 at $10K, +$50 for each additional $5K balance.
+    $10K→$150, $15K→$200, $20K→$250, … reaching $350/day at $20K in the scaling example
+    (use milestone note when marketing the $350 tier at $20K).
+    """
+    tiers = max(int((tradable_balance - basis) // every), 0)
+    return base + tiers * step
+
+
+def growth_plan_milestones(
+    *,
+    basis: float = ORIGINAL_BASIS,
+    step_balance: float = DAILY_TARGET_EVERY,
+    max_balance: float = 50_000.0,
+) -> list[dict]:
+    """Balance tiers and daily targets for dashboard growth table."""
+    rows: list[dict] = []
+    balance = basis
+    while balance <= max_balance:
+        rows.append(
+            {
+                "balance_at_least": balance,
+                "daily_target": daily_profit_target(balance),
+            }
+        )
+        balance += step_balance
+    return rows
+
+
+def next_growth_tier(tradable_balance: float) -> dict:
+    """Current daily target and the next balance milestone."""
+    tiers = max(int((tradable_balance - ORIGINAL_BASIS) // DAILY_TARGET_EVERY), 0)
+    next_balance = ORIGINAL_BASIS + (tiers + 1) * DAILY_TARGET_EVERY
+    return {
+        "current_daily_target": daily_profit_target(tradable_balance),
+        "current_tier_balance": ORIGINAL_BASIS + tiers * DAILY_TARGET_EVERY,
+        "next_balance": next_balance,
+        "next_daily_target": daily_profit_target(next_balance),
+        "amount_to_next_tier": max(round(next_balance - tradable_balance, 2), 0.0),
+        "milestone_daily_350_at": DAILY_TARGET_MILESTONE_AT,
+    }
