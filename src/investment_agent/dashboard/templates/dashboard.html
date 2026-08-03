@@ -406,24 +406,44 @@
     }
 
     async function api(path, opts = {}) {
-      const res = await fetch(path, {
-        ...opts,
-        headers: apiHeaders(opts.headers || {}),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 401) {
-          localStorage.removeItem(API_KEY_STORAGE);
-          const input = document.getElementById("app-api-key");
-          if (input) input.value = "";
+      const timeoutMs = opts.timeoutMs ?? 30000;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(path, {
+          ...opts,
+          signal: controller.signal,
+          headers: apiHeaders(opts.headers || {}),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 401) {
+            localStorage.removeItem(API_KEY_STORAGE);
+            const input = document.getElementById("app-api-key");
+            if (input) input.value = "";
+            throw new Error(
+              "Invalid dashboard password — it must match APP_API_KEY in your .env exactly. "
+              + "Saved password cleared; re-enter and click Save, or leave APP_API_KEY blank in .env for local-only use."
+            );
+          }
+          throw new Error(data.detail || data.error || res.statusText);
+        }
+        return data;
+      } catch (err) {
+        if (err.name === "AbortError") {
+          throw new Error("Request timed out — the server may still be refreshing quotes. Wait 15s and click Refresh again.");
+        }
+        if (err instanceof TypeError) {
           throw new Error(
-            "Invalid dashboard password — it must match APP_API_KEY in your .env exactly. "
-            + "Saved password cleared; re-enter and click Save, or leave APP_API_KEY blank in .env for local-only use."
+            "Cannot reach the dashboard server (connection failed). "
+            + "If using 127.0.0.1, start run_dashboard.py on this machine. "
+            + "If using a cloud link, ask for a new tunnel URL — they expire."
           );
         }
-        throw new Error(data.detail || data.error || res.statusText);
+        throw err;
+      } finally {
+        clearTimeout(timer);
       }
-      return data;
     }
 
     function initApiKeyBar() {
@@ -1014,16 +1034,20 @@
     document.getElementById("refresh-alerts").addEventListener("click", () => loadAlerts().catch((e) => toast(e.message)));
 
     document.getElementById("refresh-trading-day").addEventListener("click", async () => {
+      const btn = document.getElementById("refresh-trading-day");
       try {
-        toast("Refreshing live quotes + regime…");
-        const r = await api("/api/trading-day/refresh", { method: "POST" });
+        btn.disabled = true;
+        toast("Refreshing live quotes + regime… (about 10–15 seconds)", 8000);
+        const r = await api("/api/trading-day/refresh", { method: "POST", timeoutMs: 90000 });
         if (!r.refresh?.ok) {
-          toast(r.refresh?.error || "Refresh partial — check FINNHUB_API_KEY in .env", 5000);
+          toast(r.refresh?.error || "Refresh failed — check FINNHUB_API_KEY in .env", 6000);
         } else {
           toast(`Live data updated (${(r.refresh.updated || []).length} symbols)`);
         }
-        await refreshAll();
-      } catch (e) { toast(e.message); }
+        await loadTradingDay();
+        await loadSummary();
+      } catch (e) { toast(e.message, 8000); }
+      finally { btn.disabled = false; }
     });
 
     document.getElementById("pin-top-pick").addEventListener("click", async () => {
