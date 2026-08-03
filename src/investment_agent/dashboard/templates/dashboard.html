@@ -48,7 +48,16 @@
             <div id="top-pick-body" class="brief">Loading…</div>
           </div>
           <div>
-            <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Go / no-go checks</h3>
+            <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Planned purchase check</h3>
+            <p class="brief" style="margin:0 0 0.5rem">Enter your intended E*TRADE fill — refresh live data first, then validate before you buy.</p>
+            <form id="planned-trade-form" class="planned-trade-form">
+              <label>Ticker <input type="text" id="plan-ticker" placeholder="NFLX" /></label>
+              <label>Buy price ($) <input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Live entry" /></label>
+              <label>Shares <input type="number" id="plan-shares" step="1" min="1" placeholder="Auto from size" /></label>
+              <button class="btn secondary btn-sm" type="submit">Validate trade</button>
+            </form>
+            <div id="planned-trade-result" class="planned-trade-result brief"></div>
+            <h3 style="margin:1rem 0 0.5rem;font-size:0.95rem">Go / no-go checks</h3>
             <ul class="check-list" id="trading-checks"></ul>
             <div class="brief" id="rotation-hint" style="margin-top:0.75rem"></div>
           </div>
@@ -500,17 +509,31 @@
       if (!pick) {
         pickEl.innerHTML = "<span class='empty'>No live pick — run ingest + ranked screener</span>";
       } else {
+        const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
         pickEl.innerHTML = `
           <div class="top-pick-ticker">${pick.ticker} <span class="brief">(${pick.source})</span></div>
           <div>Rank score <strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong>
             · Hit rate <strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
-          <div>Live ${pick.quote_price != null ? "$" + fmt(pick.quote_price) : "—"}
-            ${pick.intraday_change_pct != null ? " · <strong>" + fmtPctLive(pick.intraday_change_pct) + "</strong> from open" : ""}</div>
-          <div>Target +1.5% <strong>$${fmt(pick.target_price)}</strong> · Stop −0.75% <strong>$${fmt(pick.stop_price)}</strong></div>
-          <div>Size <strong>$${fmt(pick.suggested_size)}</strong> · Today P&amp;L
+          <div class="entry-highlight">Buy at (live entry) <strong>$${fmt(entry)}</strong>
+            ${pick.intraday_change_pct != null ? " · <span class='brief'>" + fmtPctLive(pick.intraday_change_pct) + " from open</span>" : ""}
+            ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + pick.quote_as_of.slice(0, 19) + "</span>" : ""}</div>
+          <div>Shares <strong>${pick.recommended_shares ?? "—"}</strong>
+            · Notional <strong>$${fmt(pick.notional)}</strong>
+            · Total cost <strong>$${fmt(pick.total_cost)}</strong></div>
+          <div>Sell target +1.5% <strong>$${fmt(pick.target_price)}</strong>
+            <span class="brief">(net ~+$${fmt(pick.net_at_target)})</span></div>
+          <div>Stop −0.75% <strong>$${fmt(pick.stop_price)}</strong>
+            <span class="brief">(net ~$${fmt(pick.net_at_stop)})</span></div>
+          <div>Deploy size <strong>$${fmt(pick.suggested_size)}</strong> · Today P&amp;L
             <strong>${(td.today_realized_net >= 0 ? "+" : "") + "$" + fmt(td.today_realized_net)}</strong>
             / $${fmt(td.daily_target)}</div>
         `;
+        const planTicker = document.getElementById("plan-ticker");
+        const planPrice = document.getElementById("plan-price");
+        const planShares = document.getElementById("plan-shares");
+        if (planTicker && !planTicker.dataset.userEdited) planTicker.value = pick.ticker;
+        if (planPrice && !planPrice.dataset.userEdited) planPrice.value = entry != null ? Number(entry).toFixed(2) : "";
+        if (planShares && !planShares.dataset.userEdited && pick.recommended_shares) planShares.value = pick.recommended_shares;
       }
 
       const checks = document.getElementById("trading-checks");
@@ -1046,8 +1069,44 @@
         }
         await loadTradingDay();
         await loadSummary();
+        // Re-fill planned price from fresh live entry unless user edited fields
+        document.getElementById("plan-ticker")?.removeAttribute("data-user-edited");
+        document.getElementById("plan-price")?.removeAttribute("data-user-edited");
+        document.getElementById("plan-shares")?.removeAttribute("data-user-edited");
+        await loadTradingDay();
       } catch (e) { toast(e.message, 8000); }
       finally { btn.disabled = false; }
+    });
+
+    ["plan-ticker", "plan-price", "plan-shares"].forEach((id) => {
+      document.getElementById(id)?.addEventListener("input", (e) => {
+        e.target.dataset.userEdited = "1";
+      });
+    });
+
+    document.getElementById("planned-trade-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const ticker = document.getElementById("plan-ticker").value.trim();
+      const price = Number(document.getElementById("plan-price").value);
+      const sharesRaw = document.getElementById("plan-shares").value;
+      const payload = { ticker, price };
+      if (sharesRaw) payload.shares = Number(sharesRaw);
+      try {
+        toast("Validating planned trade…");
+        const r = await api("/api/trading-day/validate", { method: "POST", body: JSON.stringify(payload), timeoutMs: 60000 });
+        const el = document.getElementById("planned-trade-result");
+        const p = r.plan || {};
+        el.innerHTML = `
+          <div class="validate-verdict ${r.verdict.toLowerCase()}"><strong>${r.verdict}</strong> — ${r.headline}</div>
+          <ul class="check-list">${(r.checks || []).map((c) => {
+            const icon = c.ok === true ? "✓" : c.ok === false ? "✗" : "◐";
+            const cls = c.ok === true ? "ok" : c.ok === false ? "bad" : "wait";
+            return `<li class="check-${cls}"><span class="check-icon">${icon}</span> ${c.message}</li>`;
+          }).join("")}</ul>
+          ${p.shares ? `<div style="margin-top:0.5rem">At $${fmt(price)} × ${p.shares} sh → target $${fmt(p.target_price)} (net ~+$${fmt(p.net_at_target)}) · stop $${fmt(p.stop_price)} (net ~$${fmt(p.net_at_stop)})</div>` : ""}
+        `;
+        toast(r.headline, 5000);
+      } catch (err) { toast(err.message, 6000); }
     });
 
     document.getElementById("pin-top-pick").addEventListener("click", async () => {

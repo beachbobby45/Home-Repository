@@ -250,6 +250,60 @@ main {
   margin-bottom: 0.35rem;
 }
 
+.entry-highlight {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.65rem;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.planned-trade-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.planned-trade-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.planned-trade-form input {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  min-width: 100px;
+}
+
+.planned-trade-result {
+  margin-top: 0.5rem;
+}
+
+.validate-verdict {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.validate-verdict.go { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+.validate-verdict.caution { background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
+.validate-verdict.no_go { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+
+.top-pick-ticker {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
 .check-list {
   list-style: none;
   margin: 0;

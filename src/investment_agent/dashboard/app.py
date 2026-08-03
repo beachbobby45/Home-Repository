@@ -74,6 +74,7 @@ from investment_agent.trading_day import (
     clear_pinned_pick,
     pin_top_pick,
     refresh_live_quotes,
+    validate_planned_trade,
 )
 
 DASHBOARD_DIR = Path(__file__).resolve().parent
@@ -137,6 +138,12 @@ class PeriodScreenerBody(BaseModel):
 
 class PinPickBody(BaseModel):
     ticker: str
+
+
+class ValidateTradeBody(BaseModel):
+    ticker: str
+    price: float = Field(gt=0)
+    shares: float | None = Field(default=None, gt=0)
 
 
 def _db():
@@ -292,6 +299,19 @@ def api_trading_day_refresh(
         conn.commit()
     status = build_trading_day_status(conn)
     return {"refresh": refresh, "status": status}
+
+
+@app.post("/api/trading-day/validate")
+def api_trading_day_validate(
+    body: ValidateTradeBody,
+    conn=Depends(_db),
+) -> dict:
+    return validate_planned_trade(
+        conn,
+        ticker=body.ticker,
+        planned_price=body.price,
+        shares=body.shares,
+    )
 
 
 @app.post("/api/trading-day/pin-pick")
