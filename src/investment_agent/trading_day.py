@@ -23,6 +23,7 @@ from investment_agent.journal import (
 from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.regime import REGIME_SYMBOLS
 from investment_agent.strategy import ENTRY_DELAY_MINUTES, ENTRY_WINDOW_ET, STOP_PCT
+from investment_agent.tradability import assess_entry_tradability
 
 ET = ZoneInfo("America/New_York")
 MARKET_OPEN = time(9, 30)
@@ -32,6 +33,7 @@ MARKET_CLOSE = time(16, 0)
 QUOTE_STALE_MINUTES = 20
 TOP_PICK_MAX_DROP_PCT = 0.50  # down more than 0.5% from open → caution
 TOP_PICK_NO_GO_DROP_PCT = 0.75  # aligns with stop width
+ACTIONABLE_PICK_SCAN = 10  # walk top N live ranked for tradability
 
 
 def now_et() -> datetime:
@@ -126,6 +128,7 @@ def _opening_range_pct(quote: dict) -> float | None:
 
 
 def get_top_pick(conn: sqlite3.Connection) -> dict | None:
+    """Highest ranked live candidate (ignores intraday tradability)."""
     pinned = get_setting(conn, "pinned_pick_ticker", "").strip().upper()
     ranked = build_ranked_candidates(conn, period_days=14)["ranked"]
     live = [r for r in ranked if r.get("live_pass_today")]
@@ -134,7 +137,6 @@ def get_top_pick(conn: sqlite3.Connection) -> dict | None:
         match = next((r for r in live if r["ticker"] == pinned), None)
         if match:
             return {**match, "source": "pinned"}
-        # pinned but not live — still surface with warning
         row = next((r for r in ranked if r["ticker"] == pinned), None)
         if row:
             return {**row, "source": "pinned_not_live", "live_pass_today": False}
@@ -142,6 +144,73 @@ def get_top_pick(conn: sqlite3.Connection) -> dict | None:
     if not live:
         return None
     return {**live[0], "source": "ranked_#1"}
+
+
+def _live_ranked_candidates(conn: sqlite3.Connection, limit: int = ACTIONABLE_PICK_SCAN) -> list[dict]:
+    ranked = build_ranked_candidates(conn, period_days=14)["ranked"]
+    live = [r for r in ranked if r.get("live_pass_today")]
+    pinned = get_setting(conn, "pinned_pick_ticker", "").strip().upper()
+    if pinned:
+        pin_row = next((r for r in ranked if r["ticker"] == pinned), None)
+        if pin_row:
+            live = [pin_row] + [r for r in live if r["ticker"] != pinned]
+    return live[:limit]
+
+
+def resolve_actionable_pick(
+    conn: sqlite3.Connection,
+    *,
+    quotes: dict[str, dict],
+    deploy: float,
+    net_target: float,
+) -> tuple[dict | None, list[dict]]:
+    """Pick first live ranked name that passes intraday tradability for today's $ goal."""
+    skipped: list[dict] = []
+    candidates = _live_ranked_candidates(conn)
+    fallback: dict | None = None
+
+    for row in candidates:
+        sym = row["ticker"]
+        quote = quotes.get(sym)
+        entry = float(quote["price"]) if quote and quote.get("price") else None
+        tradability = assess_entry_tradability(
+            quote=quote,
+            entry_price=entry or float(row.get("last_quote") or 0),
+            deploy_dollar=deploy,
+            net_target=net_target,
+            avg_range_pct=float(row.get("avg_range_pct") or 0) or None,
+        ) if entry else {
+            "verdict": "UNKNOWN",
+            "headline": "No live quote",
+            "detail": "Refresh live data for tradability check",
+            "checks": [],
+        }
+
+        pick = {**row, "tradability": tradability}
+        if row.get("source") != "pinned" and sym == get_setting(conn, "pinned_pick_ticker", "").strip().upper():
+            pick["source"] = "pinned"
+        elif fallback is None:
+            fallback = pick
+
+        if tradability.get("verdict") == "NOT_TRADABLE":
+            skipped.append({
+                "ticker": sym,
+                "rank_score": row.get("score"),
+                "reason": tradability.get("detail"),
+                "verdict": tradability.get("verdict"),
+            })
+            continue
+
+        source = pick.get("source")
+        if not source:
+            pinned = get_setting(conn, "pinned_pick_ticker", "").strip().upper()
+            source = "pinned" if sym == pinned else f"ranked_#{len(skipped) + 1}"
+        pick["source"] = source
+        return pick, skipped
+
+    if fallback:
+        return fallback, skipped
+    return None, skipped
 
 
 def stopped_out_today(conn: sqlite3.Connection, date_key: str | None = None) -> bool:
@@ -170,6 +239,9 @@ def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
     from investment_agent.regime import evaluate_regime, index_quote_from_finnhub
 
     symbols: set[str] = set(REGIME_SYMBOLS)
+    for row in _live_ranked_candidates(conn, limit=ACTIONABLE_PICK_SCAN):
+        symbols.add(row["ticker"])
+
     pick = get_top_pick(conn)
     if pick:
         symbols.add(pick["ticker"])
@@ -362,6 +434,37 @@ def validate_planned_trade(
         else:
             checks.append({"name": "Price vs live", "ok": True, "message": f"Within {slippage:+.2f}% of live ${live_price:.2f}"})
 
+        remaining = max(day_status["daily_target"] - day_status.get("today_realized_net", 0), 0)
+        goal = remaining or day_status["daily_target"]
+        metrics_row = conn.execute(
+            """
+            SELECT avg_range_pct FROM ticker_metrics
+            WHERE ticker = ?
+            ORDER BY computed_at DESC LIMIT 1
+            """,
+            (sym,),
+        ).fetchone()
+        avg_range = float(metrics_row["avg_range_pct"]) if metrics_row and metrics_row["avg_range_pct"] else None
+        trad = assess_entry_tradability(
+            quote=live_q,
+            entry_price=planned_price,
+            deploy_dollar=deploy,
+            net_target=goal,
+            avg_range_pct=avg_range,
+        )
+        if trad.get("verdict") == "NOT_TRADABLE":
+            verdict = "NO_GO"
+            messages.append(trad.get("detail") or "Not tradable for today's dollar target")
+            checks.append({"name": "Tradability", "ok": False, "message": trad.get("detail", "Not tradable")})
+        elif trad.get("verdict") == "CAUTION":
+            if verdict == "GO":
+                verdict = "CAUTION"
+            checks.append({"name": "Tradability", "ok": None, "message": trad.get("detail", "Marginal")})
+        elif trad.get("verdict") == "TRADABLE":
+            checks.append({"name": "Tradability", "ok": True, "message": trad.get("detail", "Tradable for $ goal")})
+        else:
+            checks.append({"name": "Tradability", "ok": None, "message": trad.get("detail", "Unknown — refresh live data")})
+
     if pick and pick.get("ticker") != sym:
         if verdict == "GO":
             verdict = "CAUTION"
@@ -423,7 +526,16 @@ def _build_pick_detail(
     stale_entry = pick.get("entry_price")
     entry = live_entry or stale_entry
     plan = compute_trade_plan(entry_price=entry, deploy_dollar=deploy, net_target=net_target) if entry else {}
-    return {
+    tradability = pick.get("tradability")
+    if tradability is None and quote and entry:
+        tradability = assess_entry_tradability(
+            quote=quote,
+            entry_price=entry,
+            deploy_dollar=deploy,
+            net_target=net_target,
+            avg_range_pct=float(pick.get("avg_range_pct") or 0) or None,
+        )
+    detail = {
         "ticker": pick["ticker"],
         "rank_score": pick.get("score"),
         "hit_rate_pct": pick.get("hit_rate_pct"),
@@ -445,7 +557,9 @@ def _build_pick_detail(
         "quote_as_of": quote.get("captured_at") if quote else None,
         "stale_entry_price": round(stale_entry, 2) if stale_entry and live_entry and abs(stale_entry - live_entry) > 0.01 else None,
         "thesis_summary": pick.get("thesis_summary"),
+        "tradability": tradability,
     }
+    return detail
 
 
 def build_trading_day_status(conn: sqlite3.Connection) -> dict:
@@ -459,12 +573,21 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     target_met = today_net >= daily_target
     stopped = stopped_out_today(conn, day)
     open_positions = get_open_positions(conn)
-    pick = get_top_pick(conn)
+    remaining_net = max(daily_target - today_net, 0)
+    net_for_plan = remaining_net or daily_target
 
     watch: list[str] = list(REGIME_SYMBOLS)
-    if pick:
-        watch.append(pick["ticker"])
+    for row in _live_ranked_candidates(conn, limit=ACTIONABLE_PICK_SCAN):
+        watch.append(row["ticker"])
     quotes = _latest_quote_rows(conn, watch)
+
+    pick, skipped_picks = resolve_actionable_pick(
+        conn,
+        quotes=quotes,
+        deploy=summary.tradable_cash,
+        net_target=net_for_plan,
+    )
+    ranked_first = get_top_pick(conn)
 
     regime_quote_ages = [
         _quote_age_minutes(quotes[s]["captured_at"])
@@ -604,7 +727,34 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
                 detail = f"{pick['ticker']} slightly weak ({pick_change:+.2f}%) — extra caution."
         if pick_range is not None and pick_range < 0.4 and phase == "trade_window":
             pick_msg += f" · tight {pick_range:.2f}% range (chop)"
+
+        trad = (pick.get("tradability") or {}) if pick else {}
+        trad_verdict = trad.get("verdict")
+        if trad_verdict == "NOT_TRADABLE":
+            pick_ok = False
+            if verdict == "GO":
+                verdict = "NO_GO"
+            headline = f"{pick['ticker']} — not tradable for ${net_for_plan:.0f}"
+            detail = trad.get("detail") or "Insufficient room from entry to Growth Plan sell target."
+            pick_msg += f" · NOT TRADABLE: {trad.get('detail', '')[:80]}"
+        elif trad_verdict == "CAUTION":
+            pick_ok = False
+            if verdict == "GO":
+                verdict = "CAUTION"
+            detail = trad.get("detail") or detail
+            pick_msg += f" · CAUTION: {trad.get('detail', '')[:80]}"
+        elif trad_verdict == "TRADABLE":
+            pick_msg += " · tradable for $ goal"
+
         add_check("Top pick", pick_ok if pick_ok else False, pick_msg, blocking=not pick_ok and pick_change is not None and pick_change <= -TOP_PICK_NO_GO_DROP_PCT)
+
+    if skipped_picks:
+        skipped_names = ", ".join(s["ticker"] for s in skipped_picks[:3])
+        add_check(
+            "Skipped (not tradable)",
+            None,
+            f"{skipped_names}" + (f" +{len(skipped_picks) - 3} more" if len(skipped_picks) > 3 else ""),
+        )
 
     if summary.vix is not None and summary.vix >= 22:
         if verdict == "GO":
@@ -625,31 +775,48 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
 
     pick_detail = None
     second_pick_detail = None
-    remaining_net = max(daily_target - today_net, 0)
     if pick:
+        pick_quote = quotes.get(pick["ticker"])
         pick_detail = _build_pick_detail(
             pick,
             quote=pick_quote,
             deploy=float(pick.get("suggested_size") or summary.tradable_cash),
-            net_target=remaining_net or daily_target,
+            net_target=net_for_plan,
         )
         if pick_change is not None:
             pick_detail["intraday_change_pct"] = round(pick_change, 3)
         if pick_range is not None:
             pick_detail["opening_range_pct"] = round(pick_range, 3)
 
-    next_live = _next_ranked(conn, pick["ticker"] if pick else None)
-    if next_live:
-        second_row = next_live[0]
-        full_second = next((r for r in build_ranked_candidates(conn, period_days=14)["ranked"] if r["ticker"] == second_row["ticker"]), second_row)
+    # Second pick: next tradable live name after actionable #1
+    second_candidates = _live_ranked_candidates(conn, limit=ACTIONABLE_PICK_SCAN)
+    if pick:
+        second_candidates = [r for r in second_candidates if r["ticker"] != pick["ticker"]]
+    second_row = None
+    for row in second_candidates:
+        sym = row["ticker"]
+        quote = quotes.get(sym)
+        entry = float(quote["price"]) if quote and quote.get("price") else None
+        if not entry:
+            continue
+        t = assess_entry_tradability(
+            quote=quote,
+            entry_price=entry,
+            deploy_dollar=float(row.get("suggested_size") or summary.tradable_cash),
+            net_target=net_for_plan,
+            avg_range_pct=float(row.get("avg_range_pct") or 0) or None,
+        )
+        if t.get("verdict") != "NOT_TRADABLE":
+            second_row = {**row, "tradability": t, "source": "ranked_#2"}
+            break
+
+    if second_row:
         second_quote = quotes.get(second_row["ticker"])
-        if second_quote is None and second_row["ticker"]:
-            second_quote = _latest_quote_rows(conn, [second_row["ticker"]]).get(second_row["ticker"])
         second_pick_detail = _build_pick_detail(
-            {**full_second, "source": "ranked_#2"},
+            second_row,
             quote=second_quote,
-            deploy=float(full_second.get("suggested_size") or summary.tradable_cash),
-            net_target=remaining_net or daily_target,
+            deploy=float(second_row.get("suggested_size") or summary.tradable_cash),
+            net_target=net_for_plan,
         )
 
     return {
@@ -669,7 +836,9 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "open_positions": open_positions,
         "top_pick": pick_detail,
         "second_pick": second_pick_detail,
-        "next_ranked": next_live,
+        "ranked_first": ranked_first["ticker"] if ranked_first else None,
+        "skipped_not_tradable": skipped_picks,
+        "next_ranked": _next_ranked(conn, pick["ticker"] if pick else None),
         "remaining_daily_net": round(remaining_net, 2),
         "strategy": {
             "daily_net_target": daily_target,

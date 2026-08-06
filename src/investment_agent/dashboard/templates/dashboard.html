@@ -620,8 +620,19 @@
       if (!pick) return "<span class='empty'>No live pick — run ingest + ranked screener</span>";
       const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
       const netGoal = pick.net_target ?? td.daily_target;
+      const trad = pick.tradability || {};
+      const tradBadge = trad.verdict
+        ? `<div class="tradability-badge trad-${(trad.verdict || "").toLowerCase().replace("_", "-")}">${trad.verdict.replace("_", " ")}</div>`
+        : "";
+      const tradDetail = trad.detail
+        ? `<div class="tradability-detail brief">${trad.detail}</div>`
+        : "";
+      const rankedNote = td.ranked_first && pick.ticker !== td.ranked_first
+        ? `<div class="brief">Ranked #1 was ${td.ranked_first} — skipped (not tradable for $${fmt(netGoal)} today)</div>`
+        : "";
       return `
         <div class="top-pick-ticker">${pick.ticker} <span class="brief">(${pick.source})</span></div>
+        ${tradBadge}${tradDetail}${rankedNote}
         <div>Rank score <strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong>
           · Hit rate <strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
         <div class="entry-highlight">Buy at <strong>$${fmt(entry)}</strong>
@@ -633,6 +644,7 @@
           <span class="brief">(net ~$${fmt(pick.net_at_stop)})</span></div>
         <div>Sell for <strong>$${fmt(netGoal)} net</strong> at <strong>$${fmt(pick.target_price)}</strong>
           <span class="brief">(+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)})</span></div>
+        ${trad.max_net_at_day_high != null ? `<div class="brief">Day high so far → ~$${fmt(trad.max_net_at_day_high)} net from this entry</div>` : ""}
       `;
     }
 
@@ -711,6 +723,8 @@
       else if (td.daily_target_met) hintText = "Daily target reached — protect gains, no new entries.";
       else if (td.can_second_trade) hintText = "Win logged — optional 2nd trade: use #2 pick below before 2:30 PM ET.";
       else if (td.second_pick) hintText = "If #1 fails before target: watch #" + td.second_pick.ticker + " (shown below).";
+      else if ((td.skipped_not_tradable || []).length)
+        hintText = "Skipped not tradable: " + td.skipped_not_tradable.map((s) => s.ticker).join(", ");
       else if (next.length) hintText = "If top pick fails: " + next.map((n) => n.ticker).join(" → ");
       hint.textContent = hintText;
 
