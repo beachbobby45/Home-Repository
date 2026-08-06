@@ -221,8 +221,10 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
     path = db_path or DEFAULT_DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, check_same_thread=False)
+    conn = sqlite3.connect(path, check_same_thread=False, timeout=60.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=60000")
     return conn
 
 
