@@ -40,6 +40,8 @@ PYTHONPATH=src python3 scripts/sync_queue.py      # populate queue from screener
 PYTHONPATH=src python3 scripts/run_dashboard.py   # http://127.0.0.1:8080
 ```
 
+**Mac — background service (no Terminal window):** `./scripts/install_dashboard_service_mac.sh` once; opens http://127.0.0.1:8080 on login. Status: `./scripts/dashboard_service_status_mac.sh`
+
 Dashboard: **$5M goal**, tradable cash, month P&amp;L, sweep preview, regime banner, **intraday alerts**, trade queue, manual journal.
 
 ```bash

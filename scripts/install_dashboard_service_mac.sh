@@ -21,7 +21,7 @@ if [[ ! -f "$ROOT/.env" ]]; then
   echo "Created .env — add FINNHUB_API_KEY before Refresh live data."
 fi
 
-if ! "$PYTHON" -c "import uvicorn" 2>/dev/null; then
+if ! "$PYTHON" -c "import uvicorn, yfinance, jinja2" 2>/dev/null; then
   echo "Installing Python dependencies (one time)…"
   pip3 install -r "$ROOT/requirements.txt"
 fi
@@ -74,18 +74,24 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
 launchctl enable "gui/$(id -u)/$PLIST_LABEL"
 launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL"
 
-sleep 2
-if curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://127.0.0.1:8080/ | grep -q 200; then
-  echo ""
-  echo "Dashboard service installed and running."
-  echo "  Open: http://127.0.0.1:8080"
-  echo "  Logs: ${LOG_DIR}/dashboard.out.log"
-  echo ""
-  echo "No Terminal window needed. Starts automatically on login."
-  echo "Stop:    ./scripts/uninstall_dashboard_service_mac.sh"
-  echo "Restart: launchctl kickstart -k gui/$(id -u)/${PLIST_LABEL}"
-else
-  echo "Service installed but dashboard not responding yet."
-  echo "Check logs: ${LOG_DIR}/dashboard.err.log"
-  exit 1
-fi
+echo "Waiting for dashboard to start…"
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 1
+  if curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://127.0.0.1:8080/ 2>/dev/null | grep -q 200; then
+    echo ""
+    echo "Dashboard service installed and running."
+    echo "  Open: http://127.0.0.1:8080"
+    echo "  Logs: ${LOG_DIR}/dashboard.out.log"
+    echo ""
+    echo "No Terminal window needed. Starts automatically on login."
+    echo "Stop:    ./scripts/uninstall_dashboard_service_mac.sh"
+    echo "Restart: launchctl kickstart -k gui/$(id -u)/${PLIST_LABEL}"
+    exit 0
+  fi
+done
+
+echo "Service installed but dashboard not responding yet."
+echo "Run these commands and paste the output if you need help:"
+echo "  cat ${LOG_DIR}/dashboard.err.log"
+echo "  cd ${ROOT} && PYTHONPATH=src python3 scripts/run_dashboard.py --port 8080"
+exit 1
