@@ -273,6 +273,7 @@
       <div class="actions">
         <button class="btn secondary" id="load-sp100">Load SP100 preset</button>
         <button class="btn secondary" id="load-sp500">Load S&amp;P 500</button>
+        <button class="btn secondary" id="load-datacenter-us">Add Special Watch (DC US)</button>
         <button class="btn secondary" id="run-daily-ingest">Daily ingest (incremental)</button>
         <button class="btn secondary" id="run-full-ingest">Full ingest (all symbols)</button>
         <button class="btn secondary" id="run-period-screener">Run 14d screener</button>
@@ -280,6 +281,45 @@
       </div>
       <div class="card">
         <div id="watchlist-stats" class="brief">Loading universe stats…</div>
+
+        <div class="card special-watch-panel" id="special-watch-panel">
+          <h3>Special Watch — US AI Data Centers</h3>
+          <p class="brief" style="margin:0 0 0.65rem">
+            Thematic buildout list (~96 tickers). Tags show Step 3 eligibility only — <strong>no ranking boost</strong>.
+            Target avg daily range band: ~2–4% (center 3%). Run ingest after adding names so metrics populate.
+          </p>
+          <div id="special-watch-stats" class="brief">Loading Special Watch status…</div>
+          <div class="screener-filters">
+            <label>Ticker <input type="text" id="special-watch-filter-ticker" placeholder="Filter…" /></label>
+            <label>Step 3 status
+              <select id="special-watch-filter-status">
+                <option value="">All</option>
+                <option value="step3_pass">Step 3 pass</option>
+                <option value="too_quiet">Too quiet</option>
+                <option value="too_wild">Too wild</option>
+                <option value="low_liquidity">Low liquidity</option>
+                <option value="missing_metrics">Missing metrics</option>
+              </select>
+            </label>
+            <label class="inline-check"><input type="checkbox" id="special-watch-active-only" /> Active watchlist only</label>
+            <span id="special-watch-row-count" class="brief"></span>
+          </div>
+          <table class="sortable-table special-watch-table" style="margin-top:0.65rem;width:100%">
+            <thead>
+              <tr>
+                <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
+                <th data-sort="step3_status" class="sortable">Step 3</th>
+                <th data-sort="avg_range_pct" class="sortable">Avg range</th>
+                <th data-sort="adv_dollar_m" class="sortable">ADV ($M)</th>
+                <th data-sort="in_active_watchlist" class="sortable">Watchlist</th>
+              </tr>
+            </thead>
+            <tbody id="special-watch-body">
+              <tr><td colspan="5" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <div class="screener-filters">
           <label>Ticker <input type="text" id="screener-filter-ticker" placeholder="Filter…" /></label>
           <label>Min hit % <input type="number" id="screener-min-hit" min="0" max="100" step="1" placeholder="0" style="width:70px" /></label>
@@ -1034,7 +1074,90 @@
 
     async function loadRankedAndStats() {
       await loadWatchlistStats();
+      await loadSpecialWatch();
       await loadPeriodScreener();
+    }
+
+    let specialWatchRows = [];
+    let specialWatchSortKey = "ticker";
+    let specialWatchSortAsc = true;
+
+    function step3BadgeClass(status) {
+      return `step3-badge step3-${(status || "missing").replace(/_/g, "-")}`;
+    }
+
+    function applySpecialWatchFilters(rows) {
+      const q = (document.getElementById("special-watch-filter-ticker").value || "").trim().toUpperCase();
+      const status = document.getElementById("special-watch-filter-status").value;
+      const activeOnly = document.getElementById("special-watch-active-only").checked;
+      return rows.filter((r) => {
+        if (q && !r.ticker.includes(q)) return false;
+        if (status && r.step3_status !== status) return false;
+        if (activeOnly && !r.in_active_watchlist) return false;
+        return true;
+      });
+    }
+
+    function sortSpecialWatchRows(rows) {
+      const key = specialWatchSortKey;
+      const asc = specialWatchSortAsc;
+      return [...rows].sort((a, b) => {
+        let av = a[key];
+        let bv = b[key];
+        if (key === "ticker" || key === "step3_status") {
+          av = String(av || "");
+          bv = String(bv || "");
+          return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+        av = screenerNumeric(av);
+        bv = screenerNumeric(bv);
+        if (av === bv) return a.ticker.localeCompare(b.ticker);
+        return asc ? av - bv : bv - av;
+      });
+    }
+
+    function renderSpecialWatchTable() {
+      const body = document.getElementById("special-watch-body");
+      const filtered = sortSpecialWatchRows(applySpecialWatchFilters(specialWatchRows));
+      document.getElementById("special-watch-row-count").textContent =
+        `${filtered.length} of ${specialWatchRows.length} shown`;
+
+      if (!filtered.length) {
+        body.innerHTML = `<tr><td colspan="5" class="empty">${specialWatchRows.length ? "No rows match filters." : "No Special Watch data."}</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = filtered.map((r) => `
+        <tr>
+          <td><strong>${r.ticker}</strong></td>
+          <td><span class="${step3BadgeClass(r.step3_status)}" title="${r.step3_label || ""}">${r.step3_label || "—"}</span></td>
+          <td>${r.avg_range_pct != null ? r.avg_range_pct + "%" : "—"}</td>
+          <td>${r.adv_dollar_m != null ? r.adv_dollar_m : "—"}</td>
+          <td>${r.in_active_watchlist ? "Yes" : "—"}</td>
+        </tr>
+      `).join("");
+    }
+
+    function updateSpecialWatchSortHeaders() {
+      document.querySelectorAll(".special-watch-table th.sortable").forEach((th) => {
+        th.classList.remove("sorted-asc", "sorted-desc");
+        if (th.dataset.sort === specialWatchSortKey) {
+          th.classList.add(specialWatchSortAsc ? "sorted-asc" : "sorted-desc");
+        }
+      });
+    }
+
+    async function loadSpecialWatch() {
+      const data = await api("/api/watchlist/special-watch?preset=datacenter_us");
+      const band = data.swing_band_pct || {};
+      document.getElementById("special-watch-stats").textContent =
+        `Universe: ${data.ticker_count} tickers · Step 3 pass: ${data.step3_pass} · `
+        + `Too quiet: ${data.too_quiet} · Too wild: ${data.too_wild} · `
+        + `Low liquidity: ${data.low_liquidity} · Missing metrics: ${data.missing_metrics} · `
+        + `Band ${band.low}–${band.high}% (target ${band.target}%)`;
+      specialWatchRows = data.tickers || [];
+      renderSpecialWatchTable();
+      updateSpecialWatchSortHeaders();
     }
 
     async function loadHistorical() {
@@ -1195,6 +1318,17 @@
         await loadRankedAndStats();
       } catch (e) { toast(e.message); }
     });
+    document.getElementById("load-datacenter-us").addEventListener("click", async () => {
+      try {
+        const r = await api("/api/watchlist/load-preset", {
+          method: "POST",
+          body: JSON.stringify({ preset: "datacenter_us", replace: false }),
+          timeoutMs: 120000,
+        });
+        toast(`Special Watch: added ${r.tickers_loaded} tickers (${r.tickers_activated} activated). Run ingest for metrics.`);
+        await loadRankedAndStats();
+      } catch (e) { toast(e.message); }
+    });
     async function runIngest(incremental) {
       const label = incremental ? "Daily incremental ingest" : "Full ingest";
       toast(`${label} started — this may take several minutes for large universes…`);
@@ -1231,6 +1365,25 @@
       } catch (e) { toast(e.message); }
     });
     document.getElementById("refresh-ranked").addEventListener("click", () => loadRankedAndStats().catch((e) => toast(e.message)));
+
+    ["special-watch-filter-ticker", "special-watch-filter-status"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", () => renderSpecialWatchTable());
+      document.getElementById(id).addEventListener("change", () => renderSpecialWatchTable());
+    });
+    document.getElementById("special-watch-active-only").addEventListener("change", () => renderSpecialWatchTable());
+    document.querySelectorAll(".special-watch-table th.sortable").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        if (specialWatchSortKey === key) {
+          specialWatchSortAsc = !specialWatchSortAsc;
+        } else {
+          specialWatchSortKey = key;
+          specialWatchSortAsc = key === "ticker" || key === "step3_status";
+        }
+        renderSpecialWatchTable();
+        updateSpecialWatchSortHeaders();
+      });
+    });
 
     ["screener-filter-ticker", "screener-min-hit", "screener-min-days"].forEach((id) => {
       document.getElementById(id).addEventListener("input", () => renderScreenerTable());

@@ -314,6 +314,54 @@ main {
   color: var(--muted);
 }
 
+.special-watch-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--surface2);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+
+.special-watch-panel h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.step3-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.step3-badge.step3-step3-pass {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.step3-badge.step3-too-quiet {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+}
+
+.step3-badge.step3-too-wild {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.step3-badge.step3-low-liquidity {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.step3-badge.step3-missing-metrics {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
 .top-pick-card h3 {
   margin: 0 0 0.5rem;
   font-size: 0.95rem;

@@ -9,6 +9,13 @@ from pathlib import Path
 
 from investment_agent.db import get_active_watchlist
 from investment_agent.ingest import DEFAULT_TICKERS
+from investment_agent.liquidity import SWING_TARGET_PCT
+from investment_agent.step3_status import (
+    STEP3_STATUS_LABELS,
+    classify_step3_status,
+    swing_band_high,
+    swing_band_low,
+)
 from investment_agent.strategy import REGIME_ONLY_TICKERS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +25,7 @@ PRESETS: dict[str, str] = {
     "starter10": "Starter 10 (default ingest list)",
     "sp100": "S&P 100 liquid subset (~100 tickers)",
     "sp500": "S&P 500 full index (~500 tickers + regime ETFs)",
+    "datacenter_us": "US AI data center buildout & maintenance (~96 tickers)",
 }
 
 
@@ -189,4 +197,93 @@ def compute_universe_stats(conn: sqlite3.Connection) -> dict:
         "filter_pct_out": round(100.0 * filtered_out / max(tradeable, 1), 1),
         "pass_pct": round(100.0 * pass_both / max(tradeable, 1), 1),
         "missing_metrics": max(universe_size - with_metrics, 0),
+    }
+
+
+def _latest_metrics_by_ticker(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
+    rows = conn.execute(
+        """
+        SELECT m.*
+        FROM ticker_metrics m
+        INNER JOIN (
+          SELECT ticker, MAX(computed_at) AS max_at FROM ticker_metrics GROUP BY ticker
+        ) latest ON m.ticker = latest.ticker AND m.computed_at = latest.max_at
+        """
+    ).fetchall()
+    return {row["ticker"]: row for row in rows}
+
+
+def build_special_watch_report(
+    conn: sqlite3.Connection,
+    preset_name: str = "datacenter_us",
+) -> dict:
+    """Status for every ticker in a thematic preset — Step 3 pass / too quiet / too wild / etc."""
+    name = preset_name.lower().strip()
+    tickers = load_preset_tickers(name)
+    active = set(get_active_watchlist(conn))
+    metrics = _latest_metrics_by_ticker(conn)
+
+    rows: list[dict] = []
+    counts: dict[str, int] = {k: 0 for k in STEP3_STATUS_LABELS}
+
+    for ticker in tickers:
+        regime_only = ticker in REGIME_ONLY_TICKERS
+        m = metrics.get(ticker)
+        if m is None:
+            status = classify_step3_status(ticker=ticker, regime_only=regime_only)
+            row = {
+                "ticker": ticker,
+                "step3_status": status,
+                "step3_label": STEP3_STATUS_LABELS[status],
+                "avg_range_pct": None,
+                "adv_dollar": None,
+                "adv_dollar_m": None,
+                "meets_liquidity": None,
+                "near_swing_target": None,
+                "in_active_watchlist": ticker in active,
+            }
+        else:
+            avg_range = float(m["avg_range_pct"] or 0)
+            adv = float(m["adv_dollar"] or 0)
+            meets_liq = bool(m["meets_liquidity_min"])
+            near_swing = bool(m["near_swing_target"])
+            status = classify_step3_status(
+                ticker=ticker,
+                meets_liquidity=meets_liq,
+                near_swing=near_swing,
+                avg_range_pct=avg_range,
+                regime_only=regime_only,
+            )
+            row = {
+                "ticker": ticker,
+                "step3_status": status,
+                "step3_label": STEP3_STATUS_LABELS[status],
+                "avg_range_pct": round(avg_range, 2),
+                "adv_dollar": round(adv, 0),
+                "adv_dollar_m": round(adv / 1_000_000, 1) if adv else 0.0,
+                "meets_liquidity": meets_liq,
+                "near_swing_target": near_swing,
+                "in_active_watchlist": ticker in active,
+            }
+        counts[status] = counts.get(status, 0) + 1
+        rows.append(row)
+
+    with_metrics = sum(1 for r in rows if r["step3_status"] != "missing_metrics")
+    return {
+        "preset": name,
+        "description": PRESETS.get(name, name),
+        "ticker_count": len(tickers),
+        "with_metrics": with_metrics,
+        "missing_metrics": len(tickers) - with_metrics,
+        "step3_pass": counts.get("step3_pass", 0),
+        "too_quiet": counts.get("too_quiet", 0),
+        "too_wild": counts.get("too_wild", 0),
+        "low_liquidity": counts.get("low_liquidity", 0),
+        "status_counts": counts,
+        "swing_band_pct": {
+            "target": SWING_TARGET_PCT,
+            "low": swing_band_low(),
+            "high": swing_band_high(),
+        },
+        "tickers": rows,
     }

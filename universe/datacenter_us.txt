@@ -1,0 +1,112 @@
+# US AI / data center buildout & maintenance — Special Watch preset
+# Same Step 3 rules as all other tickers; thematic list only (no ranking boost).
+# Design / engineering / EPC
+ACM
+J
+FLR
+TTEK
+# Site, civil, grid construction
+STRL
+MTZ
+PWR
+MYRG
+DY
+ROAD
+PRIM
+ACA
+AGX
+URI
+# MEP construction & facilities service
+FIX
+EME
+IESC
+APG
+# Power & electrical equipment
+VRT
+ETN
+POWL
+NVT
+HUBB
+EMR
+HON
+ROK
+# Cooling / HVAC
+TT
+CARR
+MOD
+JCI
+AAON
+LII
+# Fiber, cable, networking
+GLW
+APH
+ANET
+CIEN
+LITE
+COHR
+CRDO
+MRVL
+# Structural materials
+NUE
+STLD
+VMC
+MLM
+EXP
+# Water
+XYL
+PNR
+# Backup / on-site generation
+CAT
+CMI
+GNRC
+GEV
+BE
+# Power to campus
+CEG
+VST
+TLN
+NEE
+NRG
+AES
+OKLO
+SMR
+DUK
+SO
+AEP
+EXC
+XEL
+EIX
+WEC
+ES
+PEG
+SRE
+ED
+D
+PCG
+FE
+CMS
+AEE
+LNT
+EVRG
+NI
+CNP
+# Facility operators (colo / landlord)
+EQIX
+DLR
+IRM
+AMT
+# Finance / development capital
+BX
+STWD
+# Build + operate AI campuses
+APLD
+CORZ
+WULF
+HUT
+IREN
+CRWV
+# In-rack IT hardware
+SMCI
+DELL
+HPE
+NTAP

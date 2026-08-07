@@ -57,6 +57,7 @@ from investment_agent.journal import (
 )
 from investment_agent.scenario import build_scenario_visualizer
 from investment_agent.watchlist import (
+    build_special_watch_report,
     compute_universe_stats,
     deactivate_ticker,
     get_active_watchlist_details,
@@ -555,6 +556,19 @@ def api_watchlist_presets() -> list[dict[str, Any]]:
 @app.get("/api/watchlist/stats")
 def api_watchlist_stats(conn=Depends(_db)) -> dict[str, Any]:
     return compute_universe_stats(conn)
+
+
+@app.get("/api/watchlist/special-watch")
+def api_special_watch(
+    conn=Depends(_db),
+    preset: str = "datacenter_us",
+) -> dict[str, Any]:
+    try:
+        return build_special_watch_report(conn, preset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/api/watchlist/load-preset")
