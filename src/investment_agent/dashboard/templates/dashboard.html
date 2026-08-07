@@ -1189,6 +1189,7 @@
         const r = await api("/api/watchlist/load-preset", {
           method: "POST",
           body: JSON.stringify({ preset: "sp500", replace: false }),
+          timeoutMs: 120000,
         });
         toast(`Loaded ${r.tickers_loaded} tickers (${r.tickers_activated} active). Run Full ingest once, then Daily ingest each morning.`);
         await loadRankedAndStats();

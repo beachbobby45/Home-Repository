@@ -62,7 +62,10 @@ def load_tickers_from_file(path: Path) -> list[str]:
 
 
 def load_preset_tickers(preset_name: str) -> list[str]:
-    name = preset_name.lower()
+    name = preset_name.lower().strip()
+    if name not in PRESETS:
+        known = ", ".join(sorted(PRESETS))
+        raise ValueError(f"Unknown preset {preset_name!r}. Choose one of: {known}")
     if name == "starter10" and not (UNIVERSE_DIR / "starter10.txt").is_file():
         return [t.upper() for t in DEFAULT_TICKERS]
     path = UNIVERSE_DIR / f"{name}.txt"

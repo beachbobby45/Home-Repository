@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS watchlist (
   ticker TEXT NOT NULL UNIQUE,
   sector TEXT,
   active INTEGER NOT NULL DEFAULT 1,
+  source TEXT DEFAULT 'manual',
+  added_via TEXT DEFAULT 'manual',
   added_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -211,6 +213,14 @@ MIGRATION_SQL = """
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
+    tables = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='watchlist'"
+        )
+    }
+    if "watchlist" not in tables:
+        return
     cols = {row[1] for row in conn.execute("PRAGMA table_info(watchlist)")}
     if "source" not in cols:
         conn.execute("ALTER TABLE watchlist ADD COLUMN source TEXT DEFAULT 'manual'")
@@ -225,6 +235,7 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=60000")
+    _apply_migrations(conn)
     return conn
 
 

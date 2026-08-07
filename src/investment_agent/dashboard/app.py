@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -93,6 +94,24 @@ ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
 app = FastAPI(title="AI Investment Agent Dashboard", version="0.8.0")
+
+
+@app.exception_handler(sqlite3.OperationalError)
+def sqlite_operational_error_handler(_request: Request, exc: sqlite3.OperationalError) -> JSONResponse:
+    msg = str(exc).lower()
+    if "locked" in msg:
+        detail = (
+            "Database is locked — pause the dashboard and run ingest from Terminal: "
+            "./scripts/run_ingest_mac.sh"
+        )
+        status = 503
+    elif "no such column" in msg:
+        detail = "Database schema out of date — run: ./scripts/repair_dashboard_mac.sh"
+        status = 500
+    else:
+        detail = f"Database error: {exc}"
+        status = 500
+    return JSONResponse(status_code=status, content={"detail": detail})
 
 
 class NoCacheDashboardMiddleware(BaseHTTPMiddleware):
@@ -544,9 +563,16 @@ def api_load_preset(
     conn=Depends(_db),
     _: None = Depends(_require_api_key),
 ) -> dict:
-    result = load_preset_into_watchlist(conn, body.preset, replace=body.replace)
-    conn.commit()
-    return result
+    try:
+        result = load_preset_into_watchlist(conn, body.preset, replace=body.replace)
+        conn.commit()
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/ingest/run")
