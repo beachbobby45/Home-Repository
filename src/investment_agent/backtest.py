@@ -11,6 +11,8 @@ from investment_agent.finance import (
     DEFAULT_BUY_FEE,
     DEFAULT_SELL_FEE,
     ORIGINAL_BASIS,
+    daily_profit_target,
+    sell_price_for_net_target,
 )
 from investment_agent.historical import evaluate_trading_day
 from investment_agent.period_screener import build_ranked_candidates, date_range_for_period
@@ -139,6 +141,8 @@ def _simulate_trading_day(
     target_pct: float = TARGET_PCT,
     stop_pct: float = STOP_PCT,
     max_trades: int | None = None,
+    use_dollar_target: bool = False,
+    net_target: float | None = None,
 ) -> tuple[list[BacktestTrade], float]:
     """One position at a time; multiple round trips; rotate through ranked qualifiers."""
     master = index_bars.get("SPY") or next(iter(ticker_bars.values()), [])
@@ -216,13 +220,24 @@ def _simulate_trading_day(
             if cost > cash:
                 continue
             cash -= cost
+            if use_dollar_target:
+                goal = net_target if net_target is not None else daily_profit_target(deploy)
+                target_px = sell_price_for_net_target(
+                    entry_price=entry_price,
+                    shares=shares,
+                    net_target=goal,
+                    buy_fee=buy_fee,
+                    sell_fee=sell_fee,
+                )
+            else:
+                target_px = entry_price * (1 + target_pct / 100)
             position = _OpenPosition(
                 ticker=ticker,
                 rank_score=rank_by_ticker.get(ticker, 0),
                 entry_ts=tbars[i]["ts"],
                 entry_price=entry_price,
                 shares=float(shares),
-                target=entry_price * (1 + target_pct / 100),
+                target=target_px,
                 stop=entry_price * (1 - stop_pct / 100),
                 buy_fee=buy_fee,
             )
@@ -310,6 +325,8 @@ def run_intraday_backtest(
     stop_pct: float = STOP_PCT,
     max_trades_per_day: int | None = None,
     intraday_cache: dict[str, list[dict]] | None = None,
+    use_dollar_target: bool = False,
+    net_target: float | None = None,
 ) -> BacktestResult:
     start_date, end_date = date_range_for_period(lookback_days)
     top_rows = _top_ranked_tickers(conn, period_days=lookback_days, top_n=top_n)
@@ -379,6 +396,8 @@ def run_intraday_backtest(
                 target_pct=target_pct,
                 stop_pct=stop_pct,
                 max_trades=max_trades_per_day,
+                use_dollar_target=use_dollar_target,
+                net_target=net_target,
             )
             all_trades.extend(day_trades)
 
@@ -421,7 +440,11 @@ def run_intraday_backtest(
         spy_return_pct=_spy_return(conn, start_date, end_date),
         assumptions=[
             f"Top {top_n} tickers by {lookback_days}d rank score; Yahoo {bar_interval} bars (not tick data).",
-            f"Entry at {bar_interval} bar open; exit on first touch of +{target_pct}% / −{stop_pct}% (stop wins if both in same bar).",
+            (
+                f"Entry at {bar_interval} bar open; exit on Growth Plan sell price (~${net_target or daily_profit_target(starting_capital):.0f} net) / −{stop_pct}% stop."
+                if use_dollar_target
+                else f"Entry at {bar_interval} bar open; exit on first touch of +{target_pct}% / −{stop_pct}% (stop wins if both in same bar)."
+            ),
             "Step 3 qualification from daily bars (liquidity + ~3% swing band) per day.",
             "One position at a time; multiple round trips/day; rotates through ranked qualifiers."
             + (f"; max {max_trades_per_day} trades/day." if max_trades_per_day else "."),
@@ -492,6 +515,138 @@ def backtest_to_dict(result: BacktestResult) -> dict:
                 "balance_after": t.balance_after,
             }
             for t in result.trades
+        ],
+    }
+
+
+def run_dollar_daily_backtest(
+    conn: sqlite3.Connection,
+    *,
+    lookback_days: int = 14,
+    starting_capital: float = ORIGINAL_BASIS,
+    buy_fee: float = DEFAULT_BUY_FEE,
+    sell_fee: float = DEFAULT_SELL_FEE,
+    stop_pct: float = STOP_PCT,
+) -> dict:
+    """Daily-bar backtest using Growth Plan $ net targets (open entry, high/low exit)."""
+    from investment_agent.dollar_target import simulate_dollar_outcome, net_at_high_from_open
+    from investment_agent.period_screener import date_range_for_period
+
+    start_date, end_date = date_range_for_period(lookback_days)
+    top_rows = _top_ranked_tickers(conn, period_days=lookback_days, top_n=50)
+    rank_by_ticker = {r["ticker"]: float(r.get("score") or 0) for r in top_rows}
+    top_tickers = set(rank_by_ticker)
+
+    dates = conn.execute(
+        """
+        SELECT DISTINCT date FROM ohlcv_daily
+        WHERE date >= ? AND date <= ?
+        ORDER BY date ASC
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    cash = starting_capital
+    trades: list[dict] = []
+    days_summary: list[dict] = []
+    goal = daily_profit_target(starting_capital)
+
+    for row in dates:
+        day = row["date"]
+        day_eval = evaluate_trading_day(conn, day, tradable_cash=cash)
+        screened = [
+            m for m in day_eval["screened_matches"]
+            if m["ticker"] in top_tickers
+        ]
+        screened.sort(key=lambda m: (-rank_by_ticker.get(m["ticker"], 0), m["ticker"]))
+        day_pnl = 0.0
+        day_trade: dict | None = None
+
+        if screened:
+            pick = screened[0]
+            ticker = pick["ticker"]
+            open_px = float(pick["open"])
+            high = float(pick["high"])
+            low = float(pick["low"])
+            deploy = min(float(pick.get("liquidity_cap") or cash), cash)
+            shares = int((deploy - buy_fee) / open_px) if open_px > 0 else 0
+            if shares > 0:
+                goal = daily_profit_target(deploy)
+                outcome = simulate_dollar_outcome(
+                    open_px, high, low,
+                    deploy_dollar=deploy,
+                    net_target=goal,
+                    stop_pct=stop_pct,
+                    buy_fee=buy_fee,
+                    sell_fee=sell_fee,
+                )
+                target_px = sell_price_for_net_target(
+                    entry_price=open_px,
+                    shares=shares,
+                    net_target=goal,
+                    buy_fee=buy_fee,
+                    sell_fee=sell_fee,
+                )
+                stop_px = open_px * (1 - stop_pct / 100)
+                if outcome == "target":
+                    exit_px = target_px
+                    exit_reason = "target"
+                elif outcome == "stop":
+                    exit_px = stop_px
+                    exit_reason = "stop"
+                else:
+                    exit_px = float(pick["close"])
+                    exit_reason = "eod"
+
+                gross = shares * (exit_px - open_px)
+                fees = buy_fee + sell_fee
+                net = round(gross - fees, 2)
+                cash += net
+                day_pnl = net
+                net_at_high = net_at_high_from_open(
+                    open_px, high, deploy_dollar=deploy, buy_fee=buy_fee, sell_fee=sell_fee,
+                )
+                day_trade = {
+                    "date": day,
+                    "ticker": ticker,
+                    "entry_price": round(open_px, 2),
+                    "exit_price": round(exit_px, 2),
+                    "exit_reason": exit_reason,
+                    "dollar_outcome": outcome,
+                    "net_pnl": net,
+                    "net_at_high": net_at_high,
+                    "net_target": goal,
+                    "balance_after": round(cash, 2),
+                }
+                trades.append(day_trade)
+
+        days_summary.append({
+            "date": day,
+            "trade": day_trade,
+            "day_pnl": day_pnl,
+            "qualifiers": [m["ticker"] for m in screened[:5]],
+        })
+
+    wins = sum(1 for t in trades if t["net_pnl"] > 0)
+    dollar_hits = sum(1 for t in trades if t.get("dollar_outcome") == "target")
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "starting_capital": starting_capital,
+        "ending_capital": round(cash, 2),
+        "total_net_pnl": round(cash - starting_capital, 2),
+        "total_trades": len(trades),
+        "wins": wins,
+        "dollar_target_hits": dollar_hits,
+        "dollar_hit_rate_pct": round(100.0 * dollar_hits / max(len(trades), 1), 1),
+        "daily_net_target": goal,
+        "days": days_summary,
+        "trades": trades,
+        "assumptions": [
+            f"Top ranked Step 3 qualifier per day over {lookback_days}d window.",
+            f"Open entry; exit on Growth Plan sell (~${daily_profit_target(starting_capital):.0f} net), stop, or close.",
+            "Uses stored daily OHLCV only (no intraday bars).",
+            f"Fees: ${buy_fee:.0f} buy + ${sell_fee:.0f} sell per round trip.",
         ],
     }
 

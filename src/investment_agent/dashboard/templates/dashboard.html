@@ -674,7 +674,11 @@
         <div class="top-pick-ticker">${pick.ticker} <span class="brief">(${pick.source})</span></div>
         ${tradBadge}${tradDetail}${rankedNote}
         <div>Rank score <strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong>
-          · Hit rate <strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
+          · $150 hit <strong>${pick.dollar_hit_rate_pct ?? "—"}%</strong>
+          <span class="brief">(1.5% hit ${pick.hit_rate_pct ?? "—"}%)</span></div>
+        ${pick.expected_net_at_typical_high != null ? `<div class="brief">Typical day high → ~$${fmt(pick.expected_net_at_typical_high)} net
+          ${pick.historical_avg_net_at_high != null ? `(14d avg $${fmt(pick.historical_avg_net_at_high)} at high)` : ""}
+          · need $${fmt(netGoal)}</div>` : ""}
         <div class="entry-highlight">Buy at <strong>$${fmt(entry)}</strong>
           ${pick.intraday_change_pct != null ? " · <span class='brief'>" + fmtPctLive(pick.intraday_change_pct) + " from open</span>" : ""}
           ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + fmtDateTimePT(pick.quote_as_of) + "</span>" : ""}</div>

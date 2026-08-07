@@ -19,6 +19,7 @@ from investment_agent.db import (
     log_ingest,
     upsert_watchlist,
 )
+from investment_agent.dollar_target import simulate_dollar_outcome
 from investment_agent.finance import ORIGINAL_BASIS
 from investment_agent.liquidity import DailyBar, compute_liquidity_metrics
 from investment_agent.providers.yfinance_bars import get_daily_bars
@@ -122,6 +123,16 @@ def evaluate_trading_day(
             if would_screen
             else None
         )
+        dollar_outcome = (
+            simulate_dollar_outcome(
+                open_px,
+                high,
+                low,
+                deploy_dollar=tradable_cash,
+            )
+            if would_screen
+            else None
+        )
 
         row = {
             "ticker": ticker,
@@ -137,6 +148,7 @@ def evaluate_trading_day(
             "near_swing_target": metrics.near_swing_target,
             "would_screen": would_screen,
             "simulated_outcome": outcome,
+            "dollar_outcome": dollar_outcome,
             "liquidity_cap": round(metrics.liquidity_cap, 2),
         }
         ticker_rows.append(row)
@@ -146,6 +158,9 @@ def evaluate_trading_day(
     targets = sum(1 for r in screened if r["simulated_outcome"] == "target")
     stops = sum(1 for r in screened if r["simulated_outcome"] == "stop")
     neither = sum(1 for r in screened if r["simulated_outcome"] == "neither")
+    dollar_targets = sum(1 for r in screened if r["dollar_outcome"] == "target")
+    dollar_stops = sum(1 for r in screened if r["dollar_outcome"] == "stop")
+    dollar_neither = sum(1 for r in screened if r["dollar_outcome"] == "neither")
 
     return {
         "eval_date": eval_date,
@@ -157,6 +172,13 @@ def evaluate_trading_day(
             "simulated_targets": targets,
             "simulated_stops": stops,
             "simulated_neither": neither,
+            "dollar_targets": dollar_targets,
+            "dollar_stops": dollar_stops,
+            "dollar_neither": dollar_neither,
+            "dollar_hit_rate_pct": round(
+                100.0 * dollar_targets / max(dollar_targets + dollar_stops, 1),
+                1,
+            ),
             "avg_range_delta_pct": round(
                 sum(r["range_delta_pct"] for r in ticker_rows) / len(ticker_rows),
                 2,
@@ -296,18 +318,25 @@ def evaluate_period(
         (start_date, end_date),
     ).fetchall()
     days: list[dict] = []
+    total_dollar_targets = 0
+    total_dollar_stops = 0
     for row in dates:
         day_eval = evaluate_trading_day(conn, row["date"], tradable_cash=tradable_cash)
+        total_dollar_targets += day_eval["summary"]["dollar_targets"]
+        total_dollar_stops += day_eval["summary"]["dollar_stops"]
         days.append(
             {
                 "date": row["date"],
                 "screened_count": day_eval["summary"]["screened_count"],
                 "simulated_targets": day_eval["summary"]["simulated_targets"],
                 "simulated_stops": day_eval["summary"]["simulated_stops"],
+                "dollar_targets": day_eval["summary"]["dollar_targets"],
+                "dollar_stops": day_eval["summary"]["dollar_stops"],
                 "matches": [
                     {
                         "ticker": m["ticker"],
                         "outcome": m["simulated_outcome"],
+                        "dollar_outcome": m.get("dollar_outcome"),
                         "actual_range_pct": m["actual_range_pct"],
                     }
                     for m in day_eval["screened_matches"]
@@ -326,8 +355,14 @@ def evaluate_period(
             "total_screened_setups": sum(d["screened_count"] for d in days),
             "total_simulated_targets": total_targets,
             "total_simulated_stops": total_stops,
+            "total_dollar_targets": total_dollar_targets,
+            "total_dollar_stops": total_dollar_stops,
             "target_rate_pct": round(
                 100.0 * total_targets / max(total_targets + total_stops, 1),
+                1,
+            ),
+            "dollar_target_rate_pct": round(
+                100.0 * total_dollar_targets / max(total_dollar_targets + total_dollar_stops, 1),
                 1,
             ),
         },

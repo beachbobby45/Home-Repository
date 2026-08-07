@@ -68,13 +68,13 @@ def test_nflx_tue_aug4_missed_window_if_target_already_touched():
 def test_room_to_target_early_session_caution():
     """Early session — high hasn't developed enough yet; marginal, not blocked."""
     quote = {
-        "price": 50.0,
-        "open": 50.0,
-        "high": 50.25,
-        "low": 49.85,
-        "prev_close": 49.8,
+        "price": 100.0,
+        "open": 100.0,
+        "high": 100.25,
+        "low": 99.85,
+        "prev_close": 99.8,
     }
-    result = _assess(50.0, quote, avg_range_pct=3.0)
+    result = _assess(100.0, quote, avg_range_pct=4.0)
     assert result["verdict"] in ("CAUTION", "TRADABLE")
 
 

@@ -16,12 +16,13 @@ from investment_agent.strategy import REGIME_ONLY_TICKERS
 
 # Rank weights — historical + live Step 3 likelihood (pre-Claude)
 RANK_WEIGHTS = {
-    "live_pass": 0.25,
-    "hit_rate": 0.20,
-    "consistency": 0.20,
-    "swing_proximity": 0.15,
+    "live_pass": 0.22,
+    "hit_rate": 0.12,
+    "dollar_hit_rate": 0.18,
+    "consistency": 0.18,
+    "swing_proximity": 0.12,
     "liquidity": 0.10,
-    "near_swing": 0.10,
+    "near_swing": 0.08,
 }
 
 
@@ -43,6 +44,7 @@ def _criteria_likelihood_score(
     *,
     live_pass: bool,
     hit_rate_pct: float,
+    dollar_hit_rate_pct: float = 0.0,
     days_screened: int,
     avg_range_pct: float,
     adv_dollar: float = 0.0,
@@ -54,9 +56,11 @@ def _criteria_likelihood_score(
     liq = _liquidity_score(adv_dollar, meets_liquidity)
     consistency = min(days_screened / max(period_days * 0.5, 1), 1.0)
     hit = hit_rate_pct / 100.0
+    dollar_hit = dollar_hit_rate_pct / 100.0
     score = (
         RANK_WEIGHTS["live_pass"] * (1.0 if live_pass else 0.0)
         + RANK_WEIGHTS["hit_rate"] * hit
+        + RANK_WEIGHTS["dollar_hit_rate"] * dollar_hit
         + RANK_WEIGHTS["consistency"] * consistency
         + RANK_WEIGHTS["swing_proximity"] * swing_px
         + RANK_WEIGHTS["liquidity"] * liq
@@ -68,6 +72,7 @@ def _criteria_likelihood_score(
         "liquidity_score": round(liq, 3),
         "consistency_score": round(consistency, 3),
         "hit_rate_component": round(hit, 3),
+        "dollar_hit_rate_component": round(dollar_hit, 3),
     }
 
 
@@ -82,6 +87,7 @@ def _enrich_row(row: dict, metrics: sqlite3.Row | None, *, period_days: int) -> 
     parts = _criteria_likelihood_score(
         live_pass=bool(row.get("live_pass_today")),
         hit_rate_pct=float(row.get("hit_rate_pct") or 0),
+        dollar_hit_rate_pct=float(row.get("dollar_hit_rate_pct") or 0),
         days_screened=int(row.get("days_screened") or 0),
         avg_range_pct=avg_range,
         adv_dollar=adv,
@@ -120,6 +126,7 @@ def _rank_score(
     *,
     live_pass: bool,
     hit_rate_pct: float,
+    dollar_hit_rate_pct: float = 0.0,
     days_screened: int,
     avg_range_pct: float,
     adv_dollar: float = 0.0,
@@ -130,6 +137,7 @@ def _rank_score(
     return _criteria_likelihood_score(
         live_pass=live_pass,
         hit_rate_pct=hit_rate_pct,
+        dollar_hit_rate_pct=dollar_hit_rate_pct,
         days_screened=days_screened,
         avg_range_pct=avg_range_pct,
         adv_dollar=adv_dollar,
@@ -168,6 +176,9 @@ def run_period_screener(
                     "simulated_targets": 0,
                     "simulated_stops": 0,
                     "simulated_neither": 0,
+                    "dollar_targets": 0,
+                    "dollar_stops": 0,
+                    "dollar_neither": 0,
                     "last_screened_date": None,
                     "avg_range_pct": 0.0,
                     "_range_sum": 0.0,
@@ -175,12 +186,19 @@ def run_period_screener(
             )
             bucket["days_screened"] += 1
             outcome = match.get("outcome") or "neither"
+            dollar_outcome = match.get("dollar_outcome") or "neither"
             if outcome == "target":
                 bucket["simulated_targets"] += 1
             elif outcome == "stop":
                 bucket["simulated_stops"] += 1
             else:
                 bucket["simulated_neither"] += 1
+            if dollar_outcome == "target":
+                bucket["dollar_targets"] += 1
+            elif dollar_outcome == "stop":
+                bucket["dollar_stops"] += 1
+            else:
+                bucket["dollar_neither"] += 1
             bucket["last_screened_date"] = day["date"]
             bucket["_range_sum"] += float(match.get("actual_range_pct") or 0)
 
@@ -190,6 +208,8 @@ def run_period_screener(
             continue
         decided = b["simulated_targets"] + b["simulated_stops"]
         hit_rate = round(100.0 * b["simulated_targets"] / max(decided, 1), 1)
+        dollar_decided = b["dollar_targets"] + b["dollar_stops"]
+        dollar_hit_rate = round(100.0 * b["dollar_targets"] / max(dollar_decided, 1), 1)
         if min_hit_rate_pct is not None and hit_rate < min_hit_rate_pct:
             continue
         avg_range = round(b["_range_sum"] / max(b["days_screened"], 1), 2)
@@ -201,7 +221,11 @@ def run_period_screener(
             "simulated_targets": b["simulated_targets"],
             "simulated_stops": b["simulated_stops"],
             "simulated_neither": b["simulated_neither"],
+            "dollar_targets": b["dollar_targets"],
+            "dollar_stops": b["dollar_stops"],
+            "dollar_neither": b["dollar_neither"],
             "hit_rate_pct": hit_rate,
+            "dollar_hit_rate_pct": dollar_hit_rate,
             "avg_range_pct": avg_range,
             "last_screened_date": b["last_screened_date"],
             "live_pass_today": live_pass,
@@ -349,7 +373,11 @@ def build_ranked_candidates(
             "simulated_targets": 0,
             "simulated_stops": 0,
             "simulated_neither": 0,
+            "dollar_targets": 0,
+            "dollar_stops": 0,
+            "dollar_neither": 0,
             "hit_rate_pct": 0.0,
+            "dollar_hit_rate_pct": 0.0,
             "avg_range_pct": card.avg_range_pct,
             "last_screened_date": None,
             "live_pass_today": True,

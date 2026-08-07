@@ -13,6 +13,7 @@ from investment_agent.finance import (
     sell_price_for_net_target,
     target_move_pct,
 )
+from investment_agent.dollar_target import DollarHistoryStats, assess_dollar_reachability
 from investment_agent.strategy import STOP_PCT
 
 # Gap-and-chase filters (from Aug 2026 week review — NFLX Wed gap)
@@ -75,6 +76,7 @@ def assess_entry_tradability(
     deploy_dollar: float,
     net_target: float | None = None,
     avg_range_pct: float | None = None,
+    dollar_history: DollarHistoryStats | None = None,
 ) -> dict:
     """Return tradability verdict for entering at ``entry_price`` right now."""
     goal = net_target if net_target is not None else daily_profit_target(deploy_dollar)
@@ -209,6 +211,20 @@ def assess_entry_tradability(
             f"Need +{remaining_pct:.2f}% · avg range ~{avg_range_pct:.1f}%",
         )
 
+    dollar_pred = assess_dollar_reachability(
+        entry_price=entry_price,
+        deploy_dollar=deploy_dollar,
+        net_target=goal,
+        avg_range_pct=avg_range_pct,
+        history=dollar_history,
+    )
+    for check in dollar_pred.get("checks", []):
+        add(check["name"], check["ok"], check["message"])
+    if dollar_pred.get("verdict") == "NOT_REACHABLE":
+        blockers.append(dollar_pred.get("detail") or "Historical range unlikely to reach $ goal")
+    elif dollar_pred.get("verdict") == "MARGINAL":
+        cautions.append(dollar_pred.get("detail") or "Marginal historical $ reachability")
+
     if blockers:
         verdict = "NOT_TRADABLE"
         headline = "Not tradable for today's $ goal"
@@ -235,4 +251,8 @@ def assess_entry_tradability(
         "max_net_at_day_high": max_net_at_high if high is not None else None,
         "net_target": goal,
         "plan": plan,
+        "dollar_prediction": dollar_pred,
+        "expected_net_at_typical_high": dollar_pred.get("expected_net_at_typical_high"),
+        "historical_avg_net_at_high": dollar_pred.get("historical_avg_net_at_high"),
+        "dollar_hit_rate_pct": dollar_pred.get("dollar_hit_rate_pct"),
     }

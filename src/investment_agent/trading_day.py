@@ -23,6 +23,7 @@ from investment_agent.journal import (
 from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.regime import REGIME_SYMBOLS
 from investment_agent.strategy import ENTRY_DELAY_MINUTES, ENTRY_WINDOW_ET, STOP_PCT
+from investment_agent.dollar_target import load_dollar_history
 from investment_agent.tradability import assess_entry_tradability
 
 ET = ZoneInfo("America/New_York")
@@ -167,18 +168,25 @@ def resolve_actionable_pick(
     """Pick first live ranked name that passes intraday tradability for today's $ goal."""
     skipped: list[dict] = []
     candidates = _live_ranked_candidates(conn)
-    fallback: dict | None = None
 
     for row in candidates:
         sym = row["ticker"]
         quote = quotes.get(sym)
         entry = float(quote["price"]) if quote and quote.get("price") else None
+        hist = load_dollar_history(
+            conn,
+            sym,
+            end_date=today_et_str(),
+            deploy_dollar=deploy,
+            net_target=net_target,
+        )
         tradability = assess_entry_tradability(
             quote=quote,
             entry_price=entry or float(row.get("last_quote") or 0),
             deploy_dollar=deploy,
             net_target=net_target,
             avg_range_pct=float(row.get("avg_range_pct") or 0) or None,
+            dollar_history=hist,
         ) if entry else {
             "verdict": "UNKNOWN",
             "headline": "No live quote",
@@ -186,11 +194,9 @@ def resolve_actionable_pick(
             "checks": [],
         }
 
-        pick = {**row, "tradability": tradability}
+        pick = {**row, "tradability": tradability, "dollar_history": hist.to_dict()}
         if row.get("source") != "pinned" and sym == get_setting(conn, "pinned_pick_ticker", "").strip().upper():
             pick["source"] = "pinned"
-        elif fallback is None:
-            fallback = pick
 
         if tradability.get("verdict") == "NOT_TRADABLE":
             skipped.append({
@@ -198,6 +204,8 @@ def resolve_actionable_pick(
                 "rank_score": row.get("score"),
                 "reason": tradability.get("detail"),
                 "verdict": tradability.get("verdict"),
+                "dollar_hit_rate_pct": row.get("dollar_hit_rate_pct"),
+                "expected_net_at_typical_high": tradability.get("expected_net_at_typical_high"),
             })
             continue
 
@@ -208,8 +216,6 @@ def resolve_actionable_pick(
         pick["source"] = source
         return pick, skipped
 
-    if fallback:
-        return fallback, skipped
     return None, skipped
 
 
@@ -445,12 +451,20 @@ def validate_planned_trade(
             (sym,),
         ).fetchone()
         avg_range = float(metrics_row["avg_range_pct"]) if metrics_row and metrics_row["avg_range_pct"] else None
+        hist = load_dollar_history(
+            conn,
+            sym,
+            end_date=today_et_str(),
+            deploy_dollar=deploy,
+            net_target=goal,
+        )
         trad = assess_entry_tradability(
             quote=live_q,
             entry_price=planned_price,
             deploy_dollar=deploy,
             net_target=goal,
             avg_range_pct=avg_range,
+            dollar_history=hist,
         )
         if trad.get("verdict") == "NOT_TRADABLE":
             verdict = "NO_GO"
@@ -558,6 +572,12 @@ def _build_pick_detail(
         "stale_entry_price": round(stale_entry, 2) if stale_entry and live_entry and abs(stale_entry - live_entry) > 0.01 else None,
         "thesis_summary": pick.get("thesis_summary"),
         "tradability": tradability,
+        "dollar_hit_rate_pct": pick.get("dollar_hit_rate_pct")
+        or (tradability or {}).get("dollar_hit_rate_pct"),
+        "expected_net_at_typical_high": (tradability or {}).get("expected_net_at_typical_high"),
+        "historical_avg_net_at_high": (tradability or {}).get("historical_avg_net_at_high"),
+        "dollar_history": pick.get("dollar_history"),
+        "dollar_prediction": (tradability or {}).get("dollar_prediction"),
     }
     return detail
 
@@ -708,7 +728,11 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         add_check("Top pick", False, "No live ranked candidate", blocking=True)
     else:
         pick_ok = True
-        pick_msg = f"{pick['ticker']} (score {pick.get('score', 0):.3f}, hit {pick.get('hit_rate_pct', 0):.0f}%)"
+        pick_msg = (
+            f"{pick['ticker']} (score {pick.get('score', 0):.3f}, "
+            f"${pick.get('dollar_hit_rate_pct', 0):.0f}% $ hit, "
+            f"{pick.get('hit_rate_pct', 0):.0f}% 1.5% hit)"
+        )
         if not pick.get("live_pass_today"):
             pick_ok = False
             pick_msg += " — not live Step 3 today"
@@ -799,15 +823,23 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         entry = float(quote["price"]) if quote and quote.get("price") else None
         if not entry:
             continue
+        hist = load_dollar_history(
+            conn,
+            sym,
+            end_date=day,
+            deploy_dollar=float(row.get("suggested_size") or summary.tradable_cash),
+            net_target=net_for_plan,
+        )
         t = assess_entry_tradability(
             quote=quote,
             entry_price=entry,
             deploy_dollar=float(row.get("suggested_size") or summary.tradable_cash),
             net_target=net_for_plan,
             avg_range_pct=float(row.get("avg_range_pct") or 0) or None,
+            dollar_history=hist,
         )
         if t.get("verdict") != "NOT_TRADABLE":
-            second_row = {**row, "tradability": t, "source": "ranked_#2"}
+            second_row = {**row, "tradability": t, "dollar_history": hist.to_dict(), "source": "ranked_#2"}
             break
 
     if second_row:
@@ -859,6 +891,7 @@ def _next_ranked(conn: sqlite3.Connection, after_ticker: str | None) -> list[dic
             "ticker": r["ticker"],
             "rank_score": r.get("score"),
             "hit_rate_pct": r.get("hit_rate_pct"),
+            "dollar_hit_rate_pct": r.get("dollar_hit_rate_pct"),
         }
         for r in live[:5]
     ]
