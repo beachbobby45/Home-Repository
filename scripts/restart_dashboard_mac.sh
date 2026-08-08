@@ -33,6 +33,8 @@ fi
 
 echo ""
 echo "Starting dashboard at http://127.0.0.1:8080"
+echo "UI v2 — look for Trade | Screen | Review tabs and Pick #1 / #2 side by side."
+echo "If you still see the old layout: hard-refresh the browser (Cmd+Shift+R)."
 echo "Keep this Terminal window open. Press Ctrl+C to stop."
 echo ""
 

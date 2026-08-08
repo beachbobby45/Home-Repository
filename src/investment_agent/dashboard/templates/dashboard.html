@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=20260808" />
 </head>
 <body>
   <header class="app-header">
     <div class="app-header-inner">
       <div class="app-brand">
-        <h1>AI Investment Agent</h1>
+        <h1>AI Investment Agent <span class="ui-version">UI v2</span></h1>
         <p class="subtitle">E*TRADE manual · Growth Plan · $5M goal</p>
       </div>
       <div class="app-header-actions">
@@ -41,11 +41,11 @@
   </div>
 
   <nav class="app-nav" aria-label="Dashboard views">
-    <button type="button" class="app-nav-btn active" data-view="trade">Trade</button>
-    <button type="button" class="app-nav-btn" data-view="screen">Screen</button>
-    <button type="button" class="app-nav-btn" data-view="review">Review</button>
-    <button type="button" class="app-nav-btn" data-view="account">Account</button>
-    <button type="button" class="app-nav-btn" data-view="setup">Setup</button>
+    <button type="button" class="app-nav-btn active" data-view="trade"><span class="nav-icon">◎</span> Trade</button>
+    <button type="button" class="app-nav-btn" data-view="screen"><span class="nav-icon">▦</span> Screen</button>
+    <button type="button" class="app-nav-btn" data-view="review"><span class="nav-icon">▤</span> Review</button>
+    <button type="button" class="app-nav-btn" data-view="account"><span class="nav-icon">◫</span> Account</button>
+    <button type="button" class="app-nav-btn" data-view="setup"><span class="nav-icon">⚙</span> Setup</button>
   </nav>
 
   <main class="app-main">
@@ -81,7 +81,7 @@
           <div class="pick-card-body" id="top-pick-body">Loading…</div>
         </article>
 
-        <article class="pick-card pick-card-secondary" id="second-pick-block" hidden>
+        <article class="pick-card pick-card-secondary" id="second-pick-block">
           <header class="pick-card-head">
             <span class="pick-num pick-num-alt">2</span>
             <div>
@@ -89,7 +89,7 @@
               <p class="pick-sub brief">If #1 fails or for optional 2nd trade after a win</p>
             </div>
           </header>
-          <div class="pick-card-body" id="second-pick-body">—</div>
+          <div class="pick-card-body" id="second-pick-body"><div class="pick-empty">Loading backup pick…</div></div>
         </article>
       </div>
 
@@ -766,8 +766,9 @@
       const pickEl = document.getElementById("top-pick-body");
       renderTradeMath(pick, td);
       if (!pick) {
-        pickEl.innerHTML = "<span class='empty'>No live pick — run ingest + ranked screener</span>";
-        document.getElementById("second-pick-block").hidden = true;
+        pickEl.innerHTML = "<div class='pick-empty'>No live pick — run ingest + ranked screener, then Refresh live.</div>";
+        document.getElementById("second-pick-body").innerHTML =
+          "<div class='pick-empty'>Backup pick appears after #1 is ranked and tradable.</div>";
       } else {
         pickEl.innerHTML = renderPickBlock(pick, td);
         const planTicker = document.getElementById("plan-ticker");
@@ -779,13 +780,11 @@
         if (planShares && !planShares.dataset.userEdited && pick.recommended_shares) planShares.value = pick.recommended_shares;
 
         const second = td.second_pick;
-        const secondBlock = document.getElementById("second-pick-block");
         const secondEl = document.getElementById("second-pick-body");
         if (second) {
-          secondBlock.hidden = false;
           secondEl.innerHTML = renderPickBlock(second, td);
         } else {
-          secondBlock.hidden = true;
+          secondEl.innerHTML = "<div class='pick-empty'>No second tradable name on the ranked list yet. Refresh live after ingest.</div>";
         }
       }
 
