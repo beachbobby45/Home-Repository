@@ -334,7 +334,7 @@
           </label>
           <span id="screener-row-count" class="brief"></span>
         </div>
-        <table class="sortable-table" style="margin-top:0.75rem;width:100%">
+        <table class="sortable-table" id="ranked-screener-table" style="margin-top:0.75rem;width:100%">
           <thead>
             <tr>
               <th data-sort="score" class="sortable sorted-desc">Rank score</th>
@@ -367,19 +367,32 @@
         <div id="historical-summary" class="brief">Loading…</div>
         <div class="grid grid-4" id="historical-stats"></div>
         <h3 style="margin:1rem 0 0.5rem">Prior day vs historical view</h3>
-        <div id="prior-day-eval" class="brief">Loading…</div>
-        <table style="margin-top:0.75rem;width:100%" id="prior-day-table-wrap">
-          <thead>
-            <tr>
-              <th>Ticker</th>
-              <th>Predicted range</th>
-              <th>Actual range</th>
-              <th>Screened?</th>
-              <th>Simulated</th>
-            </tr>
-          </thead>
-          <tbody id="prior-day-table"></tbody>
-        </table>
+        <div id="prior-day-eval" class="prior-screened-summary brief">Loading…</div>
+        <div class="prior-screened-toolbar" id="historical-prior-toolbar">
+          <input type="search" id="historical-prior-search" placeholder="Search ticker…" aria-label="Search ticker" />
+          <select id="historical-prior-outcome" aria-label="Filter by outcome">
+            <option value="">All outcomes</option>
+            <option value="target">Hit +1.5% target</option>
+            <option value="stop">Hit stop</option>
+            <option value="neither">No exit</option>
+          </select>
+          <span class="brief" id="historical-prior-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="sortable-table prior-screened-table" style="margin-top:0;width:100%" id="prior-day-table-wrap">
+            <thead>
+              <tr>
+                <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
+                <th data-sort="predicted_avg_range_pct" class="sortable">Typical range</th>
+                <th data-sort="actual_range_pct" class="sortable">Day range</th>
+                <th data-sort="range_delta_pct" class="sortable">Δ vs typical</th>
+                <th data-sort="simulated_outcome" class="sortable">+1.5% sim</th>
+                <th data-sort="dollar_outcome" class="sortable">$ goal sim</th>
+              </tr>
+            </thead>
+            <tbody id="prior-day-table"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -432,6 +445,35 @@
       <div class="card" id="learning-panel">
         <div id="learning-highlights" class="brief">Loading…</div>
         <div id="continual-learning" class="brief" style="margin-bottom:0.75rem"></div>
+        <div id="learning-prior-screened" class="learning-prior-block" hidden>
+          <h3 style="margin:0 0 0.35rem">Prior day screened <span id="learning-prior-date" class="brief"></span></h3>
+          <p class="brief" id="learning-prior-summary" style="margin:0 0 0.5rem"></p>
+          <div class="prior-screened-toolbar">
+            <input type="search" id="learning-prior-search" placeholder="Search ticker…" aria-label="Search ticker" />
+            <select id="learning-prior-outcome" aria-label="Filter by outcome">
+              <option value="">All outcomes</option>
+              <option value="target">Hit +1.5% target</option>
+              <option value="stop">Hit stop</option>
+              <option value="neither">No exit</option>
+            </select>
+            <span class="brief" id="learning-prior-count"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="sortable-table prior-screened-table learning-prior-table" style="width:100%">
+              <thead>
+                <tr>
+                  <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
+                  <th data-sort="predicted_avg_range_pct" class="sortable">Typical range</th>
+                  <th data-sort="actual_range_pct" class="sortable">Day range</th>
+                  <th data-sort="range_delta_pct" class="sortable">Δ vs typical</th>
+                  <th data-sort="simulated_outcome" class="sortable">+1.5% sim</th>
+                  <th data-sort="dollar_outcome" class="sortable">$ goal sim</th>
+                </tr>
+              </thead>
+              <tbody id="learning-prior-table"></tbody>
+            </table>
+          </div>
+        </div>
         <div class="learning-grid" id="learning-details"></div>
       </div>
     </section>
@@ -1033,6 +1075,166 @@
       return Number.isFinite(n) ? n : -Infinity;
     }
 
+    const priorScreenedState = {
+      historical: { rows: [], sortKey: "ticker", sortAsc: true },
+      learning: { rows: [], sortKey: "ticker", sortAsc: true },
+    };
+
+    const OUTCOME_LABELS = {
+      target: "Hit +1.5% target",
+      stop: "Hit stop (−0.75%)",
+      neither: "No target or stop",
+    };
+
+    const DOLLAR_OUTCOME_LABELS = {
+      target: "Hit $ goal",
+      stop: "Hit stop",
+      neither: "Missed $ goal",
+    };
+
+    function outcomeBadge(outcome, kind) {
+      if (!outcome) return "<span class='brief'>—</span>";
+      const labels = kind === "dollar" ? DOLLAR_OUTCOME_LABELS : OUTCOME_LABELS;
+      const label = labels[outcome] || outcome;
+      const cls = kind === "dollar" && outcome === "target"
+        ? "outcome-dollar-target"
+        : `outcome-${outcome}`;
+      return `<span class="outcome-badge ${cls}">${label}</span>`;
+    }
+
+    function formatRangeDelta(delta) {
+      if (delta == null || Number.isNaN(Number(delta))) return "—";
+      const n = Number(delta);
+      const sign = n >= 0 ? "+" : "";
+      const warn = Math.abs(n) > 1 ? " warn" : "";
+      const dir = n >= 0 ? "positive" : "negative";
+      return `<span class="range-delta ${dir}${warn}">${sign}${n.toFixed(2)}%</span>`;
+    }
+
+    function applyPriorScreenedFilters(rows, searchId, outcomeId) {
+      const q = (document.getElementById(searchId)?.value || "").trim().toUpperCase();
+      const outcome = document.getElementById(outcomeId)?.value || "";
+      return rows.filter((r) => {
+        if (q && !String(r.ticker || "").includes(q)) return false;
+        if (outcome && r.simulated_outcome !== outcome) return false;
+        return true;
+      });
+    }
+
+    function sortPriorScreenedRows(rows, sortKey, sortAsc) {
+      const outcomeOrder = { target: 0, neither: 1, stop: 2 };
+      return [...rows].sort((a, b) => {
+        let av = a[sortKey];
+        let bv = b[sortKey];
+        if (sortKey === "ticker") {
+          return sortAsc
+            ? String(av).localeCompare(String(bv))
+            : String(bv).localeCompare(String(av));
+        }
+        if (sortKey === "simulated_outcome" || sortKey === "dollar_outcome") {
+          av = outcomeOrder[av] ?? 99;
+          bv = outcomeOrder[bv] ?? 99;
+        } else {
+          av = screenerNumeric(av);
+          bv = screenerNumeric(bv);
+        }
+        if (av === bv) return a.ticker.localeCompare(b.ticker);
+        return sortAsc ? av - bv : bv - av;
+      });
+    }
+
+    function priorScreenedRowHtml(m) {
+      return `<tr>
+        <td><strong>${m.ticker}</strong></td>
+        <td>${m.predicted_avg_range_pct != null ? Number(m.predicted_avg_range_pct).toFixed(2) + "%" : "—"}</td>
+        <td>${m.actual_range_pct != null ? Number(m.actual_range_pct).toFixed(2) + "%" : "—"}</td>
+        <td>${formatRangeDelta(m.range_delta_pct)}</td>
+        <td>${outcomeBadge(m.simulated_outcome, "pct")}</td>
+        <td>${outcomeBadge(m.dollar_outcome, "dollar")}</td>
+      </tr>`;
+    }
+
+    function renderPriorScreenedTable(instance, tbodyId, countId, searchId, outcomeId) {
+      const st = priorScreenedState[instance];
+      const filtered = sortPriorScreenedRows(
+        applyPriorScreenedFilters(st.rows, searchId, outcomeId),
+        st.sortKey,
+        st.sortAsc,
+      );
+      const tbody = document.getElementById(tbodyId);
+      if (!tbody) return;
+      tbody.innerHTML = filtered.length
+        ? filtered.map(priorScreenedRowHtml).join("")
+        : "<tr><td colspan='6' class='empty'>No matches — try clearing filters</td></tr>";
+      const countEl = document.getElementById(countId);
+      if (countEl) {
+        countEl.textContent = filtered.length === st.rows.length
+          ? `${filtered.length} ticker(s)`
+          : `${filtered.length} of ${st.rows.length} shown`;
+      }
+    }
+
+    function updatePriorScreenedSortHeaders(tableSelector, instance) {
+      const st = priorScreenedState[instance];
+      document.querySelectorAll(`${tableSelector} th.sortable`).forEach((th) => {
+        th.classList.remove("sorted-asc", "sorted-desc");
+        if (th.dataset.sort === st.sortKey) {
+          th.classList.add(st.sortAsc ? "sorted-asc" : "sorted-desc");
+        }
+      });
+    }
+
+    function setPriorScreenedData(instance, rows, meta) {
+      priorScreenedState[instance].rows = rows || [];
+      if (instance === "historical") {
+        renderPriorScreenedTable(
+          "historical",
+          "prior-day-table",
+          "historical-prior-count",
+          "historical-prior-search",
+          "historical-prior-outcome",
+        );
+        updatePriorScreenedSortHeaders("#prior-day-table-wrap", "historical");
+        if (meta) {
+          const s = meta.summary || {};
+          document.getElementById("prior-day-eval").innerHTML =
+            `<strong>${meta.eval_date}</strong> — `
+            + `${s.screened_count || 0} Step 3 match(es): `
+            + `<span class="outcome-badge outcome-target">${s.simulated_targets || 0} targets</span> `
+            + `<span class="outcome-badge outcome-stop">${s.simulated_stops || 0} stops</span> `
+            + `<span class="outcome-badge outcome-neither">${s.simulated_neither || 0} flat</span>`
+            + (s.dollar_targets != null
+              ? ` · $ goal: ${s.dollar_targets} hit / ${s.dollar_stops || 0} stop / ${s.dollar_neither || 0} miss`
+              : "");
+        }
+      } else if (instance === "learning") {
+        const block = document.getElementById("learning-prior-screened");
+        if (!rows || !rows.length) {
+          block.hidden = true;
+          return;
+        }
+        block.hidden = false;
+        if (meta) {
+          document.getElementById("learning-prior-date").textContent = meta.eval_date ? `(${meta.eval_date})` : "";
+          const s = meta.summary || {};
+          document.getElementById("learning-prior-summary").textContent =
+            `${s.screened_count || rows.length} names passed Step 3 — `
+            + `${s.simulated_targets || 0} would hit +1.5%, `
+            + `${s.simulated_stops || 0} hit stop, `
+            + `${s.simulated_neither || 0} no clean exit. `
+            + "Sort columns or search by ticker.";
+        }
+        renderPriorScreenedTable(
+          "learning",
+          "learning-prior-table",
+          "learning-prior-count",
+          "learning-prior-search",
+          "learning-prior-outcome",
+        );
+        updatePriorScreenedSortHeaders(".learning-prior-table", "learning");
+      }
+    }
+
     function applyScreenerFilters(rows) {
       const q = (document.getElementById("screener-filter-ticker").value || "").trim().toUpperCase();
       const minHit = document.getElementById("screener-min-hit").value;
@@ -1099,7 +1301,7 @@
     }
 
     function updateScreenerSortHeaders() {
-      document.querySelectorAll(".sortable-table th.sortable").forEach((th) => {
+      document.querySelectorAll("#ranked-screener-table th.sortable").forEach((th) => {
         th.classList.remove("sorted-asc", "sorted-desc");
         if (th.dataset.sort === screenerSortKey) {
           th.classList.add(screenerSortAsc ? "sorted-asc" : "sorted-desc");
@@ -1210,7 +1412,9 @@
         el.textContent = "No historical bars stored — click Pull history or run scripts/run_historical.py pull.";
         document.getElementById("historical-stats").innerHTML = "";
         document.getElementById("prior-day-eval").textContent = "—";
-        document.getElementById("prior-day-table").innerHTML = "<tr><td colspan='5' class='empty'>No data</td></tr>";
+        document.getElementById("prior-day-table").innerHTML = "<tr><td colspan='6' class='empty'>No data</td></tr>";
+        document.getElementById("historical-prior-count").textContent = "";
+        priorScreenedState.historical.rows = [];
         return;
       }
       el.textContent = `${summary.ticker_count} ticker(s), ${summary.total_bars} bars (${summary.earliest_date} → ${summary.latest_date})`;
@@ -1221,22 +1425,8 @@
         <div class="card"><h2>Through</h2><div class="metric small">${summary.latest_date}</div></div>
       `;
       const prior = await api("/api/historical/evaluate");
-      const pe = document.getElementById("prior-day-eval");
-      const s = prior.summary || {};
-      pe.textContent = `${prior.eval_date}: ${s.screened_count || 0} screener match(es) — `
-        + `${s.simulated_targets || 0} target(s), ${s.simulated_stops || 0} stop(s), `
-        + `${s.simulated_neither || 0} neither (daily-bar approximation).`;
       const matches = prior.screened_matches || [];
-      document.getElementById("prior-day-table").innerHTML = matches.length
-        ? matches.map((m) => `
-          <tr>
-            <td>${m.ticker}</td>
-            <td>${m.predicted_avg_range_pct}%</td>
-            <td>${m.actual_range_pct}%</td>
-            <td>${m.would_screen ? "Yes" : "No"}</td>
-            <td>${m.simulated_outcome || "—"}</td>
-          </tr>`).join("")
-        : "<tr><td colspan='5' class='empty'>No screened matches on prior day</td></tr>";
+      setPriorScreenedData("historical", matches, prior);
     }
 
     let closeReportCache = null;
@@ -1346,12 +1536,12 @@
       const details = document.getElementById("learning-details");
       const prior = r.prior_day_evaluation;
       const priorRows = prior && prior.screened_matches ? prior.screened_matches : [];
+      setPriorScreenedData("learning", priorRows, prior);
       const sections = [
         ["Today's journal", r.today_journal, (p) => `${p.side} ${p.shares} ${p.ticker} @ $${p.price}`],
         ["Today's round trips", r.today_round_trips, (p) => `${p.ticker}: ${p.note}`],
         ["Active positions", r.active_positions, (p) => `${p.ticker}: ${p.note}`],
         ["Recent round trips", r.round_trips, (p) => `${p.ticker}: ${p.note}`],
-        ["Prior day screened", priorRows, (p) => `${p.ticker}: pred ${p.predicted_avg_range_pct}% → actual ${p.actual_range_pct}% (${p.simulated_outcome})`],
         ["Watchlist", r.watchlist_insights, (p) => `${p.ticker}: ${p.note}`],
       ];
       details.innerHTML = sections.map(([title, rows, fmt]) => {
@@ -1522,7 +1712,7 @@
     document.getElementById("screener-period-days").addEventListener("change", () => {
       loadPeriodScreener().catch((e) => toast(e.message));
     });
-    document.querySelectorAll(".sortable-table th.sortable").forEach((th) => {
+    document.querySelectorAll("#ranked-screener-table th.sortable").forEach((th) => {
       th.addEventListener("click", () => {
         const key = th.dataset.sort;
         if (screenerSortKey === key) {
@@ -1535,6 +1725,47 @@
         renderScreenerTable();
       });
     });
+
+    function wirePriorScreenedTable(instance, tableSelector, searchId, outcomeId, tbodyId, countId) {
+      const searchEl = document.getElementById(searchId);
+      const outcomeEl = document.getElementById(outcomeId);
+      if (searchEl) {
+        searchEl.addEventListener("input", () => renderPriorScreenedTable(instance, tbodyId, countId, searchId, outcomeId));
+      }
+      if (outcomeEl) {
+        outcomeEl.addEventListener("change", () => renderPriorScreenedTable(instance, tbodyId, countId, searchId, outcomeId));
+      }
+      document.querySelectorAll(`${tableSelector} th.sortable`).forEach((th) => {
+        th.addEventListener("click", () => {
+          const st = priorScreenedState[instance];
+          const key = th.dataset.sort;
+          if (st.sortKey === key) {
+            st.sortAsc = !st.sortAsc;
+          } else {
+            st.sortKey = key;
+            st.sortAsc = key === "ticker";
+          }
+          renderPriorScreenedTable(instance, tbodyId, countId, searchId, outcomeId);
+          updatePriorScreenedSortHeaders(tableSelector, instance);
+        });
+      });
+    }
+    wirePriorScreenedTable(
+      "historical",
+      "#prior-day-table-wrap",
+      "historical-prior-search",
+      "historical-prior-outcome",
+      "prior-day-table",
+      "historical-prior-count",
+    );
+    wirePriorScreenedTable(
+      "learning",
+      ".learning-prior-table",
+      "learning-prior-search",
+      "learning-prior-outcome",
+      "learning-prior-table",
+      "learning-prior-count",
+    );
 
     document.getElementById("pull-historical").addEventListener("click", async () => {
       try {
