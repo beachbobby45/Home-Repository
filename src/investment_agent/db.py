@@ -205,6 +205,23 @@ CREATE TABLE IF NOT EXISTS period_screener_hits (
 
 CREATE INDEX IF NOT EXISTS idx_period_hits_run
   ON period_screener_hits(run_id, score DESC);
+
+CREATE TABLE IF NOT EXISTS rank_snapshots (
+  id INTEGER PRIMARY KEY,
+  snapshot_date TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  ranked_json TEXT NOT NULL,
+  top_n INTEGER NOT NULL DEFAULT 20
+);
+
+CREATE TABLE IF NOT EXISTS close_reports (
+  id INTEGER PRIMARY KEY,
+  report_date TEXT NOT NULL,
+  report_type TEXT NOT NULL CHECK(report_type IN ('daily', 'weekly')),
+  generated_at TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  UNIQUE(report_date, report_type)
+);
 """
 
 MIGRATION_SQL = """

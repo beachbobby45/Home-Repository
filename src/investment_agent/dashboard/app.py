@@ -39,6 +39,15 @@ from investment_agent.learning import (
     list_learning_report_dates,
     save_learning_report,
 )
+from investment_agent.close_report import (
+    generate_daily_close_report,
+    generate_weekly_close_report,
+    get_or_generate_daily_close,
+    get_or_generate_weekly_close,
+    list_close_report_dates,
+    save_close_report,
+    save_rank_snapshot,
+)
 from investment_agent.period_screener import (
     build_ranked_candidates,
     get_latest_screener_run,
@@ -278,6 +287,77 @@ def api_learning_generate(
     report_id = save_learning_report(conn, report)
     conn.commit()
     return {"ok": True, "id": report_id, "report": report}
+
+
+@app.get("/api/close/daily")
+def api_close_daily(
+    conn=Depends(_db),
+    date: str | None = None,
+    refresh: bool = False,
+    fetch_10_et: bool = True,
+) -> dict[str, Any]:
+    report = get_or_generate_daily_close(
+        conn,
+        report_date=date,
+        regenerate=refresh,
+        fetch_10_et=fetch_10_et,
+    )
+    conn.commit()
+    return report
+
+
+@app.get("/api/close/weekly")
+def api_close_weekly(
+    conn=Depends(_db),
+    end: str | None = None,
+    refresh: bool = False,
+    fetch_10_et: bool = False,
+) -> dict[str, Any]:
+    report = get_or_generate_weekly_close(
+        conn,
+        end_date=end,
+        regenerate=refresh,
+        fetch_10_et=fetch_10_et,
+    )
+    conn.commit()
+    return report
+
+
+@app.get("/api/close/history")
+def api_close_history(
+    conn=Depends(_db),
+    report_type: str = "daily",
+    limit: int = 30,
+) -> dict[str, Any]:
+    return {"dates": list_close_report_dates(conn, report_type=report_type, limit=limit)}
+
+
+@app.post("/api/close/daily/generate")
+def api_close_daily_generate(
+    conn=Depends(_db),
+    date: str | None = None,
+    fetch_10_et: bool = True,
+    _: None = Depends(_require_api_key),
+) -> dict:
+    report = generate_daily_close_report(conn, date, fetch_10_et=fetch_10_et)
+    report_id = save_close_report(conn, report)
+    conn.commit()
+    return {"ok": True, "id": report_id, "report": report}
+
+
+@app.post("/api/close/snapshot-rank")
+def api_close_snapshot_rank(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    """Freeze current top-20 rank for today's date (call after 10:00 ET)."""
+    ranked = build_ranked_candidates(conn, period_days=14)["ranked"][:20]
+    from investment_agent.trading_day import today_et_str
+
+    day = today_et_str()
+    save_rank_snapshot(conn, day, ranked)
+    conn.commit()
+    return {"ok": True, "snapshot_date": day, "count": len(ranked)}
 
 
 @app.get("/api/historical/summary")

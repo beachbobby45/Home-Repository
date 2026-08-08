@@ -384,6 +384,45 @@
     </section>
 
     <section>
+      <h2>Daily &amp; Weekly Close</h2>
+      <p class="brief" style="margin:0 0 0.75rem">
+        Retrospective: which top-20 ranked names would have hit the Growth Plan goal from
+        <strong>open</strong> and <strong>10:00 ET</strong> entries. Compare journal vs ranked #1 vs best on list.
+      </p>
+      <div class="actions">
+        <label for="close-date" class="brief" style="margin-right:0.5rem">Date</label>
+        <input type="date" id="close-date" />
+        <button class="btn" id="load-daily-close">Daily Close</button>
+        <button class="btn secondary" id="load-weekly-close">Weekly Close</button>
+        <button class="btn secondary" id="refresh-close">Refresh</button>
+      </div>
+      <div class="card" id="close-panel">
+        <div id="close-highlights" class="brief">Select a date and load Daily or Weekly Close.</div>
+        <div id="close-summary" style="margin:0.75rem 0"></div>
+        <div class="close-tab-bar" id="close-tab-bar">
+          <button type="button" class="btn btn-sm close-tab active" data-tab="step3_pass">Step 3 pass</button>
+          <button type="button" class="btn btn-sm secondary close-tab" data-tab="full_top20">Full top 20</button>
+        </div>
+        <div class="table-wrap" style="margin-top:0.75rem">
+          <table class="data-table" id="close-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Ticker</th>
+                <th>Open → net@high</th>
+                <th>10:00 → net@high</th>
+                <th>Hit $?</th>
+                <th>Step 3</th>
+              </tr>
+            </thead>
+            <tbody id="close-table-body"></tbody>
+          </table>
+        </div>
+        <div id="close-journal" style="margin-top:1rem"></div>
+      </div>
+    </section>
+
+    <section>
       <h2>Learning Report</h2>
       <div class="actions">
         <label for="learning-date" class="brief" style="margin-right:0.5rem">Report date</label>
@@ -1200,6 +1239,93 @@
         : "<tr><td colspan='5' class='empty'>No screened matches on prior day</td></tr>";
     }
 
+    let closeReportCache = null;
+    let closeActiveTab = "step3_pass";
+
+    function renderCloseTable(tabKey) {
+      const tbody = document.getElementById("close-table-body");
+      if (!closeReportCache || !closeReportCache.tabs) {
+        tbody.innerHTML = "<tr><td colspan='6' class='empty'>Load a Daily Close report</td></tr>";
+        return;
+      }
+      const tab = closeReportCache.tabs[tabKey] || closeReportCache.tabs.full_top20;
+      const rows = tab.rows || [];
+      tbody.innerHTML = rows.length ? rows.map((r) => {
+        const o = r.open_entry || {};
+        const t = r.entry_10_et || {};
+        const hit = r.hit_goal_either ? "✓" : "—";
+        return `<tr>
+          <td>${r.rank}</td>
+          <td><strong>${r.ticker}</strong></td>
+          <td>$${fmt(o.entry_price)} → <strong>$${fmt(o.net_at_high)}</strong></td>
+          <td>${t.available ? `$${fmt(t.entry_price)} → <strong>$${fmt(t.net_at_high)}</strong>` : "—"}</td>
+          <td>${hit}</td>
+          <td>${r.live_pass_today ? "pass" : "—"}</td>
+        </tr>`;
+      }).join("") : "<tr><td colspan='6' class='empty'>No rows for this tab</td></tr>";
+    }
+
+    function renderCloseSummary(report, tabKey) {
+      const el = document.getElementById("close-summary");
+      if (!report || report.report_type === "weekly") {
+        if (report && report.report_type === "weekly") {
+          const s = report.summary || {};
+          el.innerHTML = `
+            <div><strong>Week ${report.week_start} → ${report.week_end}</strong> (${s.days} sessions)</div>
+            <div>Journal total: <strong>$${fmt(s.journal_total_net)}</strong>
+              · Best-on-list (open): <strong>$${fmt(s.counterfactual_best_open_total)}</strong>
+              · Ranked #1 (open): <strong>$${fmt(s.counterfactual_rank1_open_total)}</strong></div>
+            <div class="brief">Missed vs best: $${fmt(s.missed_vs_best_open)} · #1 hit ${s.rank1_hit_days_open}/${s.days} days</div>`;
+        }
+        return;
+      }
+      const tab = report.tabs[tabKey] || report.tabs.full_top20;
+      const s = tab.summary || {};
+      el.innerHTML = `
+        <div>Goal <strong>$${fmt(report.net_target)}</strong> net · Deploy $${fmt(report.deploy)} · Ranked #1: <strong>${report.rank1_ticker || "—"}</strong></div>
+        <div>#1 net@high: open <strong>$${fmt(s.rank1_net_at_high_open)}</strong>
+          · 10:00 <strong>$${fmt(s.rank1_net_at_high_10et)}</strong>
+          · Best on list: <strong>${s.best_hit_ticker_open || "—"}</strong> ($${fmt(s.best_net_at_high_open)})</div>
+        <div class="brief">Journal: $${fmt(s.journal_realized_net)} realized
+          · Counterfactual if #1 (open): $${fmt(s.counterfactual_if_rank1_open)}
+          · if best (open): $${fmt(s.counterfactual_if_best_open)}</div>`;
+    }
+
+    async function loadDailyClose(refresh) {
+      const dateInput = document.getElementById("close-date");
+      const q = new URLSearchParams();
+      if (dateInput.value) q.set("date", dateInput.value);
+      if (refresh) q.set("refresh", "true");
+      const r = await api(`/api/close/daily?${q}`);
+      if (!dateInput.value && r.report_date) dateInput.value = r.report_date;
+      closeReportCache = r;
+      document.getElementById("close-highlights").innerHTML = (r.highlights || [])
+        .map((h) => `<div>${h}</div>`).join("") || "<span class='empty'>No data</span>";
+      renderCloseSummary(r, closeActiveTab);
+      renderCloseTable(closeActiveTab);
+      const j = r.journal || {};
+      document.getElementById("close-journal").innerHTML = j.traded_today
+        ? `<strong>Journal:</strong> ${(j.round_trips || []).map((t) =>
+            `${t.ticker} $${fmt(t.buy_price)}→$${fmt(t.sell_price)} net $${fmt(t.net_pnl)}`).join(" · ")}`
+        : "<span class='brief'>No journal trades on this date.</span>";
+    }
+
+    async function loadWeeklyClose(refresh) {
+      const dateInput = document.getElementById("close-date");
+      const q = new URLSearchParams();
+      if (dateInput.value) q.set("end", dateInput.value);
+      if (refresh) q.set("refresh", "true");
+      const r = await api(`/api/close/weekly?${q}`);
+      closeReportCache = null;
+      document.getElementById("close-highlights").innerHTML = (r.daily_reports || [])
+        .map((d) => `<div>${d.date}: journal $${fmt(d.journal_net)} · best ${d.best_open || "—"} $${fmt(d.best_net_open)}</div>`).join("")
+        || "<span class='empty'>No weekly data</span>";
+      renderCloseSummary(r, closeActiveTab);
+      document.getElementById("close-table-body").innerHTML =
+        "<tr><td colspan='6' class='empty'>Weekly view — see summary above; load Daily Close for ticker table.</td></tr>";
+      document.getElementById("close-journal").innerHTML = "";
+    }
+
     async function loadLearning() {
       const dateInput = document.getElementById("learning-date");
       const q = dateInput.value ? `?date=${dateInput.value}` : "";
@@ -1297,7 +1423,7 @@
     }
 
     async function refreshAll() {
-      await Promise.all([loadTradingDay(), loadSummary(), loadScenario(), loadCio(), loadRankedAndStats(), loadHistorical(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
+      await Promise.all([loadTradingDay(), loadSummary(), loadScenario(), loadCio(), loadRankedAndStats(), loadHistorical(), loadDailyClose(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
     }
 
     document.getElementById("load-sp100").addEventListener("click", async () => {
@@ -1420,6 +1546,24 @@
     });
     document.getElementById("refresh-historical").addEventListener("click", () => loadHistorical().catch((e) => toast(e.message)));
     document.getElementById("learning-date").addEventListener("change", () => loadLearning().catch((e) => toast(e.message)));
+
+    document.getElementById("load-daily-close").addEventListener("click", () => loadDailyClose(false).catch((e) => toast(e.message)));
+    document.getElementById("load-weekly-close").addEventListener("click", () => loadWeeklyClose(false).catch((e) => toast(e.message)));
+    document.getElementById("refresh-close").addEventListener("click", () => loadDailyClose(true).catch((e) => toast(e.message)));
+    document.getElementById("close-date").addEventListener("change", () => loadDailyClose(false).catch((e) => toast(e.message)));
+    document.querySelectorAll(".close-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        closeActiveTab = btn.dataset.tab;
+        document.querySelectorAll(".close-tab").forEach((b) => {
+          b.classList.toggle("active", b === btn);
+          b.classList.toggle("secondary", b !== btn);
+        });
+        if (closeReportCache) {
+          renderCloseSummary(closeReportCache, closeActiveTab);
+          renderCloseTable(closeActiveTab);
+        }
+      });
+    });
 
     document.getElementById("generate-learning").addEventListener("click", async () => {
       try {
