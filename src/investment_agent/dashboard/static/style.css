@@ -1289,6 +1289,15 @@ textarea {
   font-size: 0.85rem;
 }
 
+.pick-prices-head {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--green);
+  margin-bottom: 0.35rem;
+}
+
 .pick-prices {
   display: flex;
   flex-direction: column;
@@ -1337,11 +1346,6 @@ textarea {
   font-size: 0.85rem;
   color: var(--muted);
   margin-bottom: 0.5rem;
-}
-
-.pick-empty {
-  color: var(--muted);
-  font-style: italic;
 }
 
 .validate-panel {

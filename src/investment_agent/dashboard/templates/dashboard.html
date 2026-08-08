@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260808" />
+  <link rel="stylesheet" href="/static/style.css?v=20260809" />
 </head>
 <body>
   <header class="app-header">
@@ -638,6 +638,15 @@
       initJournalForm();
     }
 
+    function formatWhyOnly(thesis) {
+      if (!thesis) return "";
+      // Thesis includes entry/sell from last screener ingest — strip so we don't duplicate live prices.
+      return thesis
+        .replace(/Entry ~\$[\d.]+ → sell \$[\d.]+ \([^)]+\), stop −[\d.]+% \$[\d.]+\.\s*/i, "")
+        .replace(/\s*Execute in E\*TRADE; log fill in journal\./i, "")
+        .trim();
+    }
+
     function renderPickBlock(pick, td) {
       if (!pick) return "<div class='pick-empty'>No live pick — run ingest and refresh ranked screener.</div>";
       const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
@@ -658,7 +667,7 @@
         </div>
         ${rankedNote}
         ${trad.detail ? `<div class="pick-tradability-detail">${trad.detail}</div>` : ""}
-        ${pick.thesis_summary ? `<div class="pick-why"><span class="pick-why-label">Why</span><p>${pick.thesis_summary}</p></div>` : ""}
+        ${pick.thesis_summary ? `<div class="pick-why"><span class="pick-why-label">Why ranked</span><p>${formatWhyOnly(pick.thesis_summary)}</p></div>` : ""}
         <div class="pick-stats-row">
           <div class="pick-stat"><span class="pick-stat-label">Rank score</span><strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong></div>
           <div class="pick-stat"><span class="pick-stat-label">$ goal hit</span><strong>${pick.dollar_hit_rate_pct ?? "—"}%</strong></div>
@@ -671,6 +680,7 @@
           · need <strong>$${fmt(netGoal)}</strong>
         </div>` : ""}
         <div class="pick-prices">
+          <div class="pick-prices-head">Trade now · live quote</div>
           <div class="pick-price-row highlight">
             <span>Buy at</span><strong class="pick-price">$${fmt(entry)}</strong>${changeHtml}
           </div>
