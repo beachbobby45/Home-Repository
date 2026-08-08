@@ -7,557 +7,457 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header>
-    <h1>AI Investment Agent</h1>
-    <p class="subtitle">Intraday alerts · E*TRADE manual · $150/day at $10K · $5M goal · Option A (no Claude)</p>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="app-brand">
+        <h1>AI Investment Agent</h1>
+        <p class="subtitle">E*TRADE manual · Growth Plan · $5M goal</p>
+      </div>
+      <div class="app-header-actions">
+        <button class="btn btn-sm" type="button" id="refresh-trading-day">Refresh live</button>
+        <button class="btn secondary btn-sm" type="button" id="pin-top-pick">Pin #1</button>
+        <button class="btn secondary btn-sm" type="button" id="refresh-all">Refresh all</button>
+      </div>
+    </div>
     {% if api_key_required %}
     <div class="api-key-bar" id="api-key-bar">
       <label for="app-api-key">Dashboard password</label>
-      <input type="password" id="app-api-key" placeholder="Same value as APP_API_KEY in your .env" autocomplete="off" />
+      <input type="password" id="app-api-key" placeholder="APP_API_KEY from .env" autocomplete="off" />
       <button class="btn secondary btn-sm" type="button" id="save-api-key">Save</button>
       <button class="btn secondary btn-sm" type="button" id="clear-api-key">Clear</button>
       <span class="brief" id="api-key-status"></span>
-      <span class="brief api-key-hint">Server binds to 127.0.0.1 by default (this machine only). Required for action buttons if you use a tunnel or --host 0.0.0.0.</span>
     </div>
     {% endif %}
   </header>
 
-  <main>
-    <div id="trading-mode-banner" class="banner paper">Loading trading mode…</div>
-    <div id="regime-banner" class="banner ok">Loading regime…</div>
+  <div id="trading-mode-banner" class="banner paper app-banner-compact">Loading trading mode…</div>
+  <div id="regime-banner" class="banner ok app-banner-compact">Loading regime…</div>
 
-    <section class="trading-day-section">
-      <div class="trading-day-header">
-        <h2>Trading Day Control</h2>
-        <div class="actions">
-          <button class="btn" id="refresh-trading-day">Refresh live data</button>
-          <button class="btn secondary btn-sm" id="pin-top-pick">Pin top pick to queue</button>
-        </div>
-      </div>
-      <div class="card trading-day-panel" id="trading-day-panel">
-        <div class="trading-verdict" id="trading-verdict">
+  <div class="status-bar" id="status-bar">
+    <div class="status-chip" id="status-verdict-chip"><span class="status-label">Session</span><span id="status-verdict-text">—</span></div>
+    <div class="status-chip status-chip-accent"><span class="status-label">Today</span><span id="status-daily-text">—</span></div>
+    <div class="status-chip"><span class="status-label">Cash</span><span id="status-cash-text">—</span></div>
+    <div class="status-chip"><span class="status-label">Goal</span><span id="status-goal-text">—</span></div>
+  </div>
+
+  <nav class="app-nav" aria-label="Dashboard views">
+    <button type="button" class="app-nav-btn active" data-view="trade">Trade</button>
+    <button type="button" class="app-nav-btn" data-view="screen">Screen</button>
+    <button type="button" class="app-nav-btn" data-view="review">Review</button>
+    <button type="button" class="app-nav-btn" data-view="account">Account</button>
+    <button type="button" class="app-nav-btn" data-view="setup">Setup</button>
+  </nav>
+
+  <main class="app-main">
+
+    <!-- ═══ TRADE — primary view ═══ -->
+    <div id="view-trade" class="app-view active">
+
+      <header class="trade-page-head">
+        <h2 class="trade-page-title">What to trade today</h2>
+        <p class="brief">Pick #1 is your primary buy. Pick #2 is backup or optional second trade after a win.</p>
+      </header>
+
+      <div class="card trading-day-panel verdict-neutral" id="trading-day-panel">
+        <div class="trade-verdict-row">
           <div class="verdict-badge" id="verdict-badge">—</div>
-          <div>
+          <div class="trade-verdict-copy">
             <div class="verdict-headline" id="verdict-headline">Loading…</div>
             <div class="brief" id="verdict-detail"></div>
             <div class="brief" id="verdict-asof"></div>
           </div>
         </div>
-        <div class="trade-math-panel" id="trade-math-panel" hidden>
-          <div class="trade-math-title">Your trade math <span class="brief" id="trade-math-goal"></span></div>
-          <div class="trade-math-grid">
-            <div class="trade-math-box buy">
-              <div class="trade-math-label">Buy at</div>
-              <div class="trade-math-value" id="math-buy">—</div>
-              <div class="trade-math-sub" id="math-shares">—</div>
-            </div>
-            <div class="trade-math-box stop">
-              <div class="trade-math-label">Stop loss (−0.75%)</div>
-              <div class="trade-math-value" id="math-stop">—</div>
-              <div class="trade-math-sub" id="math-stop-net">—</div>
-            </div>
-            <div class="trade-math-box sell">
-              <div class="trade-math-label">Sell for Growth Plan</div>
-              <div class="trade-math-value" id="math-sell">—</div>
-              <div class="trade-math-sub" id="math-sell-net">—</div>
-            </div>
-          </div>
-        </div>
-        <div class="grid grid-2" style="margin-top:1rem">
-          <div class="top-pick-card" id="top-pick-card">
-            <h3>#1 — Today&apos;s top pick</h3>
-            <div id="top-pick-body" class="brief">Loading…</div>
-            <div id="second-pick-block" class="second-pick-block" hidden>
-              <h3>#2 — Next pick if #1 fails or for 2nd trade</h3>
-              <div id="second-pick-body" class="brief">—</div>
-            </div>
-          </div>
-          <div>
-            <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Planned purchase check</h3>
-            <p class="brief" style="margin:0 0 0.5rem">Enter your intended E*TRADE fill — refresh live data first, then validate before you buy.</p>
-            <form id="planned-trade-form" class="planned-trade-form">
-              <label>Ticker <input type="text" id="plan-ticker" placeholder="NFLX" /></label>
-              <label>Buy price ($) <input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Live entry" /></label>
-              <label>Shares <input type="number" id="plan-shares" step="1" min="1" placeholder="Auto from size" /></label>
-              <button class="btn secondary btn-sm" type="submit">Validate trade</button>
-            </form>
-            <div id="planned-trade-result" class="planned-trade-result brief"></div>
-            <h3 style="margin:1rem 0 0.5rem;font-size:0.95rem">Go / no-go checks</h3>
-            <ul class="check-list" id="trading-checks"></ul>
-            <div class="brief" id="rotation-hint" style="margin-top:0.75rem"></div>
-          </div>
-        </div>
       </div>
-    </section>
 
-    <div class="grid grid-4">
-      <div class="card">
-        <h2>$5M Goal</h2>
-        <div class="metric" id="goal-pct">—</div>
-        <div class="progress-wrap">
-          <div class="progress-bar"><div class="progress-fill" id="goal-bar" style="width:0%"></div></div>
-          <div class="progress-label" id="goal-label">—</div>
+      <div class="picks-grid">
+        <article class="pick-card pick-card-primary">
+          <header class="pick-card-head">
+            <span class="pick-num">1</span>
+            <div>
+              <h2 class="pick-title">Top pick — buy this first</h2>
+              <p class="pick-sub brief">Ranked #1 that passes tradability for today&apos;s dollar goal</p>
+            </div>
+          </header>
+          <div class="pick-card-body" id="top-pick-body">Loading…</div>
+        </article>
+
+        <article class="pick-card pick-card-secondary" id="second-pick-block" hidden>
+          <header class="pick-card-head">
+            <span class="pick-num pick-num-alt">2</span>
+            <div>
+              <h2 class="pick-title">Backup pick</h2>
+              <p class="pick-sub brief">If #1 fails or for optional 2nd trade after a win</p>
+            </div>
+          </header>
+          <div class="pick-card-body" id="second-pick-body">—</div>
+        </article>
+      </div>
+
+      <div class="trade-math-panel card" id="trade-math-panel" hidden>
+        <div class="trade-math-title">Trade math <span class="brief" id="trade-math-goal"></span></div>
+        <div class="trade-math-grid">
+          <div class="trade-math-box buy">
+            <div class="trade-math-label">Buy at</div>
+            <div class="trade-math-value" id="math-buy">—</div>
+            <div class="trade-math-sub" id="math-shares">—</div>
+          </div>
+          <div class="trade-math-box stop">
+            <div class="trade-math-label">Stop (−0.75%)</div>
+            <div class="trade-math-value" id="math-stop">—</div>
+            <div class="trade-math-sub" id="math-stop-net">—</div>
+          </div>
+          <div class="trade-math-box sell">
+            <div class="trade-math-label">Sell for goal</div>
+            <div class="trade-math-value" id="math-sell">—</div>
+            <div class="trade-math-sub" id="math-sell-net">—</div>
+          </div>
         </div>
       </div>
-      <div class="card card-daily-target">
-        <h2>Daily Target</h2>
-        <div class="metric" id="daily-target">—</div>
-        <div class="progress-wrap">
-          <div class="progress-bar"><div class="progress-fill daily-fill" id="daily-bar" style="width:0%"></div></div>
-          <div class="progress-label" id="daily-progress-label">—</div>
-        </div>
-        <div class="progress-label" id="next-tier-label">—</div>
-      </div>
-      <div class="card">
-        <h2>Tradable Cash</h2>
-        <div class="metric" id="tradable-cash">—</div>
-        <div class="progress-label">Basis <span id="original-basis">—</span></div>
-      </div>
-      <div class="card">
-        <h2>Month P&amp;L</h2>
-        <div class="metric" id="month-pnl">—</div>
-        <div class="progress-label"><span id="month-key">—</span> · fees <span id="total-fees">—</span></div>
-      </div>
+
+      <section class="validate-panel card">
+        <header class="panel-head">
+          <h2>Planned purchase check</h2>
+          <p class="brief">Confirm your E*TRADE entry before you buy — refresh live data first.</p>
+        </header>
+        <form id="planned-trade-form" class="planned-trade-form planned-trade-form-hero">
+          <label class="plan-field"><span>Ticker</span><input type="text" id="plan-ticker" placeholder="NFLX" /></label>
+          <label class="plan-field"><span>Buy price ($)</span><input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Live entry" /></label>
+          <label class="plan-field"><span>Shares</span><input type="number" id="plan-shares" step="1" min="1" placeholder="Auto" /></label>
+          <button class="btn plan-submit" type="submit">Validate trade</button>
+        </form>
+        <div id="planned-trade-result" class="planned-trade-result"></div>
+      </section>
+
+      <details class="checks-panel card">
+        <summary class="checks-summary">Go / no-go checks &amp; rotation hints</summary>
+        <ul class="check-list" id="trading-checks"></ul>
+        <p class="brief rotation-hint" id="rotation-hint"></p>
+      </details>
     </div>
 
-    <div class="grid grid-2" style="margin-top:0.75rem">
-      <div class="card">
-        <h2>Jars</h2>
-        <div class="metric small">Mgmt <span id="mgmt-jar">—</span></div>
-        <div class="metric small" style="margin-top:0.35rem">Tax <span id="tax-jar">—</span></div>
-      </div>
-      <div class="card">
-        <h2>Operating Rules</h2>
-        <div class="strategy-rules" id="strategy-rules">Loading…</div>
-      </div>
-    </div>
-
-    <section>
-      <h2>Growth Plan</h2>
-      <p class="brief" style="margin:0 0 0.75rem">
-        Daily net profit goal scales with balance: <strong>$150/day at $10K</strong>, +$50 for each additional $5K.
-        Full <strong>$350/day</strong> tier becomes meaningful around <strong>$20K+</strong>.
-      </p>
-      <div class="card">
-        <div id="growth-tier-summary" class="brief">Loading…</div>
-        <table class="growth-table" style="margin-top:0.75rem;width:100%">
-          <thead>
-            <tr>
-              <th>Balance (≥)</th>
-              <th>Daily target</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="growth-plan-body">
-            <tr><td colspan="3" class="empty">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>$5M Scenario Visualizer</h2>
-      <p class="brief" style="margin:0 0 0.75rem">Journal-fed actual path + projections toward $5,000,000.</p>
-      <div class="card" id="scenario-panel">
-        <div id="scenario-summary" class="brief">Loading…</div>
-        <div class="scenario-stats grid grid-4" id="scenario-stats"></div>
-        <div class="scenario-chart-wrap">
-          <svg id="scenario-chart" viewBox="0 0 800 220" preserveAspectRatio="xMidYMid meet"></svg>
+    <!-- ═══ SCREEN ═══ -->
+    <div id="view-screen" class="app-view">
+      <section class="view-section">
+        <header class="view-head"><h2>Trade queue</h2><p class="brief">Active names you are working — sync adds live Step 3 passers.</p></header>
+        <div class="actions">
+          <button class="btn" id="sync-queue">Sync from screener</button>
         </div>
-        <div class="scenario-legend" id="scenario-legend"></div>
-        <table style="margin-top:1rem;width:100%">
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>Tradable</th>
-              <th>Goal %</th>
-              <th>Month P&amp;L</th>
-              <th>Sweep</th>
-            </tr>
-          </thead>
-          <tbody id="scenario-table"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>CIO Summary</h2>
-      <div class="card cio-panel" id="cio-panel">
-        <div class="cio-headline" id="cio-headline">Loading…</div>
-        <p class="brief" id="cio-narrative"></p>
-        <ul id="cio-actions" class="cio-actions"></ul>
-        <div class="grid grid-4" style="margin-top:0.75rem" id="cio-subagents"></div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Market Brief</h2>
-      <div class="card brief" id="market-brief">Loading…</div>
-    </section>
-
-    <section>
-      <h2>Month-end Sweep Preview</h2>
-      <div class="card">
-        <div id="sweep-preview">Loading…</div>
-        <div class="actions" style="margin-top:0.75rem">
-          <label style="display:inline-flex;align-items:center;gap:0.5rem">
-            Tax reserve rate
-            <input type="number" id="tax-rate" min="0" max="100" step="1" style="width:70px" />
-            %
-          </label>
-          <button class="btn secondary btn-sm" id="save-tax">Save rate</button>
-          <button class="btn btn-sm" id="apply-sweep">Apply month-end sweep</button>
+        <div class="card table-card">
+          <table>
+            <thead><tr>
+              <th>Ticker</th><th>State</th><th>Live</th><th>P&amp;L</th><th>Entry</th>
+              <th>Target</th><th>Stop</th><th>Size</th><th>Thesis</th><th></th>
+            </tr></thead>
+            <tbody id="queue-body"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody>
+          </table>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section>
-      <h2>Intraday Alerts</h2>
-      <div class="actions">
-        <button class="btn" id="run-monitor">Run monitor</button>
-        <button class="btn secondary" id="refresh-alerts">Refresh alerts</button>
-      </div>
-      <div class="card" style="padding:0;overflow-x:auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Ticker</th>
-              <th>Alert</th>
-              <th>Price</th>
-              <th>P&amp;L</th>
-              <th>Message</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="alerts-body">
-            <tr><td colspan="7" class="empty">Loading alerts…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <section class="view-section">
+        <header class="view-head"><h2>Intraday alerts</h2></header>
+        <div class="actions">
+          <button class="btn" id="run-monitor">Run monitor</button>
+          <button class="btn secondary" id="refresh-alerts">Refresh alerts</button>
+        </div>
+        <div class="card table-card">
+          <table>
+            <thead><tr>
+              <th>Time</th><th>Ticker</th><th>Alert</th><th>Price</th><th>P&amp;L</th><th>Message</th><th></th>
+            </tr></thead>
+            <tbody id="alerts-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
 
-    <section>
-      <h2>Trade Queue</h2>
-      <p class="brief" style="margin:0 0 0.75rem">Active trades you are working — ordered by 14d rank score when synced. Sync adds up to 5 <em>new</em> live Step 3 passers not already in the queue.</p>
-      <div class="actions">
-        <button class="btn" id="sync-queue">Sync from screener</button>
-        <button class="btn secondary" id="refresh-all">Refresh</button>
-      </div>
-      <div class="card" style="padding:0;overflow-x:auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Ticker</th>
-              <th>State</th>
-              <th>Live</th>
-              <th>P&amp;L</th>
-              <th>Entry</th>
-              <th>Target +1.5%</th>
-              <th>Stop −0.75%</th>
-              <th>Size</th>
-              <th>Thesis</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="queue-body">
-            <tr><td colspan="10" class="empty">Loading queue…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>Watchlist &amp; Period Screener</h2>
-      <p class="brief" style="margin:0 0 0.75rem">Expand universe, scan last N days for Step 3 matches, rank candidates (pre-Claude). Use <strong>Daily ingest</strong> once per morning for the full watchlist; <strong>Refresh live data</strong> (top bar) only updates regime + top picks.</p>
-      <div class="actions">
-        <button class="btn secondary" id="load-sp100">Load SP100 preset</button>
-        <button class="btn secondary" id="load-sp500">Load S&amp;P 500</button>
-        <button class="btn secondary" id="load-datacenter-us">Add Special Watch (DC US)</button>
-        <button class="btn secondary" id="run-daily-ingest">Daily ingest (incremental)</button>
-        <button class="btn secondary" id="run-full-ingest">Full ingest (all symbols)</button>
-        <button class="btn secondary" id="run-period-screener">Run 14d screener</button>
-        <button class="btn secondary" id="refresh-ranked">Refresh ranked</button>
-      </div>
-      <div class="card">
-        <div id="watchlist-stats" class="brief">Loading universe stats…</div>
-
-        <div class="card special-watch-panel" id="special-watch-panel">
-          <h3>Special Watch — US AI Data Centers</h3>
-          <p class="brief" style="margin:0 0 0.65rem">
-            Thematic buildout list (~96 tickers). Tags show Step 3 eligibility only — <strong>no ranking boost</strong>.
-            Target avg daily range band: ~2–4% (center 3%). Run ingest after adding names so metrics populate.
-          </p>
-          <div id="special-watch-stats" class="brief">Loading Special Watch status…</div>
-          <div class="screener-filters">
-            <label>Ticker <input type="text" id="special-watch-filter-ticker" placeholder="Filter…" /></label>
-            <label>Step 3 status
-              <select id="special-watch-filter-status">
+      <section class="view-section">
+        <header class="view-head"><h2>Ranked screener</h2><p class="brief">14-day rank · Step 3 matches · dollar hit rate</p></header>
+        <div class="actions actions-wrap">
+          <button class="btn secondary" id="load-sp100">SP100</button>
+          <button class="btn secondary" id="load-sp500">S&amp;P 500</button>
+          <button class="btn secondary" id="load-datacenter-us">DC US watch</button>
+          <button class="btn secondary" id="run-daily-ingest">Daily ingest</button>
+          <button class="btn secondary" id="run-full-ingest">Full ingest</button>
+          <button class="btn secondary" id="run-period-screener">Run screener</button>
+          <button class="btn secondary" id="refresh-ranked">Refresh ranked</button>
+        </div>
+        <div class="card">
+          <div id="watchlist-stats" class="brief">Loading…</div>
+          <div class="card special-watch-panel" id="special-watch-panel">
+            <h3>Special Watch — US AI Data Centers</h3>
+            <div id="special-watch-stats" class="brief">Loading…</div>
+            <div class="screener-filters">
+              <label>Ticker <input type="text" id="special-watch-filter-ticker" placeholder="Filter…" /></label>
+              <label>Step 3 <select id="special-watch-filter-status">
                 <option value="">All</option>
-                <option value="step3_pass">Step 3 pass</option>
+                <option value="step3_pass">Pass</option>
                 <option value="too_quiet">Too quiet</option>
                 <option value="too_wild">Too wild</option>
-                <option value="low_liquidity">Low liquidity</option>
-                <option value="missing_metrics">Missing metrics</option>
-              </select>
-            </label>
-            <label class="inline-check"><input type="checkbox" id="special-watch-active-only" /> Active watchlist only</label>
-            <span id="special-watch-row-count" class="brief"></span>
+                <option value="low_liquidity">Low liq</option>
+                <option value="missing_metrics">Missing</option>
+              </select></label>
+              <label class="inline-check"><input type="checkbox" id="special-watch-active-only" /> Active only</label>
+              <span id="special-watch-row-count" class="brief"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="sortable-table special-watch-table">
+                <thead><tr>
+                  <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
+                  <th data-sort="step3_status" class="sortable">Step 3</th>
+                  <th data-sort="avg_range_pct" class="sortable">Range</th>
+                  <th data-sort="adv_dollar_m" class="sortable">ADV</th>
+                  <th data-sort="in_active_watchlist" class="sortable">List</th>
+                </tr></thead>
+                <tbody id="special-watch-body"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+              </table>
+            </div>
           </div>
-          <table class="sortable-table special-watch-table" style="margin-top:0.65rem;width:100%">
-            <thead>
-              <tr>
-                <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
-                <th data-sort="step3_status" class="sortable">Step 3</th>
-                <th data-sort="avg_range_pct" class="sortable">Avg range</th>
-                <th data-sort="adv_dollar_m" class="sortable">ADV ($M)</th>
-                <th data-sort="in_active_watchlist" class="sortable">Watchlist</th>
-              </tr>
-            </thead>
-            <tbody id="special-watch-body">
-              <tr><td colspan="5" class="empty">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="screener-filters">
-          <label>Ticker <input type="text" id="screener-filter-ticker" placeholder="Filter…" /></label>
-          <label>Min hit % <input type="number" id="screener-min-hit" min="0" max="100" step="1" placeholder="0" style="width:70px" /></label>
-          <label>Min days <input type="number" id="screener-min-days" min="0" max="30" step="1" placeholder="0" style="width:70px" /></label>
-          <label class="inline-check"><input type="checkbox" id="screener-live-only" /> Live pass only</label>
-          <label>Period
-            <select id="screener-period-days">
-              <option value="7">7d</option>
-              <option value="14" selected>14d</option>
-              <option value="30">30d</option>
-            </select>
-          </label>
-          <span id="screener-row-count" class="brief"></span>
-        </div>
-        <table class="sortable-table" id="ranked-screener-table" style="margin-top:0.75rem;width:100%">
-          <thead>
-            <tr>
-              <th data-sort="score" class="sortable sorted-desc">Rank score</th>
-              <th data-sort="ticker" class="sortable">Ticker</th>
-              <th data-sort="avg_range_pct" class="sortable">Avg range</th>
-              <th data-sort="adv_dollar_m" class="sortable">ADV ($M)</th>
-              <th data-sort="days_screened" class="sortable">Days</th>
-              <th data-sort="simulated_targets" class="sortable">Targets</th>
-              <th data-sort="simulated_stops" class="sortable">Stops</th>
-              <th data-sort="hit_rate_pct" class="sortable">Hit rate</th>
-              <th data-sort="live_pass_today" class="sortable">Live</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="period-screener-body">
-            <tr><td colspan="10" class="empty">Run period screener after pulling history.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>Historical Analysis</h2>
-      <p class="brief" style="margin:0 0 0.75rem">Limited OHLCV history for prior-day screener replay and period evaluation.</p>
-      <div class="actions">
-        <button class="btn secondary" id="pull-historical">Pull history (60d)</button>
-        <button class="btn secondary" id="refresh-historical">Refresh view</button>
-      </div>
-      <div class="card" id="historical-panel">
-        <div id="historical-summary" class="brief">Loading…</div>
-        <div class="grid grid-4" id="historical-stats"></div>
-        <h3 style="margin:1rem 0 0.5rem">Prior day vs historical view</h3>
-        <div id="prior-day-eval" class="prior-screened-summary brief">Loading…</div>
-        <div class="prior-screened-toolbar" id="historical-prior-toolbar">
-          <input type="search" id="historical-prior-search" placeholder="Search ticker…" aria-label="Search ticker" />
-          <select id="historical-prior-outcome" aria-label="Filter by outcome">
-            <option value="">All outcomes</option>
-            <option value="target">Hit +1.5% target</option>
-            <option value="stop">Hit stop</option>
-            <option value="neither">No exit</option>
-          </select>
-          <span class="brief" id="historical-prior-count"></span>
-        </div>
-        <div class="table-wrap">
-          <table class="sortable-table prior-screened-table" style="margin-top:0;width:100%" id="prior-day-table-wrap">
-            <thead>
-              <tr>
-                <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
-                <th data-sort="predicted_avg_range_pct" class="sortable">Typical range</th>
-                <th data-sort="actual_range_pct" class="sortable">Day range</th>
-                <th data-sort="range_delta_pct" class="sortable">Δ vs typical</th>
-                <th data-sort="simulated_outcome" class="sortable">+1.5% sim</th>
-                <th data-sort="dollar_outcome" class="sortable">$ goal sim</th>
-              </tr>
-            </thead>
-            <tbody id="prior-day-table"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Daily &amp; Weekly Close</h2>
-      <p class="brief" style="margin:0 0 0.75rem">
-        Retrospective: which top-20 ranked names would have hit the Growth Plan goal from
-        <strong>open</strong> and <strong>10:00 ET</strong> entries. Compare journal vs ranked #1 vs best on list.
-      </p>
-      <div class="actions">
-        <label for="close-date" class="brief" style="margin-right:0.5rem">Date</label>
-        <input type="date" id="close-date" />
-        <button class="btn" id="load-daily-close">Daily Close</button>
-        <button class="btn secondary" id="load-weekly-close">Weekly Close</button>
-        <button class="btn secondary" id="refresh-close">Refresh</button>
-      </div>
-      <div class="card" id="close-panel">
-        <div id="close-highlights" class="brief">Select a date and load Daily or Weekly Close.</div>
-        <div id="close-summary" style="margin:0.75rem 0"></div>
-        <div class="close-tab-bar" id="close-tab-bar">
-          <button type="button" class="btn btn-sm close-tab active" data-tab="step3_pass">Step 3 pass</button>
-          <button type="button" class="btn btn-sm secondary close-tab" data-tab="full_top20">Full top 20</button>
-        </div>
-        <div class="table-wrap" style="margin-top:0.75rem">
-          <table class="data-table" id="close-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Ticker</th>
-                <th>Open → net@high</th>
-                <th>10:00 → net@high</th>
-                <th>Hit $?</th>
-                <th>Step 3</th>
-              </tr>
-            </thead>
-            <tbody id="close-table-body"></tbody>
-          </table>
-        </div>
-        <div id="close-journal" style="margin-top:1rem"></div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Learning Report</h2>
-      <div class="actions">
-        <label for="learning-date" class="brief" style="margin-right:0.5rem">Report date</label>
-        <input type="date" id="learning-date" />
-        <button class="btn" id="generate-learning">Generate report</button>
-      </div>
-      <div class="card" id="learning-panel">
-        <div id="learning-highlights" class="brief">Loading…</div>
-        <div id="continual-learning" class="brief" style="margin-bottom:0.75rem"></div>
-        <div id="learning-prior-screened" class="learning-prior-block" hidden>
-          <h3 style="margin:0 0 0.35rem">Prior day screened <span id="learning-prior-date" class="brief"></span></h3>
-          <p class="brief" id="learning-prior-summary" style="margin:0 0 0.5rem"></p>
-          <div class="prior-screened-toolbar">
-            <input type="search" id="learning-prior-search" placeholder="Search ticker…" aria-label="Search ticker" />
-            <select id="learning-prior-outcome" aria-label="Filter by outcome">
-              <option value="">All outcomes</option>
-              <option value="target">Hit +1.5% target</option>
-              <option value="stop">Hit stop</option>
-              <option value="neither">No exit</option>
-            </select>
-            <span class="brief" id="learning-prior-count"></span>
+          <div class="screener-filters">
+            <label>Ticker <input type="text" id="screener-filter-ticker" placeholder="Filter…" /></label>
+            <label>Min hit % <input type="number" id="screener-min-hit" min="0" max="100" style="width:70px" /></label>
+            <label>Min days <input type="number" id="screener-min-days" min="0" max="30" style="width:70px" /></label>
+            <label class="inline-check"><input type="checkbox" id="screener-live-only" /> Live only</label>
+            <label>Period <select id="screener-period-days">
+              <option value="7">7d</option><option value="14" selected>14d</option><option value="30">30d</option>
+            </select></label>
+            <span id="screener-row-count" class="brief"></span>
           </div>
           <div class="table-wrap">
-            <table class="sortable-table prior-screened-table learning-prior-table" style="width:100%">
-              <thead>
-                <tr>
-                  <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
-                  <th data-sort="predicted_avg_range_pct" class="sortable">Typical range</th>
-                  <th data-sort="actual_range_pct" class="sortable">Day range</th>
-                  <th data-sort="range_delta_pct" class="sortable">Δ vs typical</th>
-                  <th data-sort="simulated_outcome" class="sortable">+1.5% sim</th>
-                  <th data-sort="dollar_outcome" class="sortable">$ goal sim</th>
-                </tr>
-              </thead>
-              <tbody id="learning-prior-table"></tbody>
+            <table class="sortable-table" id="ranked-screener-table">
+              <thead><tr>
+                <th data-sort="score" class="sortable sorted-desc">Score</th>
+                <th data-sort="ticker" class="sortable">Ticker</th>
+                <th data-sort="avg_range_pct" class="sortable">Range</th>
+                <th data-sort="adv_dollar_m" class="sortable">ADV</th>
+                <th data-sort="days_screened" class="sortable">Days</th>
+                <th data-sort="simulated_targets" class="sortable">Tgt</th>
+                <th data-sort="simulated_stops" class="sortable">Stp</th>
+                <th data-sort="hit_rate_pct" class="sortable">Hit%</th>
+                <th data-sort="live_pass_today" class="sortable">Live</th><th></th>
+              </tr></thead>
+              <tbody id="period-screener-body"><tr><td colspan="10" class="empty">Run screener after ingest.</td></tr></tbody>
             </table>
           </div>
         </div>
-        <div class="learning-grid" id="learning-details"></div>
-      </div>
-    </section>
+      </section>
+    </div>
 
-    <section>
-      <h2>Trade Journal</h2>
-      <p class="brief" style="margin:0 0 0.75rem">
-        Log E*TRADE fills here. While in <strong>PAPER</strong> mode, all entries are practice data — switch to
-        <strong>LIVE</strong> only when you are ready for real-money tracking.
-      </p>
-      <div class="card journal-toolbar">
-        <div class="journal-mode-row">
-          <label for="trading-mode">Trading mode</label>
-          <select id="trading-mode">
-            <option value="paper">PAPER — test / practice journal</option>
-            <option value="live">LIVE — real E*TRADE fills</option>
-          </select>
-          <button class="btn secondary btn-sm" type="button" id="save-trading-mode">Save mode</button>
-          <span class="brief" id="trading-mode-status"></span>
+    <!-- ═══ REVIEW ═══ -->
+    <div id="view-review" class="app-view">
+      <section class="view-section">
+        <header class="view-head"><h2>Daily &amp; weekly close</h2><p class="brief">Which ranked names would have hit the Growth Plan goal?</p></header>
+        <div class="actions">
+          <label for="close-date" class="brief">Date</label>
+          <input type="date" id="close-date" />
+          <button class="btn" id="load-daily-close">Daily close</button>
+          <button class="btn secondary" id="load-weekly-close">Weekly</button>
+          <button class="btn secondary" id="refresh-close">Refresh</button>
         </div>
-        <button class="btn secondary btn-sm" type="button" id="clear-journal">Clear all journal entries</button>
-      </div>
-      <div class="card">
-        <form id="trade-form">
-          <div class="form-row">
-            <div>
-              <label for="t-ticker">Ticker</label>
-              <input id="t-ticker" required placeholder="AAPL" />
-            </div>
-            <div>
-              <label for="t-side">Side</label>
-              <select id="t-side">
-                <option value="BUY">BUY</option>
-                <option value="SELL">SELL</option>
+        <div class="card" id="close-panel">
+          <div id="close-highlights" class="brief">Load a daily close report.</div>
+          <div id="close-summary"></div>
+          <div class="close-tab-bar">
+            <button type="button" class="btn btn-sm close-tab active" data-tab="step3_pass">Step 3</button>
+            <button type="button" class="btn btn-sm secondary close-tab" data-tab="full_top20">Top 20</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="close-table">
+              <thead><tr><th>#</th><th>Ticker</th><th>Open→net</th><th>10:00→net</th><th>Hit?</th><th>S3</th></tr></thead>
+              <tbody id="close-table-body"></tbody>
+            </table>
+          </div>
+          <div id="close-journal" class="brief" style="margin-top:1rem"></div>
+        </div>
+      </section>
+
+      <section class="view-section">
+        <header class="view-head"><h2>Learning report</h2></header>
+        <div class="actions">
+          <label for="learning-date" class="brief">Date</label>
+          <input type="date" id="learning-date" />
+          <button class="btn" id="generate-learning">Generate</button>
+        </div>
+        <div class="card" id="learning-panel">
+          <div id="learning-highlights" class="brief">Loading…</div>
+          <div id="continual-learning" class="brief"></div>
+          <div id="learning-prior-screened" class="learning-prior-block" hidden>
+            <h3>Prior day screened <span id="learning-prior-date" class="brief"></span></h3>
+            <p class="brief" id="learning-prior-summary"></p>
+            <div class="prior-screened-toolbar">
+              <input type="search" id="learning-prior-search" placeholder="Search ticker…" />
+              <select id="learning-prior-outcome">
+                <option value="">All outcomes</option>
+                <option value="target">Target</option>
+                <option value="stop">Stop</option>
+                <option value="neither">No exit</option>
               </select>
+              <span id="learning-prior-count" class="brief"></span>
             </div>
-            <div>
-              <label for="t-shares">Shares</label>
-              <input id="t-shares" type="number" step="any" min="0.0001" required />
-            </div>
-            <div>
-              <label for="t-price">Price</label>
-              <input id="t-price" type="number" step="any" min="0.01" required />
-            </div>
-            <div>
-              <label for="t-fee">Fee ($)</label>
-              <input id="t-fee" type="number" step="0.01" min="0" placeholder="7" />
-            </div>
-            <div>
-              <label for="t-date">Trade date (Pacific)</label>
-              <input id="t-date" type="date" required />
-            </div>
-            <div>
-              <label for="t-time" id="t-time-label">Time of purchase (Pacific)</label>
-              <input id="t-time" type="time" step="1" required placeholder="From E*TRADE audit log" />
-            </div>
-            <div>
-              <label for="t-notes">Notes</label>
-              <input id="t-notes" placeholder="E*TRADE fill" />
+            <div class="table-wrap">
+              <table class="sortable-table prior-screened-table learning-prior-table">
+                <thead><tr>
+                  <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
+                  <th data-sort="predicted_avg_range_pct" class="sortable">Typical</th>
+                  <th data-sort="actual_range_pct" class="sortable">Actual</th>
+                  <th data-sort="range_delta_pct" class="sortable">Δ</th>
+                  <th data-sort="simulated_outcome" class="sortable">+1.5%</th>
+                  <th data-sort="dollar_outcome" class="sortable">$ goal</th>
+                </tr></thead>
+                <tbody id="learning-prior-table"></tbody>
+              </table>
             </div>
           </div>
-          <button class="btn" type="submit">Log trade</button>
-        </form>
+          <div class="learning-grid" id="learning-details"></div>
+        </div>
+      </section>
+
+      <section class="view-section">
+        <header class="view-head"><h2>Historical — prior day</h2></header>
+        <div class="actions">
+          <button class="btn secondary" id="pull-historical">Pull 60d history</button>
+          <button class="btn secondary" id="refresh-historical">Refresh</button>
+        </div>
+        <div class="card" id="historical-panel">
+          <div id="historical-summary" class="brief">Loading…</div>
+          <div class="grid grid-4" id="historical-stats"></div>
+          <div id="prior-day-eval" class="prior-screened-summary brief"></div>
+          <div class="prior-screened-toolbar">
+            <input type="search" id="historical-prior-search" placeholder="Search ticker…" />
+            <select id="historical-prior-outcome">
+              <option value="">All outcomes</option>
+              <option value="target">Target</option>
+              <option value="stop">Stop</option>
+              <option value="neither">No exit</option>
+            </select>
+            <span id="historical-prior-count" class="brief"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="sortable-table prior-screened-table" id="prior-day-table-wrap">
+              <thead><tr>
+                <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
+                <th data-sort="predicted_avg_range_pct" class="sortable">Typical</th>
+                <th data-sort="actual_range_pct" class="sortable">Actual</th>
+                <th data-sort="range_delta_pct" class="sortable">Δ</th>
+                <th data-sort="simulated_outcome" class="sortable">+1.5%</th>
+                <th data-sort="dollar_outcome" class="sortable">$ goal</th>
+              </tr></thead>
+              <tbody id="prior-day-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view-section">
+        <header class="view-head"><h2>CIO summary</h2></header>
+        <div class="card cio-panel" id="cio-panel">
+          <div class="cio-headline" id="cio-headline">Loading…</div>
+          <p class="brief" id="cio-narrative"></p>
+          <ul id="cio-actions" class="cio-actions"></ul>
+          <div class="grid grid-4" id="cio-subagents"></div>
+        </div>
+      </section>
+
+      <section class="view-section">
+        <header class="view-head"><h2>Market brief</h2></header>
+        <div class="card brief" id="market-brief">Loading…</div>
+      </section>
+    </div>
+
+    <!-- ═══ ACCOUNT ═══ -->
+    <div id="view-account" class="app-view">
+      <div class="grid grid-4 kpi-grid">
+        <div class="card kpi-card"><h2>$5M goal</h2><div class="metric" id="goal-pct">—</div>
+          <div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" id="goal-bar"></div></div>
+          <div class="progress-label" id="goal-label">—</div></div></div>
+        <div class="card kpi-card card-daily-target"><h2>Daily target</h2><div class="metric" id="daily-target">—</div>
+          <div class="progress-wrap"><div class="progress-bar"><div class="progress-fill daily-fill" id="daily-bar"></div></div>
+          <div class="progress-label" id="daily-progress-label">—</div></div>
+          <div class="progress-label brief" id="next-tier-label">—</div></div>
+        <div class="card kpi-card"><h2>Tradable cash</h2><div class="metric" id="tradable-cash">—</div>
+          <div class="progress-label brief">Basis <span id="original-basis">—</span></div></div>
+        <div class="card kpi-card"><h2>Month P&amp;L</h2><div class="metric" id="month-pnl">—</div>
+          <div class="progress-label brief"><span id="month-key">—</span> · fees <span id="total-fees">—</span></div></div>
       </div>
-      <div class="card" style="padding:0;overflow-x:auto;margin-top:0.75rem">
-        <table>
-          <thead>
-            <tr>
-              <th>Date (Pacific)</th>
-              <th>Time (Pacific)</th>
-              <th>Ticker</th>
-              <th>Side</th>
-              <th>Shares</th>
-              <th>Price</th>
-              <th>Fee</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody id="journal-body">
-            <tr><td colspan="8" class="empty">Loading journal…</td></tr>
-          </tbody>
-        </table>
+      <div class="grid grid-2">
+        <div class="card"><h2>Jars</h2><div class="metric small">Mgmt <span id="mgmt-jar">—</span></div>
+          <div class="metric small">Tax <span id="tax-jar">—</span></div></div>
+        <div class="card"><h2>Operating rules</h2><div class="strategy-rules brief" id="strategy-rules">Loading…</div></div>
       </div>
-    </section>
+      <section class="view-section">
+        <header class="view-head"><h2>Growth plan tiers</h2></header>
+        <div class="card">
+          <div id="growth-tier-summary" class="brief">Loading…</div>
+          <table class="growth-table"><thead><tr><th>Balance</th><th>Daily target</th><th>Status</th></tr></thead>
+          <tbody id="growth-plan-body"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody></table>
+        </div>
+      </section>
+      <section class="view-section">
+        <header class="view-head"><h2>$5M scenario</h2></header>
+        <div class="card" id="scenario-panel">
+          <div id="scenario-summary" class="brief"></div>
+          <div class="scenario-stats grid grid-4" id="scenario-stats"></div>
+          <div class="scenario-chart-wrap"><svg id="scenario-chart" viewBox="0 0 800 220"></svg></div>
+          <div class="scenario-legend" id="scenario-legend"></div>
+          <div class="table-wrap"><table><thead><tr><th>Month</th><th>Tradable</th><th>Goal%</th><th>P&amp;L</th><th>Sweep</th></tr></thead>
+          <tbody id="scenario-table"></tbody></table></div>
+        </div>
+      </section>
+      <section class="view-section">
+        <header class="view-head"><h2>Trade journal</h2></header>
+        <div class="card journal-toolbar">
+          <div class="journal-mode-row">
+            <label for="trading-mode">Mode</label>
+            <select id="trading-mode"><option value="paper">PAPER</option><option value="live">LIVE</option></select>
+            <button class="btn secondary btn-sm" type="button" id="save-trading-mode">Save</button>
+            <span class="brief" id="trading-mode-status"></span>
+          </div>
+          <button class="btn secondary btn-sm" type="button" id="clear-journal">Clear journal</button>
+        </div>
+        <div class="card">
+          <form id="trade-form"><div class="form-row">
+            <div><label for="t-ticker">Ticker</label><input id="t-ticker" required /></div>
+            <div><label for="t-side">Side</label><select id="t-side"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
+            <div><label for="t-shares">Shares</label><input id="t-shares" type="number" step="any" min="0.0001" required /></div>
+            <div><label for="t-price">Price</label><input id="t-price" type="number" step="any" min="0.01" required /></div>
+            <div><label for="t-fee">Fee</label><input id="t-fee" type="number" step="0.01" min="0" placeholder="7" /></div>
+            <div><label for="t-date">Date (PT)</label><input id="t-date" type="date" required /></div>
+            <div><label for="t-time" id="t-time-label">Time (PT)</label><input id="t-time" type="time" step="1" required /></div>
+            <div><label for="t-notes">Notes</label><input id="t-notes" placeholder="E*TRADE fill" /></div>
+          </div><button class="btn" type="submit">Log trade</button></form>
+        </div>
+        <div class="card table-card"><table><thead><tr>
+          <th>Date</th><th>Time</th><th>Ticker</th><th>Side</th><th>Shares</th><th>Price</th><th>Fee</th><th>Notes</th>
+        </tr></thead><tbody id="journal-body"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody></table></div>
+      </section>
+      <section class="view-section">
+        <header class="view-head"><h2>Month-end sweep</h2></header>
+        <div class="card">
+          <div id="sweep-preview">Loading…</div>
+          <div class="actions" style="margin-top:0.75rem">
+            <label>Tax rate <input type="number" id="tax-rate" min="0" max="100" style="width:70px" />%</label>
+            <button class="btn secondary btn-sm" id="save-tax">Save</button>
+            <button class="btn btn-sm" id="apply-sweep">Apply sweep</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ SETUP ═══ -->
+    <div id="view-setup" class="app-view">
+      <section class="view-section">
+        <header class="view-head"><h2>Data &amp; ingest</h2><p class="brief">Run on your Mac each morning. Full ingest after loading a new universe.</p></header>
+        <div class="actions actions-wrap">
+          <button class="btn secondary" id="setup-daily-ingest">Daily ingest</button>
+          <button class="btn secondary" id="setup-full-ingest">Full ingest</button>
+          <button class="btn secondary" id="setup-pull-historical">Pull 60d OHLCV</button>
+        </div>
+        <div class="card brief setup-hints">
+          <p><strong>Mac repair:</strong> <code>./scripts/repair_dashboard_mac.sh</code></p>
+          <p><strong>Mac ingest:</strong> <code>./scripts/run_ingest_mac.sh</code></p>
+          <p><strong>Backtest:</strong> <code>python3 scripts/run_backtest.py --daily-only --days 14</code></p>
+        </div>
+      </section>
+    </div>
+
   </main>
 
   <div class="toast" id="toast"></div>
@@ -733,44 +633,99 @@
       } else {
         initApiKeyBar();
       }
+      initAppNav();
       await refreshAll();
       initJournalForm();
     }
 
     function renderPickBlock(pick, td) {
-      if (!pick) return "<span class='empty'>No live pick — run ingest + ranked screener</span>";
+      if (!pick) return "<div class='pick-empty'>No live pick — run ingest and refresh ranked screener.</div>";
       const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
       const netGoal = pick.net_target ?? td.daily_target;
       const trad = pick.tradability || {};
-      const tradBadge = trad.verdict
-        ? `<div class="tradability-badge trad-${(trad.verdict || "").toLowerCase().replace("_", "-")}">${trad.verdict.replace("_", " ")}</div>`
-        : "";
-      const tradDetail = trad.detail
-        ? `<div class="tradability-detail brief">${trad.detail}</div>`
-        : "";
+      const tradClass = (trad.verdict || "unknown").toLowerCase().replace("_", "-");
       const rankedNote = td.ranked_first && pick.ticker !== td.ranked_first
-        ? `<div class="brief">Ranked #1 was ${td.ranked_first} — skipped (not tradable for $${fmt(netGoal)} today)</div>`
+        ? `<div class="pick-note warn">Ranked #1 was ${td.ranked_first} — skipped (not tradable for $${fmt(netGoal)})</div>`
+        : "";
+      const changeHtml = pick.intraday_change_pct != null
+        ? `<span class="pick-change ${pick.intraday_change_pct >= 0 ? "up" : "down"}">${fmtPctLive(pick.intraday_change_pct)} from open</span>`
         : "";
       return `
-        <div class="top-pick-ticker">${pick.ticker} <span class="brief">(${pick.source})</span></div>
-        ${tradBadge}${tradDetail}${rankedNote}
-        <div>Rank score <strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong>
-          · $150 hit <strong>${pick.dollar_hit_rate_pct ?? "—"}%</strong>
-          <span class="brief">(1.5% hit ${pick.hit_rate_pct ?? "—"}%)</span></div>
-        ${pick.expected_net_at_typical_high != null ? `<div class="brief">Typical day high → ~$${fmt(pick.expected_net_at_typical_high)} net
-          ${pick.historical_avg_net_at_high != null ? `(14d avg $${fmt(pick.historical_avg_net_at_high)} at high)` : ""}
-          · need $${fmt(netGoal)}</div>` : ""}
-        <div class="entry-highlight">Buy at <strong>$${fmt(entry)}</strong>
-          ${pick.intraday_change_pct != null ? " · <span class='brief'>" + fmtPctLive(pick.intraday_change_pct) + " from open</span>" : ""}
-          ${pick.quote_as_of ? "<br><span class='brief'>Quote as of " + fmtDateTimePT(pick.quote_as_of) + "</span>" : ""}</div>
-        <div>Shares <strong>${pick.recommended_shares ?? "—"}</strong>
-          · Notional <strong>$${fmt(pick.notional)}</strong></div>
-        <div>Stop −0.75% <strong>$${fmt(pick.stop_price)}</strong>
-          <span class="brief">(net ~$${fmt(pick.net_at_stop)})</span></div>
-        <div>Sell for <strong>$${fmt(netGoal)} net</strong> at <strong>$${fmt(pick.target_price)}</strong>
-          <span class="brief">(+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)})</span></div>
-        ${trad.max_net_at_day_high != null ? `<div class="brief">Day high so far → ~$${fmt(trad.max_net_at_day_high)} net from this entry</div>` : ""}
+        <div class="pick-symbol-row">
+          <span class="pick-symbol">${pick.ticker}</span>
+          <span class="pick-source brief">${pick.source || ""}</span>
+          ${trad.verdict ? `<span class="tradability-badge trad-${tradClass}">${trad.verdict.replace(/_/g, " ")}</span>` : ""}
+        </div>
+        ${rankedNote}
+        ${trad.detail ? `<div class="pick-tradability-detail">${trad.detail}</div>` : ""}
+        ${pick.thesis_summary ? `<div class="pick-why"><span class="pick-why-label">Why</span><p>${pick.thesis_summary}</p></div>` : ""}
+        <div class="pick-stats-row">
+          <div class="pick-stat"><span class="pick-stat-label">Rank score</span><strong>${pick.rank_score != null ? Number(pick.rank_score).toFixed(3) : "—"}</strong></div>
+          <div class="pick-stat"><span class="pick-stat-label">$ goal hit</span><strong>${pick.dollar_hit_rate_pct ?? "—"}%</strong></div>
+          <div class="pick-stat"><span class="pick-stat-label">1.5% hit</span><strong>${pick.hit_rate_pct ?? "—"}%</strong></div>
+        </div>
+        ${pick.expected_net_at_typical_high != null ? `
+        <div class="pick-forecast">
+          Typical high → <strong>$${fmt(pick.expected_net_at_typical_high)}</strong> net
+          ${pick.historical_avg_net_at_high != null ? `<span class="brief">(14d avg $${fmt(pick.historical_avg_net_at_high)})</span>` : ""}
+          · need <strong>$${fmt(netGoal)}</strong>
+        </div>` : ""}
+        <div class="pick-prices">
+          <div class="pick-price-row highlight">
+            <span>Buy at</span><strong class="pick-price">$${fmt(entry)}</strong>${changeHtml}
+          </div>
+          <div class="pick-price-row">
+            <span>${pick.recommended_shares ?? "—"} shares</span>
+            <span class="brief">$${fmt(pick.notional)} notional</span>
+          </div>
+          <div class="pick-price-row stop">
+            <span>Stop −0.75%</span><strong>$${fmt(pick.stop_price)}</strong>
+            <span class="brief">net ~$${fmt(pick.net_at_stop)}</span>
+          </div>
+          <div class="pick-price-row target">
+            <span>Sell for $${fmt(netGoal)} net</span><strong>$${fmt(pick.target_price)}</strong>
+            <span class="brief">+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · +$${fmt(pick.net_at_target)}</span>
+          </div>
+        </div>
+        ${trad.max_net_at_day_high != null ? `<div class="pick-day-high brief">Day high so far → ~$${fmt(trad.max_net_at_day_high)} net from this entry</div>` : ""}
+        ${pick.quote_as_of ? `<div class="pick-asof brief">Quote ${fmtDateTimePT(pick.quote_as_of)}</div>` : ""}
       `;
+    }
+
+    function updateStatusBar(td, summary) {
+      const verdictEl = document.getElementById("status-verdict-text");
+      const dailyEl = document.getElementById("status-daily-text");
+      const cashEl = document.getElementById("status-cash-text");
+      const goalEl = document.getElementById("status-goal-text");
+      if (td && verdictEl) {
+        verdictEl.textContent = (td.verdict || "—").replace("_", " ");
+        document.getElementById("status-verdict-chip")?.classList.toggle("status-go", td.verdict === "GO");
+        document.getElementById("status-verdict-chip")?.classList.toggle("status-nogo", td.verdict === "NO_GO");
+      }
+      if (summary && dailyEl) {
+        const todayNet = summary.today_realized_net ?? 0;
+        const target = summary.daily_target ?? 150;
+        dailyEl.textContent = `$${fmt(todayNet)} / $${fmt(target)}`;
+        if (cashEl) cashEl.textContent = "$" + fmt(summary.tradable_cash);
+        if (goalEl) goalEl.textContent = fmtPct(summary.goal_pct);
+      }
+    }
+
+    function initAppNav() {
+      const saved = localStorage.getItem("dashboard-view") || "trade";
+      document.querySelectorAll(".app-nav-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const view = btn.dataset.view;
+          localStorage.setItem("dashboard-view", view);
+          document.querySelectorAll(".app-nav-btn").forEach((b) => b.classList.toggle("active", b === btn));
+          document.querySelectorAll(".app-view").forEach((v) => {
+            v.classList.toggle("active", v.id === "view-" + view);
+          });
+        });
+      });
+      const btn = document.querySelector(`.app-nav-btn[data-view="${saved}"]`);
+      if (btn) btn.click();
+      else document.querySelector('.app-nav-btn[data-view="trade"]')?.click();
     }
 
     function renderTradeMath(pick, td) {
@@ -855,28 +810,29 @@
 
       const banner = document.getElementById("regime-banner");
       if (td.verdict === "NO_GO") {
-        banner.className = "banner block";
+        banner.className = "banner block app-banner-compact";
         banner.textContent = td.headline + " — " + (td.detail || "");
       } else if (td.verdict === "WAIT") {
-        banner.className = "banner wait";
+        banner.className = "banner wait app-banner-compact";
         banner.textContent = td.headline + " — " + (td.detail || "");
       } else if (td.verdict === "CAUTION") {
-        banner.className = "banner caution";
+        banner.className = "banner caution app-banner-compact";
         banner.textContent = td.headline + " — " + (td.detail || "");
       } else {
-        banner.className = "banner ok";
+        banner.className = "banner ok app-banner-compact";
         banner.textContent = td.headline + " — " + (td.detail || "");
       }
+      updateStatusBar(td, null);
     }
 
     function updateTradingModeBanner(mode) {
       const banner = document.getElementById("trading-mode-banner");
       if (mode === "live") {
-        banner.className = "banner live";
+        banner.className = "banner live app-banner-compact";
         banner.textContent =
           "LIVE TRADING — journal entries are treated as real E*TRADE fills. Only switch here when you are ready.";
       } else {
-        banner.className = "banner paper";
+        banner.className = "banner paper app-banner-compact";
         banner.textContent =
           "PAPER TRADING — journal entries are practice data for testing the dashboard and process. Not real money.";
       }
@@ -953,6 +909,7 @@
         : `No sweep this month (realized net $${fmt(sp.monthly_realized_net)} ≤ 0)`;
       if (s.sweep_already_applied) sweepHtml += " · <strong>Already applied</strong>";
       document.getElementById("sweep-preview").innerHTML = sweepHtml;
+      updateStatusBar(null, s);
     }
 
     const fmtPctLive = (n) => n == null ? "—" : (Number(n) >= 0 ? "+" : "") + Number(n).toFixed(2) + "%";
@@ -1882,6 +1839,15 @@
     });
 
     document.getElementById("refresh-all").addEventListener("click", () => refreshAll().catch((e) => toast(e.message)));
+    document.getElementById("setup-daily-ingest")?.addEventListener("click", () => {
+      document.getElementById("run-daily-ingest")?.click();
+    });
+    document.getElementById("setup-full-ingest")?.addEventListener("click", () => {
+      document.getElementById("run-full-ingest")?.click();
+    });
+    document.getElementById("setup-pull-historical")?.addEventListener("click", () => {
+      document.getElementById("pull-historical")?.click();
+    });
     document.getElementById("sync-queue").addEventListener("click", async () => {
       try {
         const r = await api("/api/queue/sync", { method: "POST" });
