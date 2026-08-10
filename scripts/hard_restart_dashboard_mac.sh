@@ -2,7 +2,7 @@
 # Hard restart dashboard, wait until healthy, open browser (Mac).
 # Usage: ./scripts/hard_restart_dashboard_mac.sh
 
-set -e
+set -u
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 LOG="$ROOT/data/dashboard.log"
@@ -10,6 +10,8 @@ PIDFILE="$ROOT/data/dashboard.pid"
 URL="http://127.0.0.1:8080"
 
 echo "=== Hard restart AI Investment Agent Dashboard ==="
+echo "Repo: $ROOT"
+echo ""
 
 mkdir -p "$ROOT/data"
 
@@ -43,9 +45,15 @@ if [[ ! -f "$ROOT/.env" ]]; then
   cp "$ROOT/.env.example" "$ROOT/.env"
 fi
 
-if ! python3 -c "import uvicorn, fastapi" 2>/dev/null; then
-  echo "Installing dependencies…"
-  pip3 install -r "$ROOT/requirements.txt"
+if ! python3 -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
+  echo "Installing dependencies (this may take a minute)…"
+  python3 -m pip install -r "$ROOT/requirements.txt" || pip3 install -r "$ROOT/requirements.txt"
+fi
+
+if ! PYTHONPATH="$ROOT/src" python3 -c "from investment_agent.dashboard.app import app" 2>/dev/null; then
+  echo ""
+  echo "ERROR: Dashboard failed to load. Run ./scripts/doctor_dashboard_mac.sh for details."
+  exit 1
 fi
 
 if [[ ! -f "$ROOT/data/agent.db" ]]; then
@@ -55,36 +63,53 @@ fi
 
 export PYTHONPATH="$ROOT/src"
 : > "$LOG"
-nohup python3 "$ROOT/scripts/run_dashboard.py" --port 8080 >> "$LOG" 2>&1 &
+echo "[$(date)] Starting run_dashboard.py on 127.0.0.1:8080" >> "$LOG"
+
+# Start server (background)
+nohup python3 "$ROOT/scripts/run_dashboard.py" --host 127.0.0.1 --port 8080 >> "$LOG" 2>&1 &
 echo $! > "$PIDFILE"
 PID=$(cat "$PIDFILE")
 echo "Starting dashboard (PID $PID)…"
 
-for i in $(seq 1 25); do
-  CODE=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 "$URL/api/config" 2>/dev/null || echo "000")
-  if [[ "$CODE" == "200" ]]; then
-    echo ""
-    echo "Dashboard UP: $URL"
-    if command -v open >/dev/null 2>&1; then
-      open "$URL"
-      echo "Opened in your default browser."
-    else
-      echo "Open this URL in your browser: $URL"
-    fi
-    echo "Log file: $LOG"
-    echo "Stop later: kill \$(cat $PIDFILE)"
-    exit 0
-  fi
+READY=0
+for i in $(seq 1 30); do
   if ! kill -0 "$PID" 2>/dev/null; then
     echo ""
     echo "ERROR: Dashboard process exited before becoming ready."
-    tail -40 "$LOG" || true
+    echo "--- Log ---"
+    tail -50 "$LOG" || true
+    echo ""
+    echo "Run: ./scripts/doctor_dashboard_mac.sh"
     exit 1
   fi
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 "$URL/api/config" 2>/dev/null || echo "000")
+  if [[ "$CODE" == "200" ]]; then
+    READY=1
+    break
+  fi
+  printf "."
   sleep 1
 done
-
 echo ""
-echo "ERROR: Dashboard not responding after 25s."
-tail -40 "$LOG" || true
-exit 1
+
+if [[ "$READY" != "1" ]]; then
+  echo "ERROR: Dashboard not responding after 30s (last HTTP $CODE)."
+  echo "--- Log ---"
+  tail -50 "$LOG" || true
+  echo ""
+  echo "Run: ./scripts/doctor_dashboard_mac.sh"
+  exit 1
+fi
+
+echo "Dashboard UP: $URL"
+if command -v open >/dev/null 2>&1; then
+  open "$URL"
+  echo "Opened in your default browser."
+else
+  echo "Open this URL manually: $URL"
+fi
+echo "Log: $LOG"
+echo "Stop: kill \$(cat $PIDFILE)"
+echo ""
+echo "If the browser still says 'can't be reached', wait 2s and refresh (Cmd+R)."
+exit 0
