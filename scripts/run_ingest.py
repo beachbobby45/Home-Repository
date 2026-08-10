@@ -62,7 +62,17 @@ def main() -> None:
         stale_hours=args.stale_hours,
     )
     print(json.dumps(summary, indent=2))
-    sys.exit(0 if summary.get("ok") else 1)
+    if summary.get("ok"):
+        sys.exit(0)
+    if summary.get("partial"):
+        print(
+            f"\nPartial success: {summary.get('bars_refreshed', 0)} bars, "
+            f"{summary.get('quotes_refreshed', 0)} quotes refreshed "
+            f"({summary.get('error_count', 0)} errors). Re-run --incremental to retry failures.",
+            file=sys.stderr,
+        )
+        sys.exit(0)
+    sys.exit(1)
 
 
 if __name__ == "__main__":

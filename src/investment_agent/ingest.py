@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -29,6 +30,14 @@ from investment_agent.regime import (
     evaluate_regime,
     index_quote_from_finnhub,
 )
+from investment_agent.screen_actions import (
+    ACTION_DAILY_INGEST,
+    ACTION_FULL_INGEST,
+    record_screen_action,
+)
+
+# Commit + GC every N symbols during large watchlist ingests (S&P 500 ~537 tickers).
+_BARS_BATCH_SIZE = 25
 
 # Regime indices + starter watchlist (expand in Phase 2 screener)
 DEFAULT_TICKERS = [
@@ -230,7 +239,9 @@ def _run_ingest_body(
             fh.close()
 
         # --- yfinance daily bars (Finnhub /stock/candle requires paid tier) ---
-        for symbol in symbols:
+        bars_pending_commit = 0
+        total_symbols = len(symbols)
+        for idx, symbol in enumerate(symbols, start=1):
             if incremental and not _needs_bars_refresh(
                 conn, symbol, stale_hours=stale_hours, force_symbols=force
             ):
@@ -283,6 +294,19 @@ def _run_ingest_body(
                 )
                 log_ingest(conn, "yfinance", "ok", symbol)
                 summary["bars_refreshed"] += 1
+                bars_pending_commit += 1
+                if bars_pending_commit >= _BARS_BATCH_SIZE:
+                    conn.commit()
+                    bars_pending_commit = 0
+                    gc.collect()
+                if idx % 50 == 0 or idx == total_symbols:
+                    print(
+                        f"  bars progress: {idx}/{total_symbols} "
+                        f"({summary['bars_refreshed']} refreshed, "
+                        f"{summary['bars_skipped']} skipped, "
+                        f"{len(summary['errors'])} errors)",
+                        flush=True,
+                    )
             except Exception as exc:
                 log_ingest(conn, "yfinance", "error", f"{symbol}: {exc}")
                 summary["errors"].append(f"bars {symbol}: {exc}")
@@ -322,12 +346,6 @@ def _run_ingest_body(
 
         conn.commit()
 
-        from investment_agent.screen_actions import (
-            ACTION_DAILY_INGEST,
-            ACTION_FULL_INGEST,
-            record_screen_action,
-        )
-
         action_id = ACTION_DAILY_INGEST if incremental else ACTION_FULL_INGEST
         record_screen_action(
             conn,
@@ -340,4 +358,8 @@ def _run_ingest_body(
 
     summary["error_count"] = len(summary["errors"])
     summary["ok"] = summary["error_count"] == 0
+    summary["partial"] = (
+        not summary["ok"]
+        and (summary["bars_refreshed"] > 0 or summary["quotes_refreshed"] > 0)
+    )
     return summary

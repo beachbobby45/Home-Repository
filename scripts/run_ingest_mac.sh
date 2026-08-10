@@ -21,6 +21,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# macOS default FD limit (~256) is too low for 500+ yfinance requests.
+ulimit -n 10240 2>/dev/null || ulimit -n 4096 2>/dev/null || true
+
+# Dedicated yfinance cache — avoids corrupt/default cache and "unable to open database file".
+export YFINANCE_CACHE_DIR="$ROOT/data/yfinance_cache"
+mkdir -p "$YFINANCE_CACHE_DIR"
+export YFINANCE_MIN_INTERVAL_SEC="${YFINANCE_MIN_INTERVAL_SEC:-0.2}"
+
+# Clear stale lock from a prior crashed ingest.
+rm -f "$ROOT/data/ingest.lock"
+
 if launchctl print "gui/$(id -u)/$PLIST_LABEL" &>/dev/null; then
   echo "Pausing background dashboard (database unlock for ingest)…"
   launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true

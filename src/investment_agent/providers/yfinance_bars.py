@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import gc
+import os
+import time
 from datetime import datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -10,6 +14,36 @@ import yfinance as yf
 
 REGIME_INDICES = ("SPY", "DIA", "QQQ")
 ET = ZoneInfo("America/New_York")
+
+_MIN_INTERVAL_SEC = float(os.environ.get("YFINANCE_MIN_INTERVAL_SEC", "0.15"))
+_MAX_RETRIES = int(os.environ.get("YFINANCE_MAX_RETRIES", "3"))
+_RETRY_BASE_SEC = float(os.environ.get("YFINANCE_RETRY_BASE_SEC", "1.0"))
+_last_fetch_at = 0.0
+_cache_configured = False
+
+
+def _configure_yfinance_cache() -> None:
+    global _cache_configured
+    if _cache_configured:
+        return
+    cache_dir = os.environ.get("YFINANCE_CACHE_DIR")
+    if cache_dir:
+        path = Path(cache_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        try:
+            yf.set_tz_cache_location(str(path))
+        except Exception:
+            pass
+    _cache_configured = True
+
+
+def _throttle() -> None:
+    global _last_fetch_at
+    now = time.monotonic()
+    wait = _MIN_INTERVAL_SEC - (now - _last_fetch_at)
+    if wait > 0:
+        time.sleep(wait)
+    _last_fetch_at = time.monotonic()
 
 
 def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -24,15 +58,42 @@ def _safe_float(val) -> float:
     return float(val) if val is not None and not pd.isna(val) else 0.0
 
 
-def get_daily_bars(symbol: str, lookback_days: int = 60) -> list[dict]:
-    """Fetch daily OHLCV bars for a US ticker/ETF."""
-    sym = symbol.upper()
-    period = f"{max(lookback_days, 5)}d"
-    df = yf.download(sym, period=period, progress=False, auto_adjust=False)
-    if df is None or df.empty:
-        raise ValueError(f"No daily bars returned for {sym}")
+def _fetch_history(
+    sym: str,
+    *,
+    period: str,
+    interval: str | None = None,
+) -> pd.DataFrame:
+    """Fetch OHLCV with retries; one Ticker at a time to limit open FDs."""
+    _configure_yfinance_cache()
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_RETRIES):
+        ticker = None
+        try:
+            _throttle()
+            ticker = yf.Ticker(sym)
+            if interval:
+                df = ticker.history(
+                    period=period, interval=interval, auto_adjust=False
+                )
+            else:
+                df = ticker.history(period=period, auto_adjust=False)
+            if df is None or df.empty:
+                raise ValueError(f"No bars returned for {sym}")
+            return _flatten_columns(df)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _MAX_RETRIES - 1:
+                time.sleep(_RETRY_BASE_SEC * (2**attempt))
+        finally:
+            if ticker is not None:
+                del ticker
+            gc.collect()
+    assert last_exc is not None
+    raise last_exc
 
-    df = _flatten_columns(df)
+
+def _rows_from_daily_df(df: pd.DataFrame, sym: str) -> list[dict]:
     required = {"Open", "High", "Low", "Close", "Volume"}
     if not required.issubset(set(df.columns)):
         raise ValueError(f"Unexpected yfinance columns for {sym}: {list(df.columns)}")
@@ -61,6 +122,14 @@ def get_daily_bars(symbol: str, lookback_days: int = 60) -> list[dict]:
     return rows
 
 
+def get_daily_bars(symbol: str, lookback_days: int = 60) -> list[dict]:
+    """Fetch daily OHLCV bars for a US ticker/ETF."""
+    sym = symbol.upper()
+    period = f"{max(lookback_days, 5)}d"
+    df = _fetch_history(sym, period=period)
+    return _rows_from_daily_df(df, sym)
+
+
 def get_intraday_bars(
     symbol: str,
     *,
@@ -74,11 +143,8 @@ def get_intraday_bars(
         period = f"{min(max(lookback_days, 1), 7)}d"
     else:
         period = f"{max(lookback_days, 5)}d"
-    df = yf.download(sym, period=period, interval=interval, progress=False, auto_adjust=False)
-    if df is None or df.empty:
-        raise ValueError(f"No intraday bars returned for {sym}")
+    df = _fetch_history(sym, period=period, interval=interval)
 
-    df = _flatten_columns(df)
     required = {"Open", "High", "Low", "Close", "Volume"}
     if not required.issubset(set(df.columns)):
         raise ValueError(f"Unexpected yfinance columns for {sym}: {list(df.columns)}")
