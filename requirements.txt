@@ -16,3 +16,6 @@ anthropic>=0.49.0
 
 # Testing
 pytest>=8.0.0
+
+# Docs / printable one-pagers
+fpdf2>=2.8.0
