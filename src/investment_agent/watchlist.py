@@ -102,6 +102,15 @@ def load_preset_into_watchlist(
     if replace:
         conn.execute("UPDATE watchlist SET active = 0")
     added = upsert_tickers(conn, tickers, source="preset", added_via=preset_name)
+    from investment_agent.screen_actions import PRESET_ACTIONS, record_screen_action
+
+    action_id = PRESET_ACTIONS.get(preset_name.lower().strip())
+    if action_id:
+        record_screen_action(
+            conn,
+            action_id,
+            detail=f"{len(tickers)} tickers loaded, {added} activated",
+        )
     return {
         "ok": True,
         "preset": preset_name,

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260809" />
+  <link rel="stylesheet" href="/static/style.css?v=20260810" />
 </head>
 <body>
   <header class="app-header">
@@ -171,14 +171,35 @@
 
       <section class="view-section">
         <header class="view-head"><h2>Ranked screener</h2><p class="brief">14-day rank · Step 3 matches · dollar hit rate</p></header>
-        <div class="actions actions-wrap">
-          <button class="btn secondary" id="load-sp100">SP100</button>
-          <button class="btn secondary" id="load-sp500">S&amp;P 500</button>
-          <button class="btn secondary" id="load-datacenter-us">DC US watch</button>
-          <button class="btn secondary" id="run-daily-ingest">Daily ingest</button>
-          <button class="btn secondary" id="run-full-ingest">Full ingest</button>
-          <button class="btn secondary" id="run-period-screener">Run screener</button>
-          <button class="btn secondary" id="refresh-ranked">Refresh ranked</button>
+        <div class="screener-actions-grid">
+          <div class="screener-action-item" data-action="sp100">
+            <button class="btn secondary" id="load-sp100">SP100</button>
+            <div class="screener-action-ts">Not run yet</div>
+          </div>
+          <div class="screener-action-item" data-action="sp500">
+            <button class="btn secondary" id="load-sp500">S&amp;P 500</button>
+            <div class="screener-action-ts">Not run yet</div>
+          </div>
+          <div class="screener-action-item" data-action="datacenter_us">
+            <button class="btn secondary" id="load-datacenter-us">DC US watch</button>
+            <div class="screener-action-ts">Not run yet</div>
+          </div>
+          <div class="screener-action-item" data-action="daily_ingest">
+            <button class="btn secondary" id="run-daily-ingest">Daily ingest</button>
+            <div class="screener-action-ts">Not run yet</div>
+          </div>
+          <div class="screener-action-item" data-action="full_ingest">
+            <button class="btn secondary" id="run-full-ingest">Full ingest</button>
+            <div class="screener-action-ts">Not run yet</div>
+          </div>
+          <div class="screener-action-item" data-action="period_screener">
+            <button class="btn secondary" id="run-period-screener">Run screener</button>
+            <div class="screener-action-ts">Not run yet</div>
+          </div>
+          <div class="screener-action-item" data-action="refresh_ranked">
+            <button class="btn secondary" id="refresh-ranked">Refresh ranked</button>
+            <div class="screener-action-ts">Not run yet</div>
+          </div>
         </div>
         <div class="card">
           <div id="watchlist-stats" class="brief">Loading…</div>
@@ -1030,6 +1051,33 @@
         + `Missing metrics: ${s.missing_metrics}`;
     }
 
+    function renderScreenActionTimes(actions) {
+      document.querySelectorAll(".screener-action-item[data-action]").forEach((item) => {
+        const id = item.dataset.action;
+        const info = actions[id];
+        const el = item.querySelector(".screener-action-ts");
+        if (!el) return;
+        el.classList.remove("inferred", "empty");
+        if (!info?.completed_at) {
+          el.textContent = "Not run yet";
+          el.classList.add("empty");
+          return;
+        }
+        let label = fmtDateTimePT(info.completed_at);
+        if (info.source === "inferred") {
+          label += " · estimated";
+          el.classList.add("inferred");
+        }
+        el.textContent = label;
+        el.title = info.detail || label;
+      });
+    }
+
+    async function loadScreenActionTimes() {
+      const data = await api("/api/screen/actions");
+      renderScreenActionTimes(data.actions || {});
+    }
+
     let screenerRows = [];
     let screenerSortKey = "score";
     let screenerSortAsc = false;
@@ -1285,6 +1333,7 @@
 
     async function loadRankedAndStats() {
       await loadWatchlistStats();
+      await loadScreenActionTimes();
       await loadSpecialWatch();
       await loadPeriodScreener();
     }
@@ -1648,9 +1697,20 @@
         toast(`Screener done: ${r.candidates?.length || 0} candidate(s)`);
         await loadPeriodScreener();
         await loadWatchlistStats();
+        await loadScreenActionTimes();
       } catch (e) { toast(e.message); }
     });
-    document.getElementById("refresh-ranked").addEventListener("click", () => loadRankedAndStats().catch((e) => toast(e.message)));
+    document.getElementById("refresh-ranked").addEventListener("click", async () => {
+      try {
+        await loadRankedAndStats();
+        await api("/api/screen/actions/record", {
+          method: "POST",
+          body: JSON.stringify({ action: "refresh_ranked" }),
+        });
+        await loadScreenActionTimes();
+        toast("Ranked list refreshed");
+      } catch (e) { toast(e.message); }
+    });
 
     ["special-watch-filter-ticker", "special-watch-filter-status"].forEach((id) => {
       document.getElementById(id).addEventListener("input", () => renderSpecialWatchTable());

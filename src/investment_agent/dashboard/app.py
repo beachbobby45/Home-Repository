@@ -90,6 +90,12 @@ from investment_agent.stock_team import (
     sync_queue_from_screener,
 )
 from investment_agent.ingest import run_ingest
+from investment_agent.screen_actions import (
+    ACTION_PERIOD_SCREENER,
+    ACTION_REFRESH_RANKED,
+    get_screen_action_status,
+    record_screen_action,
+)
 from investment_agent.trading_day import (
     build_trading_day_status,
     clear_pinned_pick,
@@ -195,6 +201,10 @@ class IngestRunBody(BaseModel):
     incremental: bool = False
     lookback_days: int = 60
     stale_hours: float = 20.0
+
+
+class ScreenActionRecordBody(BaseModel):
+    action: str = ACTION_REFRESH_RANKED
 
 
 def _db():
@@ -638,6 +648,26 @@ def api_watchlist_stats(conn=Depends(_db)) -> dict[str, Any]:
     return compute_universe_stats(conn)
 
 
+@app.get("/api/screen/actions")
+def api_screen_actions(conn=Depends(_db)) -> dict[str, Any]:
+    return {"actions": get_screen_action_status(conn)}
+
+
+@app.post("/api/screen/actions/record")
+def api_screen_action_record(
+    body: ScreenActionRecordBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    try:
+        record_screen_action(conn, body.action, detail="Dashboard refresh")
+        conn.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    status = get_screen_action_status(conn).get(body.action, {})
+    return {"ok": True, "action": status}
+
+
 @app.get("/api/watchlist/special-watch")
 def api_special_watch(
     conn=Depends(_db),
@@ -735,6 +765,11 @@ def api_screener_period(
     )
     if body.save:
         run_id = save_screener_run(conn, result)
+        record_screen_action(
+            conn,
+            ACTION_PERIOD_SCREENER,
+            detail=f"{len(result.get('candidates', []))} candidates · {body.period_days}d window",
+        )
         conn.commit()
         result["saved_run_id"] = run_id
     return result

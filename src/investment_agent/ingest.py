@@ -297,6 +297,22 @@ def run_ingest(
 
         conn.commit()
 
+        from investment_agent.screen_actions import (
+            ACTION_DAILY_INGEST,
+            ACTION_FULL_INGEST,
+            record_screen_action,
+        )
+
+        action_id = ACTION_DAILY_INGEST if incremental else ACTION_FULL_INGEST
+        record_screen_action(
+            conn,
+            action_id,
+            detail=(
+                f"{summary['quotes_refreshed']} quotes, {summary['bars_refreshed']} bars refreshed"
+            ),
+        )
+        conn.commit()
+
     summary["error_count"] = len(summary["errors"])
     summary["ok"] = summary["error_count"] == 0
     return summary
