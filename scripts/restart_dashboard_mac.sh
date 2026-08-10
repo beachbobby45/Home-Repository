@@ -1,10 +1,17 @@
 #!/bin/bash
 # Stop anything on port 8080 and start the dashboard fresh (Mac).
 # Usage: ./scripts/restart_dashboard_mac.sh
+#
+# For background start + auto-open browser, use:
+#   ./scripts/hard_restart_dashboard_mac.sh
 
 set -e
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
+
+if [[ "${1:-}" == "--open" ]]; then
+  exec "$ROOT/scripts/hard_restart_dashboard_mac.sh"
+fi
 
 echo "=== Restart AI Investment Agent Dashboard ==="
 
