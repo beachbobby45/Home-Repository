@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260810" />
+  <link rel="stylesheet" href="/static/style.css?v=20260810b" />
 </head>
 <body>
   <header class="app-header">
@@ -170,35 +170,48 @@
       </section>
 
       <section class="view-section">
-        <header class="view-head"><h2>Ranked screener</h2><p class="brief">14-day rank · Step 3 matches · dollar hit rate</p></header>
+        <header class="view-head">
+          <h2>Ranked screener</h2>
+          <p class="brief">14-day rank · Step 3 matches · dollar hit rate</p>
+        </header>
+        <details class="screener-workflow card" open>
+          <summary class="screener-workflow-summary">Daily routine — when to click each button</summary>
+          <div class="screener-workflow-body brief">
+            <p><strong>One-time setup:</strong> <em>S&amp;P 500</em> (or SP100) → <em>Full ingest</em> once (or <code>run_ingest_mac.sh</code> in Terminal) → <em>Run screener</em>.</p>
+            <p><strong>Each trading morning (before 10:00 AM ET):</strong> <em>Daily ingest</em> → <em>Run screener</em> → <strong>Trade</strong> tab → <em>Refresh live</em>.</p>
+            <p><strong>During the session:</strong> use <em>Refresh live</em> on the Trade tab for prices (not Full ingest). <em>Refresh ranked</em> only reloads the table from the database.</p>
+            <p><strong>After the close (optional):</strong> <em>Daily ingest</em> + <em>Run screener</em> for tomorrow&apos;s rank; Review tab for daily close.</p>
+            <p class="screener-workflow-note">Timestamps under each button show when that action last <strong>finished</strong> (Pacific time).</p>
+          </div>
+        </details>
         <div class="screener-actions-grid">
           <div class="screener-action-item" data-action="sp100">
             <button class="btn secondary" id="load-sp100">SP100</button>
-            <div class="screener-action-ts">Not run yet</div>
+            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
           </div>
           <div class="screener-action-item" data-action="sp500">
             <button class="btn secondary" id="load-sp500">S&amp;P 500</button>
-            <div class="screener-action-ts">Not run yet</div>
+            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
           </div>
           <div class="screener-action-item" data-action="datacenter_us">
             <button class="btn secondary" id="load-datacenter-us">DC US watch</button>
-            <div class="screener-action-ts">Not run yet</div>
+            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
           </div>
           <div class="screener-action-item" data-action="daily_ingest">
             <button class="btn secondary" id="run-daily-ingest">Daily ingest</button>
-            <div class="screener-action-ts">Not run yet</div>
+            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
           </div>
           <div class="screener-action-item" data-action="full_ingest">
             <button class="btn secondary" id="run-full-ingest">Full ingest</button>
-            <div class="screener-action-ts">Not run yet</div>
+            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
           </div>
           <div class="screener-action-item" data-action="period_screener">
             <button class="btn secondary" id="run-period-screener">Run screener</button>
-            <div class="screener-action-ts">Not run yet</div>
+            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
           </div>
           <div class="screener-action-item" data-action="refresh_ranked">
             <button class="btn secondary" id="refresh-ranked">Refresh ranked</button>
-            <div class="screener-action-ts">Not run yet</div>
+            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
           </div>
         </div>
         <div class="card">
@@ -1059,16 +1072,16 @@
         if (!el) return;
         el.classList.remove("inferred", "empty");
         if (!info?.completed_at) {
-          el.textContent = "Not run yet";
+          el.innerHTML = '<span class="ts-label">Last:</span> Not run yet';
           el.classList.add("empty");
           return;
         }
         let label = fmtDateTimePT(info.completed_at);
         if (info.source === "inferred") {
-          label += " · estimated";
+          label += " · est.";
           el.classList.add("inferred");
         }
-        el.textContent = label;
+        el.innerHTML = `<span class="ts-label">Last:</span> ${label}`;
         el.title = info.detail || label;
       });
     }

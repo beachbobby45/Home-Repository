@@ -1,8 +1,4 @@
 {
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": "."
-  },
   "start": "./scripts/start_dashboard_cloud.sh",
   "terminals": [
     {
