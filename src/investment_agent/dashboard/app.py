@@ -56,7 +56,7 @@ from investment_agent.period_screener import (
     save_screener_run,
     date_range_for_period,
 )
-from investment_agent.db import connect, init_db
+from investment_agent.db import connect, init_db, get_active_watchlist
 from investment_agent.journal import (
     clear_all_trades,
     insert_trade,
@@ -205,6 +205,10 @@ class IngestRunBody(BaseModel):
 
 class ScreenActionRecordBody(BaseModel):
     action: str = ACTION_REFRESH_RANKED
+
+
+# Browser ingest is unreliable with large watchlists (DB lock, Finnhub rate limits, timeouts).
+BROWSER_INGEST_MAX_TICKERS = 150
 
 
 def _db():
@@ -699,6 +703,22 @@ def api_load_preset(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@app.get("/api/ingest/preflight")
+def api_ingest_preflight(conn=Depends(_db)) -> dict[str, Any]:
+    symbols = get_active_watchlist(conn)
+    settings = Settings.from_env()
+    missing_keys = not (settings.fred_api_key and settings.finnhub_api_key)
+    count = len(symbols)
+    return {
+        "ticker_count": count,
+        "missing_api_keys": missing_keys,
+        "browser_ok": count <= BROWSER_INGEST_MAX_TICKERS and not missing_keys,
+        "recommend_terminal": count > BROWSER_INGEST_MAX_TICKERS,
+        "terminal_command": "./scripts/run_ingest_mac.sh --incremental",
+        "terminal_command_full": "./scripts/run_ingest_mac.sh",
+    }
+
+
 @app.post("/api/ingest/run")
 def api_ingest_run(
     body: IngestRunBody | None = None,
@@ -708,15 +728,43 @@ def api_ingest_run(
     if not settings.fred_api_key or not settings.finnhub_api_key:
         raise HTTPException(
             status_code=503,
-            detail="FRED_API_KEY and FINNHUB_API_KEY required in .env",
+            detail="FRED_API_KEY and FINNHUB_API_KEY required in .env — restart dashboard after editing .env",
         )
     opts = body or IngestRunBody()
-    return run_ingest(
-        settings,
-        incremental=opts.incremental,
-        lookback_days=opts.lookback_days,
-        stale_hours=opts.stale_hours,
-    )
+    try:
+        check_conn = connect(init_db())
+        try:
+            ticker_count = len(get_active_watchlist(check_conn))
+        finally:
+            check_conn.close()
+        if ticker_count > BROWSER_INGEST_MAX_TICKERS:
+            mode = " --incremental" if opts.incremental else ""
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"Watchlist has {ticker_count} tickers — browser ingest supports up to "
+                    f"{BROWSER_INGEST_MAX_TICKERS}. In Terminal run: "
+                    f"cd ~/Home-Repository && ./scripts/run_ingest_mac.sh{mode}"
+                ),
+            )
+        return run_ingest(
+            settings,
+            incremental=opts.incremental,
+            lookback_days=opts.lookback_days,
+            stale_hours=opts.stale_hours,
+        )
+    except HTTPException:
+        raise
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Database is locked — use Terminal instead (pauses background service): "
+                "./scripts/run_ingest_mac.sh --incremental"
+            ),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Ingest failed: {exc}") from exc
 
 
 @app.post("/api/watchlist/import")

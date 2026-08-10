@@ -1679,7 +1679,27 @@
     });
     async function runIngest(incremental) {
       const label = incremental ? "Daily incremental ingest" : "Full ingest";
-      toast(`${label} started — this may take several minutes for large universes…`);
+      let pf;
+      try {
+        pf = await api("/api/ingest/preflight");
+      } catch (e) {
+        toast(e.message, 8000);
+        return;
+      }
+      if (pf.missing_api_keys) {
+        toast("Add FRED_API_KEY and FINNHUB_API_KEY to .env, then restart the dashboard.", 9000);
+        return;
+      }
+      if (pf.recommend_terminal) {
+        const cmd = incremental ? pf.terminal_command : pf.terminal_command_full;
+        toast(
+          `Watchlist has ${pf.ticker_count} tickers — browser ingest would fail. `
+          + `Use Terminal: ${cmd}`,
+          12000,
+        );
+        return;
+      }
+      toast(`${label} started — this may take several minutes…`);
       const r = await api("/api/ingest/run", {
         method: "POST",
         body: JSON.stringify({ incremental, lookback_days: 60, stale_hours: 20 }),

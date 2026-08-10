@@ -8,6 +8,7 @@ from pathlib import Path
 
 from investment_agent.config import Settings
 from investment_agent.db import (
+    connect,
     get_active_watchlist,
     init_db,
     insert_macro,
@@ -118,9 +119,8 @@ def run_ingest(
     if tickers is not None:
         symbols = [t.upper() for t in tickers]
     else:
-        with sqlite3.connect(path) as raw:
-            raw.row_factory = sqlite3.Row
-            symbols = get_active_watchlist(raw)
+        with connect(path) as conn:
+            symbols = get_active_watchlist(conn)
         if not symbols:
             symbols = [t.upper() for t in DEFAULT_TICKERS]
     summary: dict = {
@@ -136,9 +136,7 @@ def run_ingest(
     index_quotes: dict = {}
     force = set(REGIME_SYMBOLS)
 
-    with sqlite3.connect(path) as raw:
-        conn = raw
-        conn.row_factory = sqlite3.Row
+    with connect(path) as conn:
         upsert_watchlist(conn, symbols)
 
         # --- FRED macro ---
