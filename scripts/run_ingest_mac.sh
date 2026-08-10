@@ -34,6 +34,13 @@ if command -v lsof >/dev/null 2>&1; then
   sleep 1
 fi
 
+PIDFILE="$ROOT/data/dashboard.pid"
+if [[ -f "$PIDFILE" ]]; then
+  DPID=$(cat "$PIDFILE" 2>/dev/null || true)
+  [[ -n "$DPID" ]] && kill "$DPID" 2>/dev/null || true
+  rm -f "$PIDFILE"
+fi
+
 echo "Starting ingest…"
 export PYTHONPATH="$ROOT/src"
 python3 "$ROOT/scripts/run_ingest.py" "$@"

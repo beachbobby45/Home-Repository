@@ -178,7 +178,7 @@
           <summary class="screener-workflow-summary">Daily routine — when to click each button</summary>
           <div class="screener-workflow-body brief">
             <p><strong>One-time setup:</strong> <em>S&amp;P 500</em> (or SP100) → <em>Full ingest</em> once (or <code>run_ingest_mac.sh</code> in Terminal) → <em>Run screener</em>.</p>
-            <p><strong>Each trading morning (before 10:00 AM ET):</strong> <em>Daily ingest</em> → <em>Run screener</em> → <strong>Trade</strong> tab → <em>Refresh live</em>.</p>
+            <p><strong>Each trading morning (before 10:00 AM ET):</strong> <em>Daily ingest</em> (Terminal if S&amp;P 500 loaded) → <em>Run screener</em> → <strong>Trade</strong> tab → <em>Refresh live</em>.</p>
             <p><strong>During the session:</strong> use <em>Refresh live</em> on the Trade tab for prices (not Full ingest). <em>Refresh ranked</em> only reloads the table from the database.</p>
             <p><strong>After the close (optional):</strong> <em>Daily ingest</em> + <em>Run screener</em> for tomorrow&apos;s rank; Review tab for daily close.</p>
             <p class="screener-workflow-note">Timestamps under each button show when that action last <strong>finished</strong> (Pacific time).</p>
@@ -1686,6 +1686,10 @@
         toast(e.message, 8000);
         return;
       }
+      if (pf.ingest_running) {
+        toast(pf.message || "Ingest running in Terminal — wait for it to finish.", 10000);
+        return;
+      }
       if (pf.missing_api_keys) {
         toast("Add FRED_API_KEY and FINNHUB_API_KEY to .env, then restart the dashboard.", 9000);
         return;
@@ -1886,8 +1890,10 @@
         } else {
           toast(`Live data updated (${(r.refresh.updated || []).length} symbols)`);
         }
-        await loadTradingDay();
-        await loadSummary();
+        if (r.status) {
+          await loadTradingDay();
+          await loadSummary();
+        }
         // Re-fill planned price from fresh live entry unless user edited fields
         document.getElementById("plan-ticker")?.removeAttribute("data-user-edited");
         document.getElementById("plan-price")?.removeAttribute("data-user-edited");

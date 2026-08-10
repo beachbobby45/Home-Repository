@@ -33,17 +33,13 @@ fi
 echo "Applying database schema + migrations…"
 export PYTHONPATH="$ROOT/src"
 python3 - <<'PY'
-from investment_agent.db import init_db, connect
-from investment_agent.watchlist import load_preset_into_watchlist, compute_universe_stats
+from investment_agent.db_maintenance import repair_database
+from investment_agent.watchlist import compute_universe_stats
+from investment_agent.db import connect, init_db
 
-path = init_db()
-conn = connect(path)
-cols = {r[1] for r in conn.execute("PRAGMA table_info(watchlist)")}
-print("watchlist columns:", sorted(cols))
-if "source" not in cols or "added_via" not in cols:
-    raise SystemExit("Migration failed — missing watchlist columns")
-load_preset_into_watchlist(conn, "starter10")
-conn.commit()
+result = repair_database()
+print("repair:", result)
+conn = connect(init_db())
 stats = compute_universe_stats(conn)
 conn.close()
 print("stats:", stats)

@@ -57,6 +57,12 @@ from investment_agent.period_screener import (
     date_range_for_period,
 )
 from investment_agent.db import connect, init_db, get_active_watchlist
+from investment_agent.db_maintenance import (
+    assert_db_available_for_writes,
+    ingest_lock_active,
+    ingest_lock_message,
+    repair_database,
+)
 from investment_agent.journal import (
     clear_all_trades,
     insert_trade,
@@ -424,17 +430,47 @@ def api_trading_day_status(conn=Depends(_db)) -> dict[str, Any]:
     return build_trading_day_status(conn)
 
 
+@app.get("/api/health/db")
+def api_health_db(conn=Depends(_db)) -> dict[str, Any]:
+    try:
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        return {
+            "ok": integrity == "ok",
+            "integrity": integrity,
+            "ingest_running": ingest_lock_active(),
+        }
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
 @app.post("/api/trading-day/refresh")
 def api_trading_day_refresh(
     conn=Depends(_db),
     _: None = Depends(_require_api_key),
 ) -> dict[str, Any]:
+    if ingest_lock_active():
+        raise HTTPException(status_code=503, detail=ingest_lock_message())
     settings = Settings.from_env()
-    refresh = refresh_live_quotes(conn, settings)
-    if refresh.get("ok"):
-        conn.commit()
-    status = build_trading_day_status(conn)
-    return {"refresh": refresh, "status": status}
+    try:
+        refresh = refresh_live_quotes(conn, settings)
+        if refresh.get("ok"):
+            conn.commit()
+        status = build_trading_day_status(conn)
+        return {"refresh": refresh, "status": status}
+    except sqlite3.OperationalError as exc:
+        conn.rollback()
+        msg = str(exc).lower()
+        if "locked" in msg:
+            detail = (
+                "Database is locked — stop Terminal ingest or close duplicate dashboard "
+                "windows, then run ./scripts/repair_dashboard_mac.sh"
+            )
+        else:
+            detail = f"Database error: {exc} — run ./scripts/repair_dashboard_mac.sh"
+        raise HTTPException(status_code=503, detail=detail) from exc
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Refresh live failed: {exc}") from exc
 
 
 @app.post("/api/trading-day/validate")
@@ -705,6 +741,17 @@ def api_load_preset(
 
 @app.get("/api/ingest/preflight")
 def api_ingest_preflight(conn=Depends(_db)) -> dict[str, Any]:
+    if ingest_lock_active():
+        return {
+            "ticker_count": len(get_active_watchlist(conn)),
+            "missing_api_keys": False,
+            "browser_ok": False,
+            "recommend_terminal": True,
+            "ingest_running": True,
+            "message": ingest_lock_message(),
+            "terminal_command": "./scripts/run_ingest_mac.sh --incremental",
+            "terminal_command_full": "./scripts/run_ingest_mac.sh",
+        }
     symbols = get_active_watchlist(conn)
     settings = Settings.from_env()
     missing_keys = not (settings.fred_api_key and settings.finnhub_api_key)
@@ -714,6 +761,7 @@ def api_ingest_preflight(conn=Depends(_db)) -> dict[str, Any]:
         "missing_api_keys": missing_keys,
         "browser_ok": count <= BROWSER_INGEST_MAX_TICKERS and not missing_keys,
         "recommend_terminal": count > BROWSER_INGEST_MAX_TICKERS,
+        "ingest_running": False,
         "terminal_command": "./scripts/run_ingest_mac.sh --incremental",
         "terminal_command_full": "./scripts/run_ingest_mac.sh",
     }
@@ -731,7 +779,10 @@ def api_ingest_run(
             detail="FRED_API_KEY and FINNHUB_API_KEY required in .env — restart dashboard after editing .env",
         )
     opts = body or IngestRunBody()
+    if ingest_lock_active():
+        raise HTTPException(status_code=503, detail=ingest_lock_message())
     try:
+        assert_db_available_for_writes()
         check_conn = connect(init_db())
         try:
             ticker_count = len(get_active_watchlist(check_conn))

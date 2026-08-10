@@ -115,6 +115,33 @@ def run_ingest(
     stale_hours: float = 20.0,
 ) -> dict:
     """Fetch macro + quotes + daily bars; compute liquidity/range metrics + regime."""
+    from investment_agent.db_maintenance import acquire_ingest_lock, release_ingest_lock
+
+    acquire_ingest_lock(detail="run_ingest")
+    try:
+        return _run_ingest_body(
+            settings,
+            tickers=tickers,
+            db_path=db_path,
+            lookback_days=lookback_days,
+            tradable_cash=tradable_cash,
+            incremental=incremental,
+            stale_hours=stale_hours,
+        )
+    finally:
+        release_ingest_lock()
+
+
+def _run_ingest_body(
+    settings: Settings,
+    tickers: list[str] | None = None,
+    db_path: Path | None = None,
+    lookback_days: int = 60,
+    tradable_cash: float = ORIGINAL_BASIS,
+    incremental: bool = False,
+    stale_hours: float = 20.0,
+) -> dict:
+    """Internal ingest implementation."""
     path = init_db(db_path)
     if tickers is not None:
         symbols = [t.upper() for t in tickers]
