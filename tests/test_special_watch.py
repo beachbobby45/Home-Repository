@@ -34,7 +34,46 @@ def test_datacenter_us_preset_loads():
     assert len(tickers) >= 90
     assert "VRT" in tickers
     assert "ACM" in tickers
+    assert "ASML" in tickers
+    assert "NBIS" in tickers
+    assert "DRAM" in tickers
     assert len(tickers) == len(set(tickers))
+
+
+def test_add_special_watch_ticker_manual_extra():
+    from investment_agent.watchlist import (
+        add_special_watch_ticker,
+        get_special_watch_extras,
+        merge_special_watch_tickers,
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "sw2.db"
+        init_db(path)
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+
+        result = add_special_watch_ticker(conn, "datacenter_us", "TESTX")
+        conn.commit()
+        assert result["ok"] is True
+        assert result["added_to_extras"] is True
+        assert get_special_watch_extras(conn, "datacenter_us") == ["TESTX"]
+
+        merged = merge_special_watch_tickers("datacenter_us", ["TESTX"])
+        assert "TESTX" in merged
+        assert "VRT" in merged
+
+        # Preset ticker does not duplicate in extras
+        result2 = add_special_watch_ticker(conn, "datacenter_us", "VRT")
+        conn.commit()
+        assert result2["already_in_preset"] is True
+        assert get_special_watch_extras(conn, "datacenter_us") == ["TESTX"]
+
+        report = build_special_watch_report(conn, "datacenter_us")
+        by_ticker = {r["ticker"]: r for r in report["tickers"]}
+        assert "TESTX" in by_ticker
+        assert by_ticker["TESTX"]["step3_status"] == MISSING_METRICS
+        conn.close()
 
 
 def test_build_special_watch_report_counts():

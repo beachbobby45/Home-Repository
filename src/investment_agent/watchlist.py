@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from investment_agent.account import set_setting
 from investment_agent.db import get_active_watchlist
 from investment_agent.ingest import DEFAULT_TICKERS
 from investment_agent.liquidity import SWING_TARGET_PCT
@@ -27,6 +30,9 @@ PRESETS: dict[str, str] = {
     "sp500": "S&P 500 full index (~500 tickers + regime ETFs)",
     "datacenter_us": "US AI data center buildout & maintenance (~96 tickers)",
 }
+
+SPECIAL_WATCH_EXTRAS_PREFIX = "special_watch_extras:"
+_TICKER_RE = re.compile(r"^[A-Z]{1,6}$")
 
 
 @dataclass(frozen=True)
@@ -78,6 +84,85 @@ def load_preset_tickers(preset_name: str) -> list[str]:
         return [t.upper() for t in DEFAULT_TICKERS]
     path = UNIVERSE_DIR / f"{name}.txt"
     return load_tickers_from_file(path)
+
+
+def _special_watch_extras_key(preset_name: str) -> str:
+    return f"{SPECIAL_WATCH_EXTRAS_PREFIX}{preset_name.lower().strip()}"
+
+
+def get_special_watch_extras(conn: sqlite3.Connection, preset_name: str) -> list[str]:
+    """Manually added tickers for a Special Watch preset (stored in app_settings)."""
+    key = _special_watch_extras_key(preset_name)
+    row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+    if not row:
+        return []
+    try:
+        data = json.loads(row["value"])
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in data:
+        t = str(item).strip().upper()
+        if t and t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def _save_special_watch_extras(
+    conn: sqlite3.Connection, preset_name: str, tickers: list[str]
+) -> None:
+    set_setting(conn, _special_watch_extras_key(preset_name), json.dumps(tickers))
+
+
+def merge_special_watch_tickers(preset_name: str, extras: list[str]) -> list[str]:
+    """Preset file tickers plus manual extras (deduped, preset order first)."""
+    base = load_preset_tickers(preset_name)
+    seen = set(base)
+    out = list(base)
+    for ticker in extras:
+        t = ticker.upper()
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def add_special_watch_ticker(
+    conn: sqlite3.Connection,
+    preset_name: str,
+    ticker: str,
+) -> dict:
+    """Add a ticker to Special Watch and the active watchlist (metrics on next ingest)."""
+    name = preset_name.lower().strip()
+    if name not in PRESETS:
+        known = ", ".join(sorted(PRESETS))
+        raise ValueError(f"Unknown preset {preset_name!r}. Choose one of: {known}")
+
+    t = ticker.strip().upper()
+    if not t or not _TICKER_RE.match(t):
+        raise ValueError(f"Invalid ticker symbol {ticker!r} — use 1–6 letters (e.g. NBIS)")
+
+    preset_tickers = set(load_preset_tickers(name))
+    extras = get_special_watch_extras(conn, name)
+    added_to_extras = False
+    if t not in preset_tickers and t not in extras:
+        extras.append(t)
+        _save_special_watch_extras(conn, name, extras)
+        added_to_extras = True
+
+    upsert_tickers(conn, [t], source="special_watch", added_via=f"{name}_manual")
+    return {
+        "ok": True,
+        "preset": name,
+        "ticker": t,
+        "added_to_extras": added_to_extras,
+        "already_in_preset": t in preset_tickers,
+        "tickers_activated": 1,
+    }
 
 
 def get_active_watchlist_details(conn: sqlite3.Connection) -> list[dict]:
@@ -228,7 +313,8 @@ def build_special_watch_report(
 ) -> dict:
     """Status for every ticker in a thematic preset — Step 3 pass / too quiet / too wild / etc."""
     name = preset_name.lower().strip()
-    tickers = load_preset_tickers(name)
+    extras = get_special_watch_extras(conn, name)
+    tickers = merge_special_watch_tickers(name, extras)
     active = set(get_active_watchlist(conn))
     metrics = _latest_metrics_by_ticker(conn)
 
@@ -282,6 +368,8 @@ def build_special_watch_report(
         "preset": name,
         "description": PRESETS.get(name, name),
         "ticker_count": len(tickers),
+        "preset_ticker_count": len(load_preset_tickers(name)),
+        "manual_ticker_count": len(extras),
         "with_metrics": with_metrics,
         "missing_metrics": len(tickers) - with_metrics,
         "step3_pass": counts.get("step3_pass", 0),

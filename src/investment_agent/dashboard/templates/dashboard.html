@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260810b" />
+  <link rel="stylesheet" href="/static/style.css?v=20260810c" />
 </head>
 <body>
   <header class="app-header">
@@ -216,35 +216,6 @@
         </div>
         <div class="card">
           <div id="watchlist-stats" class="brief">Loading…</div>
-          <div class="card special-watch-panel" id="special-watch-panel">
-            <h3>Special Watch — US AI Data Centers</h3>
-            <div id="special-watch-stats" class="brief">Loading…</div>
-            <div class="screener-filters">
-              <label>Ticker <input type="text" id="special-watch-filter-ticker" placeholder="Filter…" /></label>
-              <label>Step 3 <select id="special-watch-filter-status">
-                <option value="">All</option>
-                <option value="step3_pass">Pass</option>
-                <option value="too_quiet">Too quiet</option>
-                <option value="too_wild">Too wild</option>
-                <option value="low_liquidity">Low liq</option>
-                <option value="missing_metrics">Missing</option>
-              </select></label>
-              <label class="inline-check"><input type="checkbox" id="special-watch-active-only" /> Active only</label>
-              <span id="special-watch-row-count" class="brief"></span>
-            </div>
-            <div class="table-wrap">
-              <table class="sortable-table special-watch-table">
-                <thead><tr>
-                  <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
-                  <th data-sort="step3_status" class="sortable">Step 3</th>
-                  <th data-sort="avg_range_pct" class="sortable">Range</th>
-                  <th data-sort="adv_dollar_m" class="sortable">ADV</th>
-                  <th data-sort="in_active_watchlist" class="sortable">List</th>
-                </tr></thead>
-                <tbody id="special-watch-body"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-              </table>
-            </div>
-          </div>
           <div class="screener-filters">
             <label>Ticker <input type="text" id="screener-filter-ticker" placeholder="Filter…" /></label>
             <label>Min hit % <input type="number" id="screener-min-hit" min="0" max="100" style="width:70px" /></label>
@@ -270,6 +241,42 @@
               </tr></thead>
               <tbody id="period-screener-body"><tr><td colspan="10" class="empty">Run screener after ingest.</td></tr></tbody>
             </table>
+          </div>
+          <div class="card special-watch-panel" id="special-watch-panel">
+            <h3>Special Watch — US AI Data Centers</h3>
+            <div id="special-watch-stats" class="brief">Loading…</div>
+            <div class="special-watch-add">
+              <label>Add ticker
+                <input type="text" id="special-watch-add-ticker" placeholder="e.g. NBIS" maxlength="6" autocapitalize="characters" />
+              </label>
+              <button type="button" class="btn btn-sm secondary" id="special-watch-add-btn">Add to Special Watch</button>
+              <span class="brief special-watch-add-hint">Added tickers join the active watchlist; Range/ADV fill in after Daily ingest.</span>
+            </div>
+            <div class="screener-filters">
+              <label>Ticker <input type="text" id="special-watch-filter-ticker" placeholder="Filter…" /></label>
+              <label>Step 3 <select id="special-watch-filter-status">
+                <option value="">All</option>
+                <option value="step3_pass">Pass</option>
+                <option value="too_quiet">Too quiet</option>
+                <option value="too_wild">Too wild</option>
+                <option value="low_liquidity">Low liq</option>
+                <option value="missing_metrics">Missing</option>
+              </select></label>
+              <label class="inline-check"><input type="checkbox" id="special-watch-active-only" /> Active only</label>
+              <span id="special-watch-row-count" class="brief"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="sortable-table special-watch-table">
+                <thead><tr>
+                  <th data-sort="ticker" class="sortable sorted-asc">Ticker</th>
+                  <th data-sort="step3_status" class="sortable">Step 3</th>
+                  <th data-sort="avg_range_pct" class="sortable">Range</th>
+                  <th data-sort="adv_dollar_m" class="sortable">ADV</th>
+                  <th data-sort="in_active_watchlist" class="sortable">List</th>
+                </tr></thead>
+                <tbody id="special-watch-body"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -1423,14 +1430,41 @@
     async function loadSpecialWatch() {
       const data = await api("/api/watchlist/special-watch?preset=datacenter_us");
       const band = data.swing_band_pct || {};
+      const manualNote = data.manual_ticker_count
+        ? ` · ${data.manual_ticker_count} manual add(s)`
+        : "";
       document.getElementById("special-watch-stats").textContent =
-        `Universe: ${data.ticker_count} tickers · Step 3 pass: ${data.step3_pass} · `
+        `Universe: ${data.ticker_count} tickers${manualNote} · Step 3 pass: ${data.step3_pass} · `
         + `Too quiet: ${data.too_quiet} · Too wild: ${data.too_wild} · `
         + `Low liquidity: ${data.low_liquidity} · Missing metrics: ${data.missing_metrics} · `
         + `Band ${band.low}–${band.high}% (target ${band.target}%)`;
       specialWatchRows = data.tickers || [];
       renderSpecialWatchTable();
       updateSpecialWatchSortHeaders();
+    }
+
+    async function addSpecialWatchTicker() {
+      const input = document.getElementById("special-watch-add-ticker");
+      const ticker = (input.value || "").trim().toUpperCase();
+      if (!ticker) {
+        toast("Enter a ticker symbol (e.g. NBIS)");
+        return;
+      }
+      try {
+        const r = await api("/api/watchlist/special-watch/add", {
+          method: "POST",
+          body: JSON.stringify({ preset: "datacenter_us", ticker }),
+        });
+        input.value = "";
+        const msg = r.already_in_preset && !r.added_to_extras
+          ? `${ticker} is already on the Special Watch list — activated on watchlist for ingest.`
+          : `${ticker} added to Special Watch. Run Daily ingest (or Refresh live) for Range/ADV.`;
+        toast(msg);
+        await loadSpecialWatch();
+        await loadRankedAndStats();
+      } catch (e) {
+        toast(e.message);
+      }
     }
 
     async function loadHistorical() {
@@ -1754,6 +1788,13 @@
       document.getElementById(id).addEventListener("change", () => renderSpecialWatchTable());
     });
     document.getElementById("special-watch-active-only").addEventListener("change", () => renderSpecialWatchTable());
+    document.getElementById("special-watch-add-btn").addEventListener("click", () => addSpecialWatchTicker());
+    document.getElementById("special-watch-add-ticker").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addSpecialWatchTicker();
+      }
+    });
     document.querySelectorAll(".special-watch-table th.sortable").forEach((th) => {
       th.addEventListener("click", () => {
         const key = th.dataset.sort;

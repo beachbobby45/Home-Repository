@@ -72,6 +72,7 @@ from investment_agent.journal import (
 )
 from investment_agent.scenario import build_scenario_visualizer
 from investment_agent.watchlist import (
+    add_special_watch_ticker,
     build_special_watch_report,
     compute_universe_stats,
     deactivate_ticker,
@@ -184,6 +185,11 @@ class WatchlistImportBody(BaseModel):
 class LoadPresetBody(BaseModel):
     preset: str
     replace: bool = False
+
+
+class SpecialWatchAddBody(BaseModel):
+    preset: str = "datacenter_us"
+    ticker: str
 
 
 class PeriodScreenerBody(BaseModel):
@@ -719,6 +725,22 @@ def api_special_watch(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/watchlist/special-watch/add")
+def api_special_watch_add(
+    body: SpecialWatchAddBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    try:
+        result = add_special_watch_ticker(conn, body.preset, body.ticker)
+        conn.commit()
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/watchlist/load-preset")

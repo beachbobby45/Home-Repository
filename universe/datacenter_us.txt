@@ -110,3 +110,7 @@ SMCI
 DELL
 HPE
 NTAP
+# Semiconductor / AI infra (manual adds — metrics on ingest)
+DRAM
+ASML
+NBIS
