@@ -4,8 +4,26 @@
 #        ./scripts/run_ingest_mac.sh --incremental
 
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || {
+  echo "ERROR: Could not find Home-Repository folder."
+  exit 1
+}
 ROOT="$PWD"
+
+echo ""
+echo "  AI Investment Agent — ingest"
+echo "  Folder: $ROOT"
+echo ""
+
+if [[ ! -f "$ROOT/scripts/run_ingest.py" ]]; then
+  echo "ERROR: Missing scripts/run_ingest.py — are you in Home-Repository?"
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: python3 not found. Install Python 3 or run: xcode-select --install"
+  exit 1
+fi
 PLIST_LABEL="com.investment-agent.dashboard"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 PAUSED=0

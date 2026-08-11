@@ -1731,9 +1731,10 @@
       if (pf.recommend_terminal) {
         const cmd = incremental ? pf.terminal_command : pf.terminal_command_full;
         toast(
-          `Watchlist has ${pf.ticker_count} tickers — browser ingest would fail. `
-          + `Use Terminal: ${cmd}`,
-          12000,
+          `Watchlist has ${pf.ticker_count} tickers — use Mac Terminal or double-click `
+          + `scripts/Run Daily Ingest.command in Finder. Command: ${cmd}. `
+          + `Refresh the browser after it finishes.`,
+          14000,
         );
         return;
       }
