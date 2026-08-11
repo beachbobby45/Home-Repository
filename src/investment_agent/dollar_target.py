@@ -19,11 +19,34 @@ from investment_agent.finance import (
 )
 from investment_agent.strategy import STOP_PCT
 
-# Minimum historical open→high hit rate to treat as reliably reachable (ranking / caution)
-MIN_DOLLAR_HIT_RATE_PCT = 30.0
+# Minimum historical open→high hit rate to treat as reliably reachable (tradability caution)
+MIN_DOLLAR_HIT_RATE_PCT = 40.0
 # Expected net at typical day-high must reach this fraction of today's goal for GO
 MIN_EXPECTED_NET_RATIO = 0.95
 DEFAULT_LOOKBACK_DAYS = 14
+
+# Stricter gates for period ranking — smaller pool, stronger $-goal alignment
+MIN_RANK_DOLLAR_HIT_RATE_PCT = 40.0
+MIN_RANK_AVG_NET_RATIO = 0.90
+MIN_RANK_DOLLAR_DAYS = 2
+
+
+def passes_dollar_rank_gate(
+    *,
+    dollar_hit_rate_pct: float,
+    avg_net_at_high: float,
+    net_target: float,
+    days_screened: int,
+    min_hit_rate_pct: float = MIN_RANK_DOLLAR_HIT_RATE_PCT,
+    min_avg_ratio: float = MIN_RANK_AVG_NET_RATIO,
+    min_days: int = MIN_RANK_DOLLAR_DAYS,
+) -> bool:
+    """True when historical Step 3 days support today's scaled Growth Plan net goal."""
+    if net_target <= 0 or days_screened < min_days:
+        return False
+    if dollar_hit_rate_pct < min_hit_rate_pct:
+        return False
+    return avg_net_at_high >= net_target * min_avg_ratio
 
 
 @dataclass(frozen=True)

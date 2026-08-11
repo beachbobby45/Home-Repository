@@ -25,6 +25,7 @@ from investment_agent.account import (
 )
 from investment_agent.cio import build_cio_summary
 from investment_agent.config import Settings
+from investment_agent.finance import ORIGINAL_BASIS
 from investment_agent.historical import (
     build_historical_summary,
     evaluate_period,
@@ -471,10 +472,15 @@ def api_prepare_morning(
         raise HTTPException(status_code=503, detail=ingest_lock_message())
     start, end = date_range_for_period(14, conn=conn)
     trading_dates = list_trading_dates(conn, count=14)
+    from investment_agent.account import build_dashboard_summary
+
+    summary = build_dashboard_summary(conn)
+    deploy = float(summary.tradable_cash or ORIGINAL_BASIS)
     result = run_period_screener(
         conn,
         start_date=start,
         end_date=end,
+        tradable_cash=deploy,
         min_days_screened=1,
         min_hit_rate_pct=None,
         trading_dates=trading_dates or None,

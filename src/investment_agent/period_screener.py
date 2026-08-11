@@ -8,21 +8,28 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from investment_agent.finance import ORIGINAL_BASIS
+from investment_agent.finance import ORIGINAL_BASIS, daily_profit_target
 from investment_agent.historical import evaluate_period
 from investment_agent.liquidity import MIN_ADV_DOLLAR, SWING_TARGET_PCT
+from investment_agent.dollar_target import (
+    MIN_RANK_AVG_NET_RATIO,
+    MIN_RANK_DOLLAR_DAYS,
+    MIN_RANK_DOLLAR_HIT_RATE_PCT,
+    passes_dollar_rank_gate,
+)
 from investment_agent.stock_team import _latest_metrics, screen_candidates
 from investment_agent.strategy import REGIME_ONLY_TICKERS
 
-# Rank weights — historical + live Step 3 likelihood (pre-Claude)
+# Rank weights — dollar-goal reachability first (pool is smaller but stronger)
 RANK_WEIGHTS = {
-    "live_pass": 0.22,
-    "hit_rate": 0.12,
-    "dollar_hit_rate": 0.18,
-    "consistency": 0.18,
-    "swing_proximity": 0.12,
-    "liquidity": 0.10,
-    "near_swing": 0.08,
+    "live_pass": 0.12,
+    "dollar_hit_rate": 0.32,
+    "dollar_avg_net": 0.22,
+    "consistency": 0.10,
+    "hit_rate": 0.06,
+    "swing_proximity": 0.08,
+    "liquidity": 0.06,
+    "near_swing": 0.04,
 }
 
 
@@ -45,6 +52,8 @@ def _criteria_likelihood_score(
     live_pass: bool,
     hit_rate_pct: float,
     dollar_hit_rate_pct: float = 0.0,
+    avg_net_at_high: float = 0.0,
+    net_target: float = 150.0,
     days_screened: int,
     avg_range_pct: float,
     adv_dollar: float = 0.0,
@@ -57,10 +66,14 @@ def _criteria_likelihood_score(
     consistency = min(days_screened / max(period_days * 0.5, 1), 1.0)
     hit = hit_rate_pct / 100.0
     dollar_hit = dollar_hit_rate_pct / 100.0
+    dollar_avg = (
+        min(avg_net_at_high / net_target, 1.0) if net_target > 0 and avg_net_at_high > 0 else 0.0
+    )
     score = (
         RANK_WEIGHTS["live_pass"] * (1.0 if live_pass else 0.0)
         + RANK_WEIGHTS["hit_rate"] * hit
         + RANK_WEIGHTS["dollar_hit_rate"] * dollar_hit
+        + RANK_WEIGHTS["dollar_avg_net"] * dollar_avg
         + RANK_WEIGHTS["consistency"] * consistency
         + RANK_WEIGHTS["swing_proximity"] * swing_px
         + RANK_WEIGHTS["liquidity"] * liq
@@ -73,10 +86,17 @@ def _criteria_likelihood_score(
         "consistency_score": round(consistency, 3),
         "hit_rate_component": round(hit, 3),
         "dollar_hit_rate_component": round(dollar_hit, 3),
+        "dollar_avg_net_component": round(dollar_avg, 3),
     }
 
 
-def _enrich_row(row: dict, metrics: sqlite3.Row | None, *, period_days: int) -> dict:
+def _enrich_row(
+    row: dict,
+    metrics: sqlite3.Row | None,
+    *,
+    period_days: int,
+    net_target: float,
+) -> dict:
     adv = float(metrics["adv_dollar"] or 0) if metrics else 0.0
     avg_range = float(row.get("avg_range_pct") or (metrics["avg_range_pct"] if metrics else 0) or 0)
     meets_liq = bool(metrics["meets_liquidity_min"]) if metrics else False
@@ -88,6 +108,8 @@ def _enrich_row(row: dict, metrics: sqlite3.Row | None, *, period_days: int) -> 
         live_pass=bool(row.get("live_pass_today")),
         hit_rate_pct=float(row.get("hit_rate_pct") or 0),
         dollar_hit_rate_pct=float(row.get("dollar_hit_rate_pct") or 0),
+        avg_net_at_high=float(row.get("avg_net_at_high") or 0),
+        net_target=net_target,
         days_screened=int(row.get("days_screened") or 0),
         avg_range_pct=avg_range,
         adv_dollar=adv,
@@ -96,6 +118,13 @@ def _enrich_row(row: dict, metrics: sqlite3.Row | None, *, period_days: int) -> 
         period_days=period_days,
     )
     out = {**row, **parts}
+    out["net_target"] = net_target
+    out["passes_dollar_rank_gate"] = passes_dollar_rank_gate(
+        dollar_hit_rate_pct=float(row.get("dollar_hit_rate_pct") or 0),
+        avg_net_at_high=float(row.get("avg_net_at_high") or 0),
+        net_target=net_target,
+        days_screened=int(row.get("days_screened") or 0),
+    )
     out["avg_range_pct"] = round(avg_range, 2)
     out["adv_dollar"] = round(adv, 0)
     out["adv_dollar_m"] = round(adv / 1_000_000, 1) if adv else 0.0
@@ -171,6 +200,8 @@ def _rank_score(
     live_pass: bool,
     hit_rate_pct: float,
     dollar_hit_rate_pct: float = 0.0,
+    avg_net_at_high: float = 0.0,
+    net_target: float = 150.0,
     days_screened: int,
     avg_range_pct: float,
     adv_dollar: float = 0.0,
@@ -182,6 +213,8 @@ def _rank_score(
         live_pass=live_pass,
         hit_rate_pct=hit_rate_pct,
         dollar_hit_rate_pct=dollar_hit_rate_pct,
+        avg_net_at_high=avg_net_at_high,
+        net_target=net_target,
         days_screened=days_screened,
         avg_range_pct=avg_range_pct,
         adv_dollar=adv_dollar,
@@ -199,10 +232,12 @@ def run_period_screener(
     tradable_cash: float = ORIGINAL_BASIS,
     min_days_screened: int = 1,
     min_hit_rate_pct: float | None = None,
+    min_dollar_hit_rate_pct: float | None = None,
     trading_dates: list[str] | None = None,
     requested_trading_days: int | None = None,
 ) -> dict:
     """Aggregate period evaluation by ticker and rank candidates."""
+    net_target = daily_profit_target(tradable_cash)
     period = evaluate_period(
         conn,
         start_date,
@@ -233,6 +268,7 @@ def run_period_screener(
                     "last_screened_date": None,
                     "avg_range_pct": 0.0,
                     "_range_sum": 0.0,
+                    "_net_at_high_sum": 0.0,
                 },
             )
             bucket["days_screened"] += 1
@@ -252,6 +288,7 @@ def run_period_screener(
                 bucket["dollar_neither"] += 1
             bucket["last_screened_date"] = day["date"]
             bucket["_range_sum"] += float(match.get("actual_range_pct") or 0)
+            bucket["_net_at_high_sum"] += float(match.get("net_at_high") or 0)
 
     candidates: list[dict] = []
     for ticker, b in agg.items():
@@ -263,7 +300,10 @@ def run_period_screener(
         dollar_hit_rate = round(100.0 * b["dollar_targets"] / max(dollar_decided, 1), 1)
         if min_hit_rate_pct is not None and hit_rate < min_hit_rate_pct:
             continue
+        if min_dollar_hit_rate_pct is not None and dollar_hit_rate < min_dollar_hit_rate_pct:
+            continue
         avg_range = round(b["_range_sum"] / max(b["days_screened"], 1), 2)
+        avg_net_at_high = round(b["_net_at_high_sum"] / max(b["days_screened"], 1), 2)
         live_pass = ticker in live_tickers
         m = metrics_by_ticker.get(ticker)
         base = {
@@ -277,13 +317,14 @@ def run_period_screener(
             "dollar_neither": b["dollar_neither"],
             "hit_rate_pct": hit_rate,
             "dollar_hit_rate_pct": dollar_hit_rate,
+            "avg_net_at_high": avg_net_at_high,
             "avg_range_pct": avg_range,
             "last_screened_date": b["last_screened_date"],
             "live_pass_today": live_pass,
             "period_trading_days": trading_days_in_period,
             "requested_trading_days": score_period_days,
         }
-        row = _enrich_row(base, m, period_days=score_period_days)
+        row = _enrich_row(base, m, period_days=score_period_days, net_target=net_target)
         candidates.append(row)
 
     candidates.sort(
@@ -296,6 +337,8 @@ def run_period_screener(
         "period_days": score_period_days,
         "trading_days_in_period": trading_days_in_period,
         "requested_trading_days": score_period_days,
+        "net_target": net_target,
+        "deploy": tradable_cash,
         "days_evaluated": period["days_evaluated"],
         "candidates": candidates,
         "summary": {
@@ -388,13 +431,23 @@ def build_ranked_candidates(
     period_days: int = 14,
     min_days_screened: int = 1,
     end_date: str | None = None,
+    tradable_cash: float | None = None,
+    net_target: float | None = None,
+    require_dollar_rank_gate: bool = True,
 ) -> dict:
+    from investment_agent.account import build_dashboard_summary
+
+    summary = build_dashboard_summary(conn)
+    deploy = float(tradable_cash if tradable_cash is not None else summary.tradable_cash or ORIGINAL_BASIS)
+    goal = float(net_target if net_target is not None else summary.daily_target or daily_profit_target(deploy))
+
     trading_dates = list_trading_dates(conn, count=period_days, end_date=end_date)
     start, end = date_range_for_period(period_days, end_date=end_date, conn=conn)
     period = run_period_screener(
         conn,
         start_date=start,
         end_date=end,
+        tradable_cash=deploy,
         min_days_screened=min_days_screened,
         trading_dates=trading_dates or None,
         requested_trading_days=period_days,
@@ -405,21 +458,24 @@ def build_ranked_candidates(
     score_period = period_days
 
     ranked: list[dict] = []
+    excluded: list[dict] = []
     seen: set[str] = set()
 
     for c in period["candidates"]:
         card = live_map.get(c["ticker"])
-        row = _enrich_row(c, metrics_by_ticker.get(c["ticker"]), period_days=score_period)
-        ranked.append(
-            {
-                **row,
-                "entry_price": card.entry_price if card else None,
-                "target_price": card.target_price if card else None,
-                "stop_price": card.stop_price if card else None,
-                "suggested_size": card.suggested_size if card else row.get("liquidity_cap"),
-                "thesis_summary": card.thesis_summary if card else None,
-            }
-        )
+        row = _enrich_row(c, metrics_by_ticker.get(c["ticker"]), period_days=score_period, net_target=goal)
+        enriched = {
+            **row,
+            "entry_price": card.entry_price if card else None,
+            "target_price": card.target_price if card else None,
+            "stop_price": card.stop_price if card else None,
+            "suggested_size": card.suggested_size if card else row.get("liquidity_cap"),
+            "thesis_summary": card.thesis_summary if card else None,
+        }
+        if require_dollar_rank_gate and not row.get("passes_dollar_rank_gate"):
+            excluded.append(enriched)
+        else:
+            ranked.append(enriched)
         seen.add(c["ticker"])
 
     for card in live:
@@ -437,24 +493,27 @@ def build_ranked_candidates(
             "dollar_neither": 0,
             "hit_rate_pct": 0.0,
             "dollar_hit_rate_pct": 0.0,
+            "avg_net_at_high": 0.0,
             "avg_range_pct": card.avg_range_pct,
             "last_screened_date": None,
             "live_pass_today": True,
             "period_trading_days": period.get("trading_days_in_period", period["days_evaluated"]),
             "requested_trading_days": score_period,
         }
-        row = _enrich_row(base, m, period_days=score_period)
-        ranked.append(
-            {
-                **row,
-                "entry_price": card.entry_price,
-                "target_price": card.target_price,
-                "stop_price": card.stop_price,
-                "suggested_size": card.suggested_size,
-                "thesis_summary": card.thesis_summary,
-                "liquidity_cap": card.liquidity_cap,
-            }
-        )
+        row = _enrich_row(base, m, period_days=score_period, net_target=goal)
+        enriched = {
+            **row,
+            "entry_price": card.entry_price,
+            "target_price": card.target_price,
+            "stop_price": card.stop_price,
+            "suggested_size": card.suggested_size,
+            "thesis_summary": card.thesis_summary,
+            "liquidity_cap": card.liquidity_cap,
+        }
+        if require_dollar_rank_gate and not row.get("passes_dollar_rank_gate"):
+            excluded.append(enriched)
+        else:
+            ranked.append(enriched)
 
     ranked.sort(
         key=lambda r: (-r["score"], -r["days_screened"], -r.get("adv_dollar", 0), r["ticker"])
@@ -466,8 +525,18 @@ def build_ranked_candidates(
         "end_date": end,
         "trading_dates": trading_dates,
         "ranked": ranked,
+        "excluded": excluded,
+        "excluded_count": len(excluded),
         "live_count": len(live),
         "period_unique": len(period["candidates"]),
+        "net_target": goal,
+        "deploy": deploy,
+        "rank_filters": {
+            "min_dollar_hit_rate_pct": MIN_RANK_DOLLAR_HIT_RATE_PCT,
+            "min_avg_net_ratio": MIN_RANK_AVG_NET_RATIO,
+            "min_dollar_days": MIN_RANK_DOLLAR_DAYS,
+            "require_dollar_rank_gate": require_dollar_rank_gate,
+        },
         "rank_weights": RANK_WEIGHTS,
     }
 

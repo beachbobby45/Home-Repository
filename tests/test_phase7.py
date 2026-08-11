@@ -82,6 +82,9 @@ def test_criteria_likelihood_score_prefers_live_and_swing():
     high = _criteria_likelihood_score(
         live_pass=True,
         hit_rate_pct=80.0,
+        dollar_hit_rate_pct=65.0,
+        avg_net_at_high=160.0,
+        net_target=150.0,
         days_screened=10,
         avg_range_pct=3.0,
         adv_dollar=10_000_000,
@@ -92,6 +95,9 @@ def test_criteria_likelihood_score_prefers_live_and_swing():
     low = _criteria_likelihood_score(
         live_pass=False,
         hit_rate_pct=20.0,
+        dollar_hit_rate_pct=10.0,
+        avg_net_at_high=50.0,
+        net_target=150.0,
         days_screened=2,
         avg_range_pct=1.5,
         adv_dollar=500_000,
@@ -132,7 +138,7 @@ def test_build_ranked_candidates_includes_enriched_fields():
         _seed_ohlcv_history(conn, ["AAPL", "MSFT", "NVDA"], end=now_dt)
         conn.commit()
 
-        result = build_ranked_candidates(conn, period_days=14)
+        result = build_ranked_candidates(conn, period_days=14, require_dollar_rank_gate=False)
         assert "ranked" in result
         assert result["rank_weights"] == RANK_WEIGHTS
         assert len(result["ranked"]) >= 1

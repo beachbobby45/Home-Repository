@@ -19,8 +19,8 @@ from investment_agent.db import (
     log_ingest,
     upsert_watchlist,
 )
-from investment_agent.dollar_target import simulate_dollar_outcome
-from investment_agent.finance import ORIGINAL_BASIS
+from investment_agent.dollar_target import net_at_high_from_open, simulate_dollar_outcome
+from investment_agent.finance import ORIGINAL_BASIS, daily_profit_target
 from investment_agent.liquidity import DailyBar, compute_liquidity_metrics
 from investment_agent.providers.yfinance_bars import get_daily_bars
 from investment_agent.strategy import REGIME_ONLY_TICKERS, STOP_PCT, TARGET_PCT
@@ -93,6 +93,7 @@ def evaluate_trading_day(
     tradable_cash: float = ORIGINAL_BASIS,
 ) -> dict:
     """Compare predicted metrics (bars before eval_date) vs actual bar on eval_date."""
+    net_target = daily_profit_target(tradable_cash)
     tickers = [t for t in get_active_watchlist(conn) if t not in REGIME_ONLY_TICKERS]
     ticker_rows: list[dict] = []
     screened: list[dict] = []
@@ -129,7 +130,13 @@ def evaluate_trading_day(
                 high,
                 low,
                 deploy_dollar=tradable_cash,
+                net_target=net_target,
             )
+            if would_screen
+            else None
+        )
+        net_at_high = (
+            net_at_high_from_open(open_px, high, deploy_dollar=tradable_cash)
             if would_screen
             else None
         )
@@ -149,6 +156,7 @@ def evaluate_trading_day(
             "would_screen": would_screen,
             "simulated_outcome": outcome,
             "dollar_outcome": dollar_outcome,
+            "net_at_high": round(net_at_high, 2) if net_at_high is not None else None,
             "liquidity_cap": round(metrics.liquidity_cap, 2),
         }
         ticker_rows.append(row)
@@ -344,6 +352,7 @@ def evaluate_period(
                         "ticker": m["ticker"],
                         "outcome": m["simulated_outcome"],
                         "dollar_outcome": m.get("dollar_outcome"),
+                        "net_at_high": m.get("net_at_high"),
                         "actual_range_pct": m["actual_range_pct"],
                     }
                     for m in day_eval["screened_matches"]
