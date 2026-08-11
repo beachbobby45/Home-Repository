@@ -115,10 +115,54 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def date_range_for_period(period_days: int, end_date: str | None = None) -> tuple[str, str]:
+MARKET_CALENDAR_TICKER = "SPY"
+
+
+def list_trading_dates(
+    conn: sqlite3.Connection,
+    *,
+    count: int,
+    end_date: str | None = None,
+) -> list[str]:
+    """Last ``count`` US market sessions from OHLCV (SPY calendar, excludes weekends/holidays)."""
+    end = end_date or _today_et()
+    rows = conn.execute(
+        """
+        SELECT DISTINCT date FROM ohlcv_daily
+        WHERE ticker = ? AND date <= ?
+        ORDER BY date DESC
+        LIMIT ?
+        """,
+        (MARKET_CALENDAR_TICKER, end, count),
+    ).fetchall()
+    if len(rows) < count:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT date FROM ohlcv_daily
+            WHERE date <= ?
+            ORDER BY date DESC
+            LIMIT ?
+            """,
+            (end, count),
+        ).fetchall()
+    return sorted(row[0] for row in rows)
+
+
+def date_range_for_period(
+    period_days: int,
+    end_date: str | None = None,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> tuple[str, str]:
+    """Return [start, end] spanning the last ``period_days`` trading sessions."""
+    if conn is not None:
+        dates = list_trading_dates(conn, count=period_days, end_date=end_date)
+        if dates:
+            return dates[0], dates[-1]
     end = end_date or _today_et()
     end_dt = datetime.strptime(end, "%Y-%m-%d")
-    start_dt = end_dt - timedelta(days=max(period_days - 1, 0))
+    # Calendar fallback when no OHLCV (tests): widen window to approximate sessions.
+    start_dt = end_dt - timedelta(days=max(int(period_days * 2), period_days))
     return start_dt.strftime("%Y-%m-%d"), end
 
 
@@ -155,14 +199,21 @@ def run_period_screener(
     tradable_cash: float = ORIGINAL_BASIS,
     min_days_screened: int = 1,
     min_hit_rate_pct: float | None = None,
+    trading_dates: list[str] | None = None,
+    requested_trading_days: int | None = None,
 ) -> dict:
     """Aggregate period evaluation by ticker and rank candidates."""
-    period = evaluate_period(conn, start_date, end_date, tradable_cash=tradable_cash)
+    period = evaluate_period(
+        conn,
+        start_date,
+        end_date,
+        tradable_cash=tradable_cash,
+        trading_dates=trading_dates,
+    )
     live_tickers = {c.ticker for c in screen_candidates(conn)}
     metrics_by_ticker = _metrics_map(conn)
-    period_days = (
-        datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")
-    ).days + 1
+    trading_days_in_period = period["days_evaluated"]
+    score_period_days = requested_trading_days or trading_days_in_period
 
     agg: dict[str, dict] = {}
     for day in period["days"]:
@@ -229,8 +280,10 @@ def run_period_screener(
             "avg_range_pct": avg_range,
             "last_screened_date": b["last_screened_date"],
             "live_pass_today": live_pass,
+            "period_trading_days": trading_days_in_period,
+            "requested_trading_days": score_period_days,
         }
-        row = _enrich_row(base, m, period_days=period_days)
+        row = _enrich_row(base, m, period_days=score_period_days)
         candidates.append(row)
 
     candidates.sort(
@@ -240,7 +293,9 @@ def run_period_screener(
     return {
         "start_date": start_date,
         "end_date": end_date,
-        "period_days": period_days,
+        "period_days": score_period_days,
+        "trading_days_in_period": trading_days_in_period,
+        "requested_trading_days": score_period_days,
         "days_evaluated": period["days_evaluated"],
         "candidates": candidates,
         "summary": {
@@ -332,25 +387,29 @@ def build_ranked_candidates(
     *,
     period_days: int = 14,
     min_days_screened: int = 1,
+    end_date: str | None = None,
 ) -> dict:
-    start, end = date_range_for_period(period_days)
+    trading_dates = list_trading_dates(conn, count=period_days, end_date=end_date)
+    start, end = date_range_for_period(period_days, end_date=end_date, conn=conn)
     period = run_period_screener(
         conn,
         start_date=start,
         end_date=end,
         min_days_screened=min_days_screened,
+        trading_dates=trading_dates or None,
+        requested_trading_days=period_days,
     )
     live = screen_candidates(conn)
     live_map = {c.ticker: c for c in live}
     metrics_by_ticker = _metrics_map(conn)
-    period_days = period["period_days"]
+    score_period = period_days
 
     ranked: list[dict] = []
     seen: set[str] = set()
 
     for c in period["candidates"]:
         card = live_map.get(c["ticker"])
-        row = _enrich_row(c, metrics_by_ticker.get(c["ticker"]), period_days=period_days)
+        row = _enrich_row(c, metrics_by_ticker.get(c["ticker"]), period_days=score_period)
         ranked.append(
             {
                 **row,
@@ -381,8 +440,10 @@ def build_ranked_candidates(
             "avg_range_pct": card.avg_range_pct,
             "last_screened_date": None,
             "live_pass_today": True,
+            "period_trading_days": period.get("trading_days_in_period", period["days_evaluated"]),
+            "requested_trading_days": score_period,
         }
-        row = _enrich_row(base, m, period_days=period_days)
+        row = _enrich_row(base, m, period_days=score_period)
         ranked.append(
             {
                 **row,
@@ -400,8 +461,10 @@ def build_ranked_candidates(
     )
     return {
         "period_days": period_days,
+        "trading_days_in_period": period.get("trading_days_in_period", period["days_evaluated"]),
         "start_date": start,
         "end_date": end,
+        "trading_dates": trading_dates,
         "ranked": ranked,
         "live_count": len(live),
         "period_unique": len(period["candidates"]),

@@ -307,26 +307,33 @@ def evaluate_period(
     end_date: str,
     *,
     tradable_cash: float = ORIGINAL_BASIS,
+    trading_dates: list[str] | None = None,
 ) -> dict:
     """Evaluate each trading day in range that has OHLCV data."""
-    dates = conn.execute(
-        """
-        SELECT DISTINCT date FROM ohlcv_daily
-        WHERE date >= ? AND date <= ?
-        ORDER BY date ASC
-        """,
-        (start_date, end_date),
-    ).fetchall()
+    if trading_dates is not None:
+        dates = sorted(trading_dates)
+    else:
+        dates = [
+            row["date"]
+            for row in conn.execute(
+                """
+                SELECT DISTINCT date FROM ohlcv_daily
+                WHERE date >= ? AND date <= ?
+                ORDER BY date ASC
+                """,
+                (start_date, end_date),
+            ).fetchall()
+        ]
     days: list[dict] = []
     total_dollar_targets = 0
     total_dollar_stops = 0
-    for row in dates:
-        day_eval = evaluate_trading_day(conn, row["date"], tradable_cash=tradable_cash)
+    for date in dates:
+        day_eval = evaluate_trading_day(conn, date, tradable_cash=tradable_cash)
         total_dollar_targets += day_eval["summary"]["dollar_targets"]
         total_dollar_stops += day_eval["summary"]["dollar_stops"]
         days.append(
             {
-                "date": row["date"],
+                "date": date,
                 "screened_count": day_eval["summary"]["screened_count"],
                 "simulated_targets": day_eval["summary"]["simulated_targets"],
                 "simulated_stops": day_eval["summary"]["simulated_stops"],

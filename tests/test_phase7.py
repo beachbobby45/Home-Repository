@@ -61,8 +61,14 @@ def test_period_screener_on_seeded_history():
         _seed_ohlcv_history(conn, ["AAPL", "MSFT", "NVDA", "AMD", "META", "SPY", "DIA", "QQQ"], end=now)
         conn.commit()
 
-        start, end = date_range_for_period(14, end_date=(now.replace(day=max(now.day - 1, 1))).strftime("%Y-%m-%d"))
-        result = run_period_screener(conn, start_date=start, end_date=end, min_days_screened=1)
+        start, end = date_range_for_period(14, end_date=(now.replace(day=max(now.day - 1, 1))).strftime("%Y-%m-%d"), conn=conn)
+        result = run_period_screener(
+            conn,
+            start_date=start,
+            end_date=end,
+            min_days_screened=1,
+            requested_trading_days=14,
+        )
         assert "candidates" in result
         assert result["days_evaluated"] >= 1
 

@@ -238,7 +238,7 @@ def run_strategy_backtest(
     sell_fee: float = DEFAULT_SELL_FEE,
     intraday_cache: dict[str, list[dict]] | None = None,
 ) -> StrategyBacktestResult:
-    start_date, end_date = date_range_for_period(lookback_days)
+    start_date, end_date = date_range_for_period(lookback_days, conn=conn)
     top_rows = _top_ranked_tickers(conn, period_days=lookback_days, top_n=top_n)
     top_tickers = {r["ticker"] for r in top_rows}
     rank_by_ticker = {r["ticker"]: float(r.get("score") or 0) for r in top_rows}

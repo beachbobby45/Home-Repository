@@ -51,6 +51,7 @@ from investment_agent.close_report import (
 from investment_agent.period_screener import (
     build_ranked_candidates,
     get_latest_screener_run,
+    list_trading_dates,
     promote_ticker_to_queue,
     run_period_screener,
     save_screener_run,
@@ -468,19 +469,22 @@ def api_prepare_morning(
     """Step 2 — run screener and return trade candidates with size / sell / stop."""
     if ingest_lock_active():
         raise HTTPException(status_code=503, detail=ingest_lock_message())
-    start, end = date_range_for_period(14)
+    start, end = date_range_for_period(14, conn=conn)
+    trading_dates = list_trading_dates(conn, count=14)
     result = run_period_screener(
         conn,
         start_date=start,
         end_date=end,
         min_days_screened=1,
         min_hit_rate_pct=None,
+        trading_dates=trading_dates or None,
+        requested_trading_days=14,
     )
     run_id = save_screener_run(conn, result)
     record_screen_action(
         conn,
         ACTION_PERIOD_SCREENER,
-        detail=f"{len(result.get('candidates', []))} candidates · 14d window",
+        detail=f"{len(result.get('candidates', []))} candidates · 14 trading days",
     )
     conn.commit()
     candidates = build_trading_candidates(conn, limit=15, period_days=14)
@@ -936,20 +940,23 @@ def api_screener_period(
     conn=Depends(_db),
     _: None = Depends(_require_api_key),
 ) -> dict:
-    start, end = date_range_for_period(body.period_days)
+    start, end = date_range_for_period(body.period_days, conn=conn)
+    trading_dates = list_trading_dates(conn, count=body.period_days)
     result = run_period_screener(
         conn,
         start_date=start,
         end_date=end,
         min_days_screened=body.min_days_screened,
         min_hit_rate_pct=body.min_hit_rate_pct,
+        trading_dates=trading_dates or None,
+        requested_trading_days=body.period_days,
     )
     if body.save:
         run_id = save_screener_run(conn, result)
         record_screen_action(
             conn,
             ACTION_PERIOD_SCREENER,
-            detail=f"{len(result.get('candidates', []))} candidates · {body.period_days}d window",
+            detail=f"{len(result.get('candidates', []))} candidates · {body.period_days} trading days",
         )
         conn.commit()
         result["saved_run_id"] = run_id

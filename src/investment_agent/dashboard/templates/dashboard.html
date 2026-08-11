@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260811a" />
+  <link rel="stylesheet" href="/static/style.css?v=20260811b" />
 </head>
 <body>
   <header class="app-header">
@@ -221,7 +221,7 @@
             <label>Min days <input type="number" id="screener-min-days" min="0" max="30" style="width:70px" /></label>
             <label class="inline-check"><input type="checkbox" id="screener-live-only" /> Live only</label>
             <label>Period <select id="screener-period-days">
-              <option value="7">7d</option><option value="14" selected>14d</option><option value="30">30d</option>
+              <option value="7">7 trading days</option><option value="14" selected>14 trading days</option><option value="30">30 trading days</option>
             </select></label>
             <span id="screener-row-count" class="brief"></span>
           </div>
@@ -232,9 +232,9 @@
                 <th data-sort="ticker" class="sortable">Ticker</th>
                 <th data-sort="avg_range_pct" class="sortable">Range</th>
                 <th data-sort="adv_dollar_m" class="sortable">ADV</th>
-                <th data-sort="days_screened" class="sortable">Days</th>
-                <th data-sort="simulated_targets" class="sortable">Tgt</th>
-                <th data-sort="simulated_stops" class="sortable">Stp</th>
+                <th data-sort="days_screened" class="sortable" title="Step 3 hits out of selected trading days (excludes weekends and market holidays)">Days</th>
+                <th data-sort="simulated_targets" class="sortable" title="Target hits on Step 3 days in the period">Tgt</th>
+                <th data-sort="simulated_stops" class="sortable" title="Stop hits on Step 3 days in the period">Stp</th>
                 <th data-sort="hit_rate_pct" class="sortable">Hit%</th>
                 <th data-sort="live_pass_today" class="sortable">Live</th><th></th>
               </tr></thead>
@@ -1271,6 +1271,8 @@
     let screenerRows = [];
     let screenerSortKey = "score";
     let screenerSortAsc = false;
+    let screenerRequestedTradingDays = 14;
+    let screenerTradingDaysInPeriod = 14;
 
     function screenerNumeric(val) {
       if (val === true) return 1;
@@ -1467,11 +1469,17 @@
       });
     }
 
+    function formatScreenerDays(row) {
+      const hit = row.days_screened ?? 0;
+      const total = row.requested_trading_days ?? screenerRequestedTradingDays;
+      return `${hit}/${total}`;
+    }
+
     function renderScreenerTable() {
       const body = document.getElementById("period-screener-body");
       const filtered = sortScreenerRows(applyScreenerFilters(screenerRows));
       document.getElementById("screener-row-count").textContent =
-        `${filtered.length} of ${screenerRows.length} shown · sorted by ${screenerSortKey} (${screenerSortAsc ? "asc" : "desc"})`;
+        `${filtered.length} of ${screenerRows.length} shown · ${screenerRequestedTradingDays} trading-day window · sorted by ${screenerSortKey} (${screenerSortAsc ? "asc" : "desc"})`;
 
       if (!filtered.length) {
         body.innerHTML = `<tr><td colspan="10" class="empty">${screenerRows.length ? "No rows match filters." : "Run period screener after pulling history."}</td></tr>`;
@@ -1484,7 +1492,7 @@
           <td>${r.ticker}</td>
           <td>${r.avg_range_pct != null ? r.avg_range_pct + "%" : "—"}</td>
           <td>${r.adv_dollar_m != null ? r.adv_dollar_m : "—"}</td>
-          <td>${r.days_screened ?? "—"}</td>
+          <td>${formatScreenerDays(r)}</td>
           <td>${r.simulated_targets ?? "—"}</td>
           <td>${r.simulated_stops ?? "—"}</td>
           <td>${r.hit_rate_pct != null ? r.hit_rate_pct + "%" : "—"}</td>
@@ -1517,6 +1525,8 @@
       const days = document.getElementById("screener-period-days").value || "14";
       const data = await api(`/api/screener/ranked?period_days=${days}`);
       screenerRows = data.ranked || [];
+      screenerRequestedTradingDays = data.period_days ?? Number(days);
+      screenerTradingDaysInPeriod = data.trading_days_in_period ?? screenerRequestedTradingDays;
       renderScreenerTable();
       updateScreenerSortHeaders();
     }

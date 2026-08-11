@@ -27,6 +27,7 @@ from investment_agent.historical import evaluate_trading_day
 from investment_agent.journal import get_completed_round_trips
 from investment_agent.period_screener import (
     date_range_for_period,
+    list_trading_dates,
     run_period_screener,
 )
 from investment_agent.strategy_models import RECOMMENDED_MODEL
@@ -123,8 +124,16 @@ def build_ranked_top20_for_date(
     if stored:
         return stored[:TOP_N]
 
-    start, end = date_range_for_period(period_days, end_date=report_date)
-    period = run_period_screener(conn, start_date=start, end_date=end, min_days_screened=1)
+    start, end = date_range_for_period(period_days, end_date=report_date, conn=conn)
+    trading_dates = list_trading_dates(conn, count=period_days, end_date=report_date)
+    period = run_period_screener(
+        conn,
+        start_date=start,
+        end_date=end,
+        min_days_screened=1,
+        trading_dates=trading_dates or None,
+        requested_trading_days=period_days,
+    )
     day_eval = evaluate_trading_day(conn, report_date)
     screened = {m["ticker"]: m for m in day_eval.get("screened_matches") or []}
 

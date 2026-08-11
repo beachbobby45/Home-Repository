@@ -328,7 +328,7 @@ def run_intraday_backtest(
     use_dollar_target: bool = False,
     net_target: float | None = None,
 ) -> BacktestResult:
-    start_date, end_date = date_range_for_period(lookback_days)
+    start_date, end_date = date_range_for_period(lookback_days, conn=conn)
     top_rows = _top_ranked_tickers(conn, period_days=lookback_days, top_n=top_n)
     top_tickers = {r["ticker"] for r in top_rows}
     rank_by_ticker = {r["ticker"]: float(r.get("score") or 0) for r in top_rows}
@@ -532,7 +532,7 @@ def run_dollar_daily_backtest(
     from investment_agent.dollar_target import simulate_dollar_outcome, net_at_high_from_open
     from investment_agent.period_screener import date_range_for_period
 
-    start_date, end_date = date_range_for_period(lookback_days)
+    start_date, end_date = date_range_for_period(lookback_days, conn=conn)
     top_rows = _top_ranked_tickers(conn, period_days=lookback_days, top_n=50)
     rank_by_ticker = {r["ticker"]: float(r.get("score") or 0) for r in top_rows}
     top_tickers = set(rank_by_ticker)
