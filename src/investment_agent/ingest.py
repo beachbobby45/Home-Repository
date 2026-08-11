@@ -122,6 +122,8 @@ def run_ingest(
     tradable_cash: float = ORIGINAL_BASIS,
     incremental: bool = False,
     stale_hours: float = 20.0,
+    quote_stale_hours: float | None = None,
+    bar_stale_hours: float | None = None,
 ) -> dict:
     """Fetch macro + quotes + daily bars; compute liquidity/range metrics + regime."""
     from investment_agent.db_maintenance import acquire_ingest_lock, release_ingest_lock
@@ -136,6 +138,8 @@ def run_ingest(
             tradable_cash=tradable_cash,
             incremental=incremental,
             stale_hours=stale_hours,
+            quote_stale_hours=quote_stale_hours,
+            bar_stale_hours=bar_stale_hours,
         )
     finally:
         release_ingest_lock()
@@ -149,8 +153,12 @@ def _run_ingest_body(
     tradable_cash: float = ORIGINAL_BASIS,
     incremental: bool = False,
     stale_hours: float = 20.0,
+    quote_stale_hours: float | None = None,
+    bar_stale_hours: float | None = None,
 ) -> dict:
     """Internal ingest implementation."""
+    q_stale = stale_hours if quote_stale_hours is None else quote_stale_hours
+    b_stale = stale_hours if bar_stale_hours is None else bar_stale_hours
     path = init_db(db_path)
     if tickers is not None:
         symbols = [t.upper() for t in tickers]
@@ -164,6 +172,9 @@ def _run_ingest_body(
         "tickers": symbols,
         "errors": [],
         "incremental": incremental,
+        "stale_hours": stale_hours,
+        "quote_stale_hours": q_stale,
+        "bar_stale_hours": b_stale,
         "quotes_refreshed": 0,
         "quotes_skipped": 0,
         "bars_refreshed": 0,
@@ -191,7 +202,7 @@ def _run_ingest_body(
         try:
             for symbol in symbols:
                 if incremental and not _needs_quote_refresh(
-                    conn, symbol, stale_hours=stale_hours, force_symbols=force
+                    conn, symbol, stale_hours=q_stale, force_symbols=force
                 ):
                     summary["quotes_skipped"] += 1
                     if symbol in REGIME_SYMBOLS:
@@ -243,7 +254,7 @@ def _run_ingest_body(
         total_symbols = len(symbols)
         for idx, symbol in enumerate(symbols, start=1):
             if incremental and not _needs_bars_refresh(
-                conn, symbol, stale_hours=stale_hours, force_symbols=force
+                conn, symbol, stale_hours=b_stale, force_symbols=force
             ):
                 summary["bars_skipped"] += 1
                 continue

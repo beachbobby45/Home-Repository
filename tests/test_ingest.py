@@ -165,3 +165,73 @@ def test_run_ingest_incremental_skips_fresh_symbols():
         assert summary["quotes_skipped"] >= 3
         assert summary["bars_skipped"] >= 3
         assert mock_fh.get_quote.call_count < len(summary["tickers"])
+
+
+def test_run_ingest_after_close_uses_shorter_quote_stale_window():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "ac.db"
+        init_db(path)
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        load_preset_into_watchlist(conn, "starter10")
+        now = _recent_iso(3.0)  # 3 hours ago — fresh for 20h, stale for 2h quotes
+        for ticker in ("AAPL",):
+            insert_quote(
+                conn,
+                {
+                    "ticker": ticker,
+                    "captured_at": now,
+                    "price": 100.0,
+                    "open": 99.0,
+                    "high": 101.0,
+                    "low": 98.0,
+                    "prev_close": 99.5,
+                },
+            )
+            insert_ticker_metrics(
+                conn,
+                {
+                    "ticker": ticker,
+                    "computed_at": now,
+                    "adv_dollar": 50_000_000,
+                    "avg_range_pct": 3.0,
+                    "liquidity_cap": 400_000,
+                    "last_close": 100,
+                    "last_quote": 100,
+                    "meets_liquidity_min": True,
+                    "near_swing_target": True,
+                },
+            )
+        conn.commit()
+        conn.close()
+
+        settings = Settings(
+            anthropic_api_key="sk-test",
+            fred_api_key="test-fred",
+            finnhub_api_key="test-finnhub",
+            massive_api_key=None,
+            verify_test_ticker="SPY",
+            app_api_key="",
+            alpaca_api_key=None,
+            alpaca_secret_key=None,
+        )
+        mock_fh = MagicMock()
+        mock_fh.get_quote.return_value = {"c": 100, "o": 99, "h": 101, "l": 98, "pc": 99}
+
+        with (
+            patch("investment_agent.ingest.fetch_vix", return_value=("2026-01-01", 15.0)),
+            patch("investment_agent.ingest.FinnhubClient", return_value=mock_fh),
+            patch("investment_agent.ingest.get_daily_bars", return_value=[]),
+        ):
+            summary = run_ingest(
+                settings,
+                db_path=path,
+                incremental=True,
+                stale_hours=20.0,
+                quote_stale_hours=2.0,
+                bar_stale_hours=12.0,
+            )
+
+        assert summary["quote_stale_hours"] == 2.0
+        assert summary["quotes_refreshed"] >= 1
+        assert summary["bars_skipped"] >= 1

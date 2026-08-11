@@ -251,6 +251,80 @@ def upsert_tickers(
     return count
 
 
+def _parse_iso_age_hours(iso_ts: str | None) -> float | None:
+    if not iso_ts:
+        return None
+    try:
+        from datetime import datetime, timezone
+
+        ts = iso_ts.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - dt.astimezone(timezone.utc)
+        return age.total_seconds() / 3600.0
+    except ValueError:
+        return None
+
+
+def compute_data_freshness(conn: sqlite3.Connection) -> dict:
+    """How old quotes and metrics are for the active watchlist."""
+    active = get_active_watchlist(conn)
+    if not active:
+        return {
+            "quotes_newest_at": None,
+            "quotes_oldest_at": None,
+            "quotes_max_age_hours": None,
+            "metrics_newest_at": None,
+            "metrics_max_age_hours": None,
+            "stale_quote_count": 0,
+            "stale_metrics_count": 0,
+        }
+
+    placeholders = ",".join("?" for _ in active)
+    quote_rows = conn.execute(
+        f"""
+        SELECT ticker, MAX(captured_at) AS last_at
+        FROM quotes
+        WHERE ticker IN ({placeholders})
+        GROUP BY ticker
+        """,
+        active,
+    ).fetchall()
+    metric_rows = conn.execute(
+        f"""
+        SELECT ticker, MAX(computed_at) AS last_at
+        FROM ticker_metrics
+        WHERE ticker IN ({placeholders})
+        GROUP BY ticker
+        """,
+        active,
+    ).fetchall()
+
+    quote_times = [r["last_at"] for r in quote_rows if r["last_at"]]
+    metric_times = [r["last_at"] for r in metric_rows if r["last_at"]]
+    quote_ages = [_parse_iso_age_hours(t) for t in quote_times]
+    metric_ages = [_parse_iso_age_hours(t) for t in metric_times]
+    quote_ages_valid = [a for a in quote_ages if a is not None]
+    metric_ages_valid = [a for a in metric_ages if a is not None]
+
+    newest_quote = max(quote_times) if quote_times else None
+    oldest_quote = min(quote_times) if quote_times else None
+    newest_metric = max(metric_times) if metric_times else None
+
+    return {
+        "quotes_newest_at": newest_quote,
+        "quotes_oldest_at": oldest_quote,
+        "quotes_max_age_hours": round(max(quote_ages_valid), 1) if quote_ages_valid else None,
+        "metrics_newest_at": newest_metric,
+        "metrics_max_age_hours": round(max(metric_ages_valid), 1) if metric_ages_valid else None,
+        "stale_quote_count": sum(1 for a in quote_ages_valid if a >= 4.0),
+        "stale_metrics_count": sum(1 for a in metric_ages_valid if a >= 24.0),
+        "tickers_with_quotes": len(quote_times),
+        "tickers_with_metrics": len(metric_times),
+    }
+
+
 def compute_universe_stats(conn: sqlite3.Connection) -> dict:
     """Step 3 pass/filter counts from latest ticker_metrics per active ticker."""
     rows = conn.execute(
@@ -291,6 +365,7 @@ def compute_universe_stats(conn: sqlite3.Connection) -> dict:
         "filter_pct_out": round(100.0 * filtered_out / max(tradeable, 1), 1),
         "pass_pct": round(100.0 * pass_both / max(tradeable, 1), 1),
         "missing_metrics": max(universe_size - with_metrics, 0),
+        "freshness": compute_data_freshness(conn),
     }
 
 

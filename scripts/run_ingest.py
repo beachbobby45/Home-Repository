@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,22 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.config import Settings
 from investment_agent.ingest import DEFAULT_TICKERS, run_ingest
+
+LAST_RUN_PATH = ROOT / "data" / "ingest_last_run.json"
+
+# After close: refresh quotes if older than 2h; daily bars if older than 12h.
+AFTER_CLOSE_QUOTE_STALE_HOURS = 2.0
+AFTER_CLOSE_BAR_STALE_HOURS = 12.0
+
+
+def _write_last_run(summary: dict, *, mode: str) -> None:
+    LAST_RUN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "finished_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "mode": mode,
+        **summary,
+    }
+    LAST_RUN_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def main() -> None:
@@ -41,6 +58,11 @@ def main() -> None:
         help="Skip symbols with fresh quotes/bars (default: full refresh)",
     )
     parser.add_argument(
+        "--after-close",
+        action="store_true",
+        help="Incremental with fresh quotes (2h) and daily bars (12h) — use after market close",
+    )
+    parser.add_argument(
         "--stale-hours",
         type=float,
         default=20.0,
@@ -53,14 +75,28 @@ def main() -> None:
         print("ERROR: FRED_API_KEY and FINNHUB_API_KEY required in .env")
         sys.exit(2)
 
+    incremental = args.incremental or args.after_close
+    quote_stale = None
+    bar_stale = None
+    mode = "full"
+    if args.after_close:
+        mode = "after_close"
+        quote_stale = AFTER_CLOSE_QUOTE_STALE_HOURS
+        bar_stale = AFTER_CLOSE_BAR_STALE_HOURS
+    elif args.incremental:
+        mode = "incremental"
+
     summary = run_ingest(
         settings,
         tickers=args.tickers,
         db_path=args.db,
         lookback_days=args.lookback_days,
-        incremental=args.incremental,
+        incremental=incremental,
         stale_hours=args.stale_hours,
+        quote_stale_hours=quote_stale,
+        bar_stale_hours=bar_stale,
     )
+    _write_last_run(summary, mode=mode)
     print(json.dumps(summary, indent=2))
     if summary.get("ok"):
         sys.exit(0)
@@ -68,7 +104,7 @@ def main() -> None:
         print(
             f"\nPartial success: {summary.get('bars_refreshed', 0)} bars, "
             f"{summary.get('quotes_refreshed', 0)} quotes refreshed "
-            f"({summary.get('error_count', 0)} errors). Re-run --incremental to retry failures.",
+            f"({summary.get('error_count', 0)} errors). Re-run to retry failures.",
             file=sys.stderr,
         )
         sys.exit(0)

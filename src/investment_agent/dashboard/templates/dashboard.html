@@ -178,9 +178,9 @@
           <summary class="screener-workflow-summary">Daily routine — when to click each button</summary>
           <div class="screener-workflow-body brief">
             <p><strong>One-time setup:</strong> <em>S&amp;P 500</em> (or SP100) → <em>Full ingest</em> once (or <code>run_ingest_mac.sh</code> in Terminal) → <em>Run screener</em>.</p>
-            <p><strong>Each trading morning (before 10:00 AM ET):</strong> <em>Daily ingest</em> (Terminal if S&amp;P 500 loaded) → <em>Run screener</em> → <strong>Trade</strong> tab → <em>Refresh live</em>.</p>
-            <p><strong>During the session:</strong> use <em>Refresh live</em> on the Trade tab for prices (not Full ingest). <em>Refresh ranked</em> only reloads the table from the database.</p>
-            <p><strong>After the close (optional):</strong> <em>Daily ingest</em> + <em>Run screener</em> for tomorrow&apos;s rank; Review tab for daily close.</p>
+            <p><strong>Each trading morning (before 10:00 AM ET):</strong> ingest runs automatically if you installed the schedule (see Setup), or double-click <em>Run Daily Ingest.command</em> → <em>Run screener</em> → <strong>Trade</strong> tab → <em>Refresh live</em>.</p>
+            <p><strong>After the close:</strong> double-click <em>Run After-Close Ingest.command</em> (or wait for 4:30 PM auto-run) → <em>Run screener</em>. Browser Daily ingest does not run with 537 tickers.</p>
+            <p><strong>During the session:</strong> use <em>Refresh live</em> on the Trade tab for prices (top picks only — not the full S&amp;P 500).</p>
             <p class="screener-workflow-note">Timestamps under each button show when that action last <strong>finished</strong> (Pacific time).</p>
           </div>
         </details>
@@ -485,16 +485,19 @@
     <!-- ═══ SETUP ═══ -->
     <div id="view-setup" class="app-view">
       <section class="view-section">
-        <header class="view-head"><h2>Data &amp; ingest</h2><p class="brief">Run on your Mac each morning. Full ingest after loading a new universe.</p></header>
+        <header class="view-head"><h2>Data &amp; ingest</h2><p class="brief">Best setup: automatic schedule (no Terminal). Browser Daily ingest only works under ~150 tickers.</p></header>
         <div class="actions actions-wrap">
           <button class="btn secondary" id="setup-daily-ingest">Daily ingest</button>
           <button class="btn secondary" id="setup-full-ingest">Full ingest</button>
           <button class="btn secondary" id="setup-pull-historical">Pull 60d OHLCV</button>
         </div>
         <div class="card brief setup-hints">
+          <p><strong>Recommended (S&amp;P 500):</strong> one-time in Terminal:</p>
+          <p><code>cd ~/Home-Repository && ./scripts/install_ingest_schedule_mac.sh</code></p>
+          <p>Then data updates at <strong>6:30 AM</strong> and <strong>4:30 PM</strong> automatically. Logs: <code>~/Library/Logs/investment-agent/ingest.log</code></p>
+          <p><strong>Manual (Finder):</strong> <code>scripts/Run Daily Ingest.command</code> (morning) · <code>scripts/Run After-Close Ingest.command</code> (evening)</p>
           <p><strong>Mac repair:</strong> <code>./scripts/repair_dashboard_mac.sh</code></p>
-          <p><strong>Mac ingest:</strong> <code>./scripts/run_ingest_mac.sh</code></p>
-          <p><strong>Backtest:</strong> <code>python3 scripts/run_backtest.py --daily-only --days 14</code></p>
+          <p id="setup-freshness" class="brief">Loading data freshness…</p>
         </div>
       </section>
     </div>
@@ -1064,11 +1067,33 @@
 
     async function loadWatchlistStats() {
       const s = await api("/api/watchlist/stats");
+      const f = s.freshness || {};
+      let freshLine = "";
+      if (f.quotes_max_age_hours != null) {
+        freshLine = ` · Quotes oldest: ${f.quotes_max_age_hours}h ago`;
+        if (f.stale_quote_count > 0) {
+          freshLine += ` (${f.stale_quote_count} stale)`;
+        }
+      }
+      if (f.metrics_max_age_hours != null) {
+        freshLine += ` · Metrics oldest: ${f.metrics_max_age_hours}h ago`;
+      }
       document.getElementById("watchlist-stats").textContent =
         `Universe: ${s.universe_size} tickers (${s.tradeable_universe} tradeable) · `
         + `Step 3 pass: ${s.pass_both_step3} (${s.pass_pct}%) · `
         + `Filtered out: ${s.filtered_out} (${s.filter_pct_out}%) · `
-        + `Missing metrics: ${s.missing_metrics}`;
+        + `Missing metrics: ${s.missing_metrics}${freshLine}`;
+      const setupFresh = document.getElementById("setup-freshness");
+      if (setupFresh) {
+        if (f.quotes_newest_at) {
+          setupFresh.textContent =
+            `Data freshness — newest quote: ${fmtDateTimePT(f.quotes_newest_at)} · `
+            + `newest metrics: ${f.metrics_newest_at ? fmtDateTimePT(f.metrics_newest_at) : "—"} · `
+            + `If quotes are >4h old, run After-Close Ingest or install the auto schedule (above).`;
+        } else {
+          setupFresh.textContent = "No quote data yet — run ingest once.";
+        }
+      }
     }
 
     function renderScreenActionTimes(actions) {
