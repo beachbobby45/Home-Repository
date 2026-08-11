@@ -110,6 +110,11 @@ from investment_agent.trading_day import (
     refresh_live_quotes,
     validate_planned_trade,
 )
+from investment_agent.daily_rhythm import (
+    build_trading_candidates,
+    get_daily_rhythm_status,
+    ingest_schedule_installed,
+)
 
 DASHBOARD_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DASHBOARD_DIR.parents[2]
@@ -434,6 +439,61 @@ def api_summary(conn=Depends(_db)) -> dict[str, Any]:
 @app.get("/api/trading-day/status")
 def api_trading_day_status(conn=Depends(_db)) -> dict[str, Any]:
     return build_trading_day_status(conn)
+
+
+@app.get("/api/daily-rhythm/status")
+def api_daily_rhythm_status(conn=Depends(_db)) -> dict[str, Any]:
+    return get_daily_rhythm_status(conn)
+
+
+@app.get("/api/daily-rhythm/candidates")
+def api_daily_rhythm_candidates(
+    conn=Depends(_db),
+    limit: int = 15,
+    period_days: int = 14,
+) -> dict[str, Any]:
+    return {
+        "candidates": build_trading_candidates(
+            conn, limit=min(max(limit, 1), 30), period_days=period_days
+        ),
+        "period_days": period_days,
+    }
+
+
+@app.post("/api/daily-rhythm/prepare-morning")
+def api_prepare_morning(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Step 2 — run screener and return trade candidates with size / sell / stop."""
+    if ingest_lock_active():
+        raise HTTPException(status_code=503, detail=ingest_lock_message())
+    start, end = date_range_for_period(14)
+    result = run_period_screener(
+        conn,
+        start_date=start,
+        end_date=end,
+        min_days_screened=1,
+        min_hit_rate_pct=None,
+    )
+    run_id = save_screener_run(conn, result)
+    record_screen_action(
+        conn,
+        ACTION_PERIOD_SCREENER,
+        detail=f"{len(result.get('candidates', []))} candidates · 14d window",
+    )
+    conn.commit()
+    candidates = build_trading_candidates(conn, limit=15, period_days=14)
+    status = build_trading_day_status(conn)
+    rhythm = get_daily_rhythm_status(conn)
+    return {
+        "ok": True,
+        "saved_run_id": run_id,
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+        "trading_day": status,
+        "rhythm": rhythm,
+    }
 
 
 @app.get("/api/health/db")

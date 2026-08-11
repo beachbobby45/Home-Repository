@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260810c" />
+  <link rel="stylesheet" href="/static/style.css?v=20260811a" />
 </head>
 <body>
   <header class="app-header">
@@ -14,7 +14,7 @@
         <p class="subtitle">E*TRADE manual · Growth Plan · $5M goal</p>
       </div>
       <div class="app-header-actions">
-        <button class="btn btn-sm" type="button" id="refresh-trading-day">Refresh live</button>
+        <button class="btn btn-sm" type="button" id="refresh-trading-day" title="Step 3 — refresh live prices before you buy">Refresh live before buy</button>
         <button class="btn secondary btn-sm" type="button" id="pin-top-pick">Pin #1</button>
         <button class="btn secondary btn-sm" type="button" id="refresh-all">Refresh all</button>
       </div>
@@ -55,8 +55,29 @@
 
       <header class="trade-page-head">
         <h2 class="trade-page-title">What to trade today</h2>
-        <p class="brief">Pick #1 is your primary buy. Pick #2 is backup or optional second trade after a win.</p>
+        <p class="brief">Three steps each day — metrics after close, picks before open, live check before you buy.</p>
       </header>
+
+      <section class="daily-rhythm card" id="daily-rhythm-panel">
+        <h2 class="daily-rhythm-title">Daily rhythm</h2>
+        <ol class="rhythm-steps" id="rhythm-steps"></ol>
+      </section>
+
+      <section class="card" id="candidates-panel">
+        <header class="panel-head">
+          <h2>Today&apos;s candidates</h2>
+          <p class="brief">After Step 2 — buy size, sell target, and stop per symbol (Growth Plan).</p>
+        </header>
+        <div class="table-wrap">
+          <table class="data-table" id="candidates-table">
+            <thead><tr>
+              <th>#</th><th>Ticker</th><th>Hit%</th><th>Buy</th><th>Shares</th><th>Size</th>
+              <th>Sell</th><th>Stop</th><th>Live S3</th>
+            </tr></thead>
+            <tbody id="candidates-body"><tr><td colspan="9" class="empty">Run Step 2 to populate.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
 
       <div class="card trading-day-panel verdict-neutral" id="trading-day-panel">
         <div class="trade-verdict-row">
@@ -114,10 +135,10 @@
         </div>
       </div>
 
-      <section class="validate-panel card">
+      <section class="validate-panel card rhythm-step3-panel">
         <header class="panel-head">
-          <h2>Planned purchase check</h2>
-          <p class="brief">Confirm your E*TRADE entry before you buy — refresh live data first.</p>
+          <h2>Step 3 — Confirm before you buy</h2>
+          <p class="brief">Click <strong>Refresh live before buy</strong> above, then validate your E*TRADE entry.</p>
         </header>
         <form id="planned-trade-form" class="planned-trade-form planned-trade-form-hero">
           <label class="plan-field"><span>Ticker</span><input type="text" id="plan-ticker" placeholder="NFLX" /></label>
@@ -171,49 +192,27 @@
 
       <section class="view-section">
         <header class="view-head">
-          <h2>Ranked screener</h2>
-          <p class="brief">14-day rank · Step 3 matches · dollar hit rate</p>
+          <h2>Ranked universe</h2>
+          <p class="brief">Full screener table · use <strong>Trade</strong> tab for Step 2 picks with buy / sell / stop</p>
         </header>
-        <details class="screener-workflow card" open>
-          <summary class="screener-workflow-summary">Daily routine — when to click each button</summary>
+        <div class="card rhythm-screen-note brief" id="rhythm-screen-note">Loading daily rhythm…</div>
+        <details class="screener-workflow card">
+          <summary class="screener-workflow-summary">Advanced — load watchlists &amp; one-time setup</summary>
           <div class="screener-workflow-body brief">
-            <p><strong>One-time setup:</strong> <em>S&amp;P 500</em> (or SP100) → <em>Full ingest</em> once (or <code>run_ingest_mac.sh</code> in Terminal) → <em>Run screener</em>.</p>
-            <p><strong>Each trading morning (before 10:00 AM ET):</strong> ingest runs automatically if you installed the schedule (see Setup), or double-click <em>Run Daily Ingest.command</em> → <em>Run screener</em> → <strong>Trade</strong> tab → <em>Refresh live</em>.</p>
-            <p><strong>After the close:</strong> double-click <em>Run After-Close Ingest.command</em> (or wait for 4:30 PM auto-run) → <em>Run screener</em>. Browser Daily ingest does not run with 537 tickers.</p>
-            <p><strong>During the session:</strong> use <em>Refresh live</em> on the Trade tab for prices (top picks only — not the full S&amp;P 500).</p>
-            <p class="screener-workflow-note">Timestamps under each button show when that action last <strong>finished</strong> (Pacific time).</p>
+            <div class="screener-actions-grid screener-actions-compact">
+              <div class="screener-action-item" data-action="sp500">
+                <button class="btn secondary btn-sm" id="load-sp500">Load S&amp;P 500</button>
+              </div>
+              <div class="screener-action-item" data-action="datacenter_us">
+                <button class="btn secondary btn-sm" id="load-datacenter-us">DC US watch</button>
+              </div>
+              <div class="screener-action-item" data-action="refresh_ranked">
+                <button class="btn secondary btn-sm" id="refresh-ranked">Reload table</button>
+              </div>
+            </div>
+            <p class="screener-workflow-note">First time: Setup tab → Enable Auto Refresh · Load S&amp;P 500 once.</p>
           </div>
         </details>
-        <div class="screener-actions-grid">
-          <div class="screener-action-item" data-action="sp100">
-            <button class="btn secondary" id="load-sp100">SP100</button>
-            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
-          </div>
-          <div class="screener-action-item" data-action="sp500">
-            <button class="btn secondary" id="load-sp500">S&amp;P 500</button>
-            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
-          </div>
-          <div class="screener-action-item" data-action="datacenter_us">
-            <button class="btn secondary" id="load-datacenter-us">DC US watch</button>
-            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
-          </div>
-          <div class="screener-action-item" data-action="daily_ingest">
-            <button class="btn secondary" id="run-daily-ingest">Daily ingest</button>
-            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
-          </div>
-          <div class="screener-action-item" data-action="full_ingest">
-            <button class="btn secondary" id="run-full-ingest">Full ingest</button>
-            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
-          </div>
-          <div class="screener-action-item" data-action="period_screener">
-            <button class="btn secondary" id="run-period-screener">Run screener</button>
-            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
-          </div>
-          <div class="screener-action-item" data-action="refresh_ranked">
-            <button class="btn secondary" id="refresh-ranked">Refresh ranked</button>
-            <div class="screener-action-ts"><span class="ts-label">Last:</span> Not run yet</div>
-          </div>
-        </div>
         <div class="card">
           <div id="watchlist-stats" class="brief">Loading…</div>
           <div class="screener-filters">
@@ -485,19 +484,25 @@
     <!-- ═══ SETUP ═══ -->
     <div id="view-setup" class="app-view">
       <section class="view-section">
-        <header class="view-head"><h2>Data &amp; ingest</h2><p class="brief">Best setup: automatic schedule (no Terminal). Browser Daily ingest only works under ~150 tickers.</p></header>
+        <header class="view-head"><h2>Setup</h2><p class="brief">One-time — then the daily rhythm runs automatically.</p></header>
+        <div class="card setup-onboarding">
+          <h3>1. Enable automatic data refresh (recommended)</h3>
+          <p class="brief">Updates metrics after close (4:30 PM) and before open (6:30 AM) — no Terminal typing.</p>
+          <p>In Finder, open <code>Home-Repository/scripts/</code> and double-click:</p>
+          <p><strong>Enable Auto Refresh.command</strong></p>
+          <p class="brief" id="setup-schedule-status">Checking schedule…</p>
+          <h3 style="margin-top:1.25rem">2. Load your stock universe (once)</h3>
+          <p class="brief">Screen tab → Advanced → <strong>Load S&amp;P 500</strong> (or use SP100 for a smaller list).</p>
+          <h3 style="margin-top:1.25rem">3. Manual refresh (if needed)</h3>
+          <p class="brief"><strong>Run After-Close Ingest.command</strong> · <strong>Run Daily Ingest.command</strong></p>
+        </div>
         <div class="actions actions-wrap">
-          <button class="btn secondary" id="setup-daily-ingest">Daily ingest</button>
-          <button class="btn secondary" id="setup-full-ingest">Full ingest</button>
+          <button class="btn secondary" id="setup-daily-ingest">Daily ingest (small lists only)</button>
           <button class="btn secondary" id="setup-pull-historical">Pull 60d OHLCV</button>
         </div>
         <div class="card brief setup-hints">
-          <p><strong>Recommended (S&amp;P 500):</strong> one-time in Terminal:</p>
-          <p><code>cd ~/Home-Repository && ./scripts/install_ingest_schedule_mac.sh</code></p>
-          <p>Then data updates at <strong>6:30 AM</strong> and <strong>4:30 PM</strong> automatically. Logs: <code>~/Library/Logs/investment-agent/ingest.log</code></p>
-          <p><strong>Manual (Finder):</strong> <code>scripts/Run Daily Ingest.command</code> (morning) · <code>scripts/Run After-Close Ingest.command</code> (evening)</p>
-          <p><strong>Mac repair:</strong> <code>./scripts/repair_dashboard_mac.sh</code></p>
-          <p id="setup-freshness" class="brief">Loading data freshness…</p>
+          <p id="setup-freshness">Loading data freshness…</p>
+          <p><strong>Repair:</strong> <code>./scripts/repair_dashboard_mac.sh</code></p>
         </div>
       </section>
     </div>
@@ -1063,6 +1068,146 @@
           <div class="brief" style="font-size:0.82rem">${v}</div>
         </div>
       `).join("");
+    }
+
+    function rhythmStateLabel(state) {
+      const map = { ready: "Ready", ok: "OK", needed: "Do this", stale: "Re-run" };
+      return map[state] || state || "—";
+    }
+
+    function renderCandidatesTable(candidates) {
+      const body = document.getElementById("candidates-body");
+      if (!body) return;
+      if (!candidates?.length) {
+        body.innerHTML = '<tr><td colspan="9" class="empty">Run Step 2 — Prepare today&apos;s trades — to fill this table.</td></tr>';
+        return;
+      }
+      body.innerHTML = candidates.map((c, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td><strong>${c.ticker}</strong></td>
+          <td>${c.dollar_hit_rate_pct ?? c.hit_rate_pct ?? "—"}%</td>
+          <td>${c.entry_price != null ? "$" + fmt(c.entry_price) : "—"}</td>
+          <td>${c.recommended_shares ?? "—"}</td>
+          <td>${c.suggested_size != null ? "$" + fmt(c.suggested_size) : "—"}</td>
+          <td>${c.target_price != null ? "$" + fmt(c.target_price) : "—"}</td>
+          <td>${c.stop_price != null ? "$" + fmt(c.stop_price) : "—"}</td>
+          <td>${c.step3_pass ? "Yes" : "No"}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadCandidates() {
+      try {
+        const data = await api("/api/daily-rhythm/candidates?limit=15");
+        renderCandidatesTable(data.candidates || []);
+      } catch (_) {
+        renderCandidatesTable([]);
+      }
+    }
+
+    function renderDailyRhythm(rhythm) {
+      const list = document.getElementById("rhythm-steps");
+      if (!list || !rhythm?.steps) return;
+      list.innerHTML = rhythm.steps.map((step) => {
+        const last = step.last_at ? `Last: ${fmtDateTimePT(step.last_at)}` : "Not run yet today";
+        let actionBtn = "";
+        if (step.id === "pre_market") {
+          actionBtn = `<button type="button" class="btn btn-sm rhythm-action-btn" data-rhythm-action="prepare">Prepare today&apos;s trades</button>`;
+        } else if (step.id === "before_buy") {
+          actionBtn = `<button type="button" class="btn btn-sm rhythm-action-btn" data-rhythm-action="refresh">Refresh live before buy</button>`;
+        } else if (step.id === "after_close") {
+          actionBtn = `<span class="brief rhythm-manual">${step.manual || ""}</span>`;
+        }
+        return `
+          <li class="rhythm-step rhythm-state-${step.state}">
+            <div class="rhythm-step-head">
+              <span class="rhythm-num">${step.number}</span>
+              <div class="rhythm-step-copy">
+                <strong>${step.title}</strong>
+                <span class="rhythm-sub">${step.subtitle}</span>
+              </div>
+              <span class="rhythm-badge">${rhythmStateLabel(step.state)}</span>
+            </div>
+            <p class="brief rhythm-detail">${step.detail}</p>
+            <p class="brief rhythm-last">${last}</p>
+            ${actionBtn}
+          </li>`;
+      }).join("");
+      list.querySelectorAll("[data-rhythm-action=prepare]").forEach((btn) => {
+        btn.addEventListener("click", () => prepareMorningTrades().catch((e) => toast(e.message)));
+      });
+      list.querySelectorAll("[data-rhythm-action=refresh]").forEach((btn) => {
+        btn.addEventListener("click", () => refreshLiveBeforeBuy().catch((e) => toast(e.message)));
+      });
+      const sched = document.getElementById("setup-schedule-status");
+      if (sched) {
+        sched.textContent = rhythm.schedule_installed
+          ? "Auto refresh is ON (6:30 AM + 4:30 PM)."
+          : "Auto refresh is OFF — double-click Enable Auto Refresh.command in scripts/.";
+      }
+      const screenNote = document.getElementById("rhythm-screen-note");
+      if (screenNote && rhythm.steps?.[1]) {
+        const s2 = rhythm.steps[1];
+        screenNote.textContent =
+          `Step 2 last run: ${s2.last_at ? fmtDateTimePT(s2.last_at) : "not yet today"} — `
+          + `use Trade tab → Prepare today's trades for buy / sell / stop columns.`;
+      }
+    }
+
+    async function loadDailyRhythm() {
+      const rhythm = await api("/api/daily-rhythm/status");
+      renderDailyRhythm(rhythm);
+      return rhythm;
+    }
+
+    async function prepareMorningTrades() {
+      toast("Step 2 — running screener and building trade plan…");
+      const r = await api("/api/daily-rhythm/prepare-morning", { method: "POST", timeoutMs: 300000 });
+      renderCandidatesTable(r.candidates || []);
+      if (r.trading_day) {
+        const td = r.trading_day;
+        updateStatusBar(td, null);
+        const pick = td.top_pick;
+        document.getElementById("top-pick-body").innerHTML = pick
+          ? renderPickBlock(pick, td)
+          : "<div class='pick-empty'>No tradable pick for today's dollar goal.</div>";
+        renderTradeMath(pick, td);
+        document.getElementById("second-pick-body").innerHTML = td.second_pick
+          ? renderPickBlock(td.second_pick, td)
+          : "<div class='pick-empty'>No backup pick yet.</div>";
+        document.getElementById("verdict-headline").textContent = td.headline || "—";
+        document.getElementById("verdict-detail").textContent = td.detail || "";
+      }
+      if (r.rhythm) renderDailyRhythm(r.rhythm);
+      await loadPeriodScreener();
+      await loadWatchlistStats();
+      toast(`Step 2 done — ${r.candidate_count || 0} candidates with buy / sell / stop on Trade tab.`);
+    }
+
+    async function refreshLiveBeforeBuy() {
+      const btn = document.getElementById("refresh-trading-day");
+      try {
+        if (btn) btn.disabled = true;
+        toast("Step 3 — refreshing live quotes for picks…", 8000);
+        const r = await api("/api/trading-day/refresh", { method: "POST", timeoutMs: 90000 });
+        if (!r.refresh?.ok) {
+          toast(r.refresh?.error || "Refresh failed — check FINNHUB_API_KEY in .env", 6000);
+        } else {
+          toast(`Live refresh done (${(r.refresh.updated || []).length} symbols). Validate below.`);
+        }
+        if (r.status) {
+          await loadTradingDay();
+          await loadSummary();
+        }
+        document.getElementById("plan-ticker")?.removeAttribute("data-user-edited");
+        document.getElementById("plan-price")?.removeAttribute("data-user-edited");
+        document.getElementById("plan-shares")?.removeAttribute("data-user-edited");
+        await loadTradingDay();
+        document.querySelector(".validate-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
 
     async function loadWatchlistStats() {
@@ -1700,20 +1845,24 @@
     }
 
     async function refreshAll() {
-      await Promise.all([loadTradingDay(), loadSummary(), loadScenario(), loadCio(), loadRankedAndStats(), loadHistorical(), loadDailyClose(), loadLearning(), loadAlerts(), loadQueue(), loadJournal()]);
+      await Promise.all([
+        loadTradingDay(),
+        loadSummary(),
+        loadScenario(),
+        loadCio(),
+        loadDailyRhythm(),
+        loadCandidates(),
+        loadRankedAndStats(),
+        loadHistorical(),
+        loadDailyClose(),
+        loadLearning(),
+        loadAlerts(),
+        loadQueue(),
+        loadJournal(),
+      ]);
     }
 
-    document.getElementById("load-sp100").addEventListener("click", async () => {
-      try {
-        const r = await api("/api/watchlist/load-preset", {
-          method: "POST",
-          body: JSON.stringify({ preset: "sp100", replace: false }),
-        });
-        toast(`Loaded ${r.tickers_loaded} tickers (${r.tickers_activated} active)`);
-        await loadRankedAndStats();
-      } catch (e) { toast(e.message); }
-    });
-    document.getElementById("load-sp500").addEventListener("click", async () => {
+    document.getElementById("load-sp500")?.addEventListener("click", async () => {
       if (!confirm("Load ~500 S&P 500 tickers into the watchlist? Existing tickers stay active.")) return;
       try {
         const r = await api("/api/watchlist/load-preset", {
@@ -1721,11 +1870,11 @@
           body: JSON.stringify({ preset: "sp500", replace: false }),
           timeoutMs: 120000,
         });
-        toast(`Loaded ${r.tickers_loaded} tickers (${r.tickers_activated} active). Run Full ingest once, then Daily ingest each morning.`);
+        toast(`Loaded ${r.tickers_loaded} tickers. Enable Auto Refresh in Setup, then wait for ingest or run After-Close Ingest.command.`);
         await loadRankedAndStats();
       } catch (e) { toast(e.message); }
     });
-    document.getElementById("load-datacenter-us").addEventListener("click", async () => {
+    document.getElementById("load-datacenter-us")?.addEventListener("click", async () => {
       try {
         const r = await api("/api/watchlist/load-preset", {
           method: "POST",
@@ -1776,28 +1925,7 @@
       toast(`${label} done: ${q} quotes refreshed (${qs} skipped), ${b} bars refreshed (${bs} skipped)`);
       await refreshAll();
     }
-    document.getElementById("run-daily-ingest").addEventListener("click", async () => {
-      try { await runIngest(true); } catch (e) { toast(e.message); }
-    });
-    document.getElementById("run-full-ingest").addEventListener("click", async () => {
-      if (!confirm("Full ingest refreshes every active watchlist symbol. Continue?")) return;
-      try { await runIngest(false); } catch (e) { toast(e.message); }
-    });
-    document.getElementById("run-period-screener").addEventListener("click", async () => {
-      try {
-        const days = Number(document.getElementById("screener-period-days").value || 14);
-        toast(`Running ${days}-day period screener…`);
-        const r = await api("/api/screener/period", {
-          method: "POST",
-          body: JSON.stringify({ period_days: days, min_days_screened: 1, save: true }),
-        });
-        toast(`Screener done: ${r.candidates?.length || 0} candidate(s)`);
-        await loadPeriodScreener();
-        await loadWatchlistStats();
-        await loadScreenActionTimes();
-      } catch (e) { toast(e.message); }
-    });
-    document.getElementById("refresh-ranked").addEventListener("click", async () => {
+    document.getElementById("refresh-ranked")?.addEventListener("click", async () => {
       try {
         await loadRankedAndStats();
         await api("/api/screen/actions/record", {
@@ -1946,28 +2074,8 @@
     });
     document.getElementById("refresh-alerts").addEventListener("click", () => loadAlerts().catch((e) => toast(e.message)));
 
-    document.getElementById("refresh-trading-day").addEventListener("click", async () => {
-      const btn = document.getElementById("refresh-trading-day");
-      try {
-        btn.disabled = true;
-        toast("Refreshing live quotes + regime… (about 10–15 seconds)", 8000);
-        const r = await api("/api/trading-day/refresh", { method: "POST", timeoutMs: 90000 });
-        if (!r.refresh?.ok) {
-          toast(r.refresh?.error || "Refresh failed — check FINNHUB_API_KEY in .env", 6000);
-        } else {
-          toast(`Live data updated (${(r.refresh.updated || []).length} symbols)`);
-        }
-        if (r.status) {
-          await loadTradingDay();
-          await loadSummary();
-        }
-        // Re-fill planned price from fresh live entry unless user edited fields
-        document.getElementById("plan-ticker")?.removeAttribute("data-user-edited");
-        document.getElementById("plan-price")?.removeAttribute("data-user-edited");
-        document.getElementById("plan-shares")?.removeAttribute("data-user-edited");
-        await loadTradingDay();
-      } catch (e) { toast(e.message, 8000); }
-      finally { btn.disabled = false; }
+    document.getElementById("refresh-trading-day").addEventListener("click", () => {
+      refreshLiveBeforeBuy().catch((e) => toast(e.message, 8000));
     });
 
     ["plan-ticker", "plan-price", "plan-shares"].forEach((id) => {
@@ -2015,10 +2123,7 @@
 
     document.getElementById("refresh-all").addEventListener("click", () => refreshAll().catch((e) => toast(e.message)));
     document.getElementById("setup-daily-ingest")?.addEventListener("click", () => {
-      document.getElementById("run-daily-ingest")?.click();
-    });
-    document.getElementById("setup-full-ingest")?.addEventListener("click", () => {
-      document.getElementById("run-full-ingest")?.click();
+      runIngest(true).catch((e) => toast(e.message));
     });
     document.getElementById("setup-pull-historical")?.addEventListener("click", () => {
       document.getElementById("pull-historical")?.click();
