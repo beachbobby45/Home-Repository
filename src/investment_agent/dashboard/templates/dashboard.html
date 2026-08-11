@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260811c" />
+  <link rel="stylesheet" href="/static/style.css?v=20260811d" />
 </head>
 <body>
   <header class="app-header">
@@ -489,22 +489,56 @@
         <header class="view-head"><h2>Setup</h2><p class="brief">One-time — then the daily rhythm runs automatically.</p></header>
         <div class="card setup-onboarding">
           <h3>1. Enable automatic data refresh (recommended)</h3>
-          <p class="brief">Updates metrics after close (4:30 PM) and before open (6:30 AM) — no Terminal typing.</p>
-          <p>In Finder, open <code>Home-Repository/scripts/</code> and double-click:</p>
-          <p><strong>Enable Auto Refresh.command</strong></p>
+          <p class="brief">Updates metrics after close (4:30 PM) and before open (6:30 AM).</p>
+          <p>In Finder, open <code>Home-Repository/scripts/</code> and double-click <strong>Enable Auto Refresh.command</strong>.</p>
+          <p class="brief">If double-click does not launch, paste in Terminal:</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/install_ingest_schedule_mac.sh</pre>
           <p class="brief" id="setup-schedule-status">Checking schedule…</p>
+
           <h3 style="margin-top:1.25rem">2. Load your stock universe (once)</h3>
-          <p class="brief">Screen tab → Advanced → <strong>Load S&amp;P 500</strong> (or use SP100 for a smaller list).</p>
-          <h3 style="margin-top:1.25rem">3. Manual refresh (if needed)</h3>
-          <p class="brief"><strong>Run After-Close Ingest.command</strong> · <strong>Run Daily Ingest.command</strong></p>
+          <p class="brief">Screen tab → Advanced → <strong>Load S&amp;P 500</strong>, or run in Terminal:</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+PYTHONPATH=src python3 scripts/manage_watchlist.py load-preset sp500</pre>
+          <p class="brief">Smaller list (SP100): <code>load-preset sp100</code> · Special Watch: <code>load-preset datacenter_us</code></p>
+
+          <h3 style="margin-top:1.25rem">3. Refresh data (run in Terminal)</h3>
+          <p class="brief">Use these when Setup buttons or <code>.command</code> files do not launch. Replace <code>~/Home-Repository</code> with your clone path. Leave the window open — S&amp;P 500 takes ~15–25 minutes.</p>
+
+          <p class="setup-terminal-label"><strong>After market close</strong> — quotes + today&apos;s bars (Step 1)</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/run_ingest_mac.sh --after-close</pre>
+
+          <p class="setup-terminal-label"><strong>Before open</strong> — morning incremental refresh</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/run_ingest_mac.sh --incremental</pre>
+
+          <p class="setup-terminal-label"><strong>First time or full rebuild</strong> — all quotes + 60d bars</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/run_ingest_mac.sh</pre>
+
+          <p class="setup-terminal-label"><strong>Pull 60-day OHLCV only</strong> (same as Pull 60d OHLCV button)</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+PYTHONPATH=src python3 scripts/run_historical.py pull --lookback-days 60</pre>
+
+          <p class="setup-terminal-label"><strong>Refresh ranked screener</strong> after ingest (14 trading days)</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
+
+          <p class="setup-terminal-label"><strong>Check ingest result</strong></p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
         </div>
         <div class="actions actions-wrap">
           <button class="btn secondary" id="setup-daily-ingest">Daily ingest (small lists only)</button>
           <button class="btn secondary" id="setup-pull-historical">Pull 60d OHLCV</button>
         </div>
+        <p class="brief setup-terminal-note">Large watchlists (100+ tickers): browser ingest is blocked — use Terminal commands above.</p>
         <div class="card brief setup-hints">
           <p id="setup-freshness">Loading data freshness…</p>
-          <p><strong>Repair:</strong> <code>./scripts/repair_dashboard_mac.sh</code></p>
+          <p><strong>Repair dashboard:</strong></p>
+          <pre class="setup-terminal setup-terminal-compact" tabindex="0">cd ~/Home-Repository
+./scripts/repair_dashboard_mac.sh</pre>
         </div>
       </section>
     </div>
