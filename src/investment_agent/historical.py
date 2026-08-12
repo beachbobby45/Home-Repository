@@ -21,6 +21,10 @@ from investment_agent.db import (
 )
 from investment_agent.dollar_target import net_at_high_from_open, simulate_dollar_outcome
 from investment_agent.finance import ORIGINAL_BASIS, daily_profit_target
+from investment_agent.pullback_entry import (
+    net_at_high_after_pullback_fill,
+    simulate_pullback_dollar_outcome,
+)
 from investment_agent.liquidity import DailyBar, compute_liquidity_metrics
 from investment_agent.providers.yfinance_bars import get_daily_bars
 from investment_agent.strategy import REGIME_ONLY_TICKERS, STOP_PCT, TARGET_PCT
@@ -125,18 +129,25 @@ def evaluate_trading_day(
             else None
         )
         dollar_outcome = (
-            simulate_dollar_outcome(
+            simulate_pullback_dollar_outcome(
                 open_px,
                 high,
                 low,
                 deploy_dollar=tradable_cash,
+                avg_range_pct=metrics.avg_range_pct,
                 net_target=net_target,
             )
             if would_screen
             else None
         )
         net_at_high = (
-            net_at_high_from_open(open_px, high, deploy_dollar=tradable_cash)
+            net_at_high_after_pullback_fill(
+                open_px,
+                high,
+                low,
+                deploy_dollar=tradable_cash,
+                avg_range_pct=metrics.avg_range_pct,
+            )
             if would_screen
             else None
         )
@@ -168,7 +179,10 @@ def evaluate_trading_day(
     neither = sum(1 for r in screened if r["simulated_outcome"] == "neither")
     dollar_targets = sum(1 for r in screened if r["dollar_outcome"] == "target")
     dollar_stops = sum(1 for r in screened if r["dollar_outcome"] == "stop")
-    dollar_neither = sum(1 for r in screened if r["dollar_outcome"] == "neither")
+    dollar_neither = sum(
+        1 for r in screened if r["dollar_outcome"] in ("neither", "no_fill")
+    )
+    dollar_no_fill = sum(1 for r in screened if r["dollar_outcome"] == "no_fill")
 
     return {
         "eval_date": eval_date,
@@ -183,6 +197,7 @@ def evaluate_trading_day(
             "dollar_targets": dollar_targets,
             "dollar_stops": dollar_stops,
             "dollar_neither": dollar_neither,
+            "dollar_no_fill": dollar_no_fill,
             "dollar_hit_rate_pct": round(
                 100.0 * dollar_targets / max(dollar_targets + dollar_stops, 1),
                 1,

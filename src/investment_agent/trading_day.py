@@ -24,6 +24,12 @@ from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.regime import REGIME_SYMBOLS
 from investment_agent.strategy import ENTRY_DELAY_MINUTES, ENTRY_WINDOW_ET, STOP_PCT
 from investment_agent.dollar_target import load_dollar_history
+from investment_agent.pullback_entry import (
+    LIMIT_FILL_DEADLINE,
+    compute_pullback_trade_plan,
+    dollar_confidence,
+    limit_fill_missed,
+)
 from investment_agent.tradability import assess_entry_tradability
 
 ET = ZoneInfo("America/New_York")
@@ -35,6 +41,73 @@ QUOTE_STALE_MINUTES = 20
 TOP_PICK_MAX_DROP_PCT = 0.50  # down more than 0.5% from open → caution
 TOP_PICK_NO_GO_DROP_PCT = 0.75  # aligns with stop width
 ACTIONABLE_PICK_SCAN = 10  # walk top N live ranked for tradability
+
+
+def _session_open_from_quote(quote: dict | None, fallback: float | None = None) -> float | None:
+    if not quote:
+        return fallback
+    open_px = quote.get("open")
+    if open_px and open_px > 0:
+        return float(open_px)
+    return fallback
+
+
+def _pullback_plan_for_row(
+    row: dict,
+    quote: dict | None,
+    *,
+    deploy: float,
+    net_target: float,
+) -> dict:
+    avg_range = float(row.get("avg_range_pct") or 0)
+    session_open = _session_open_from_quote(
+        quote,
+        fallback=float(row.get("entry_price") or row.get("last_quote") or 0) or None,
+    )
+    if not session_open or session_open <= 0:
+        return {}
+    return compute_pullback_trade_plan(
+        session_open=session_open,
+        avg_range_pct=avg_range,
+        deploy_dollar=deploy,
+        net_target=net_target,
+    )
+
+
+def _assess_pick_tradability(
+    row: dict,
+    quote: dict | None,
+    *,
+    deploy: float,
+    net_target: float,
+    conn: sqlite3.Connection,
+) -> tuple[dict, dict, dict]:
+    """Return (pullback_plan, tradability, dollar_history dict)."""
+    avg_range = float(row.get("avg_range_pct") or 0) or None
+    plan = _pullback_plan_for_row(row, quote, deploy=deploy, net_target=net_target)
+    limit_entry = plan.get("limit_buy_price") or plan.get("entry_price")
+    hist = load_dollar_history(
+        conn,
+        row["ticker"],
+        end_date=today_et_str(),
+        deploy_dollar=deploy,
+        net_target=net_target,
+        avg_range_pct=avg_range,
+    )
+    tradability = assess_entry_tradability(
+        quote=quote,
+        entry_price=limit_entry or float(row.get("last_quote") or 0),
+        deploy_dollar=deploy,
+        net_target=net_target,
+        avg_range_pct=avg_range,
+        dollar_history=hist,
+    ) if limit_entry and quote else {
+        "verdict": "UNKNOWN",
+        "headline": "No live quote",
+        "detail": "Refresh live data for tradability check",
+        "checks": [],
+    }
+    return plan, tradability, hist.to_dict()
 
 
 def now_et() -> datetime:
@@ -178,40 +251,38 @@ def resolve_actionable_pick(
     for row in candidates:
         sym = row["ticker"]
         quote = quotes.get(sym)
-        entry = float(quote["price"]) if quote and quote.get("price") else None
-        hist = load_dollar_history(
-            conn,
-            sym,
-            end_date=today_et_str(),
-            deploy_dollar=deploy,
-            net_target=net_target,
-        )
-        tradability = assess_entry_tradability(
-            quote=quote,
-            entry_price=entry or float(row.get("last_quote") or 0),
-            deploy_dollar=deploy,
-            net_target=net_target,
-            avg_range_pct=float(row.get("avg_range_pct") or 0) or None,
-            dollar_history=hist,
-        ) if entry else {
-            "verdict": "UNKNOWN",
-            "headline": "No live quote",
-            "detail": "Refresh live data for tradability check",
-            "checks": [],
-        }
+        if not quote or not quote.get("price"):
+            skipped.append({
+                "ticker": sym,
+                "rank_score": row.get("score"),
+                "reason": "No live quote",
+                "verdict": "UNKNOWN",
+            })
+            continue
 
-        pick = {**row, "tradability": tradability, "dollar_history": hist.to_dict()}
+        plan, tradability, hist_dict = _assess_pick_tradability(
+            row, quote, deploy=deploy, net_target=net_target, conn=conn
+        )
+        pick = {
+            **row,
+            **plan,
+            "tradability": tradability,
+            "dollar_history": hist_dict,
+            "dollar_confidence": dollar_confidence(float(row.get("dollar_hit_rate_pct") or 0)),
+        }
         if row.get("source") != "pinned" and sym == get_setting(conn, "pinned_pick_ticker", "").strip().upper():
             pick["source"] = "pinned"
 
-        if tradability.get("verdict") == "NOT_TRADABLE":
+        verdict = tradability.get("verdict")
+        if verdict in ("NOT_TRADABLE", "CAUTION"):
             skipped.append({
                 "ticker": sym,
                 "rank_score": row.get("score"),
                 "reason": tradability.get("detail"),
-                "verdict": tradability.get("verdict"),
+                "verdict": verdict,
                 "dollar_hit_rate_pct": row.get("dollar_hit_rate_pct"),
                 "expected_net_at_typical_high": tradability.get("expected_net_at_typical_high"),
+                "limit_buy_price": plan.get("limit_buy_price"),
             })
             continue
 
@@ -542,27 +613,56 @@ def _build_pick_detail(
     deploy: float,
     net_target: float,
 ) -> dict:
-    live_entry = float(quote["price"]) if quote else None
-    stale_entry = pick.get("entry_price")
-    entry = live_entry or stale_entry
-    plan = compute_trade_plan(entry_price=entry, deploy_dollar=deploy, net_target=net_target) if entry else {}
-    tradability = pick.get("tradability")
-    if tradability is None and quote and entry:
-        tradability = assess_entry_tradability(
-            quote=quote,
-            entry_price=entry,
+    avg_range = float(pick.get("avg_range_pct") or 0)
+    session_open = _session_open_from_quote(
+        quote,
+        fallback=float(pick.get("session_open") or pick.get("entry_price") or 0) or None,
+    )
+    plan = pick if pick.get("limit_buy_price") else (
+        compute_pullback_trade_plan(
+            session_open=session_open or 0,
+            avg_range_pct=avg_range,
             deploy_dollar=deploy,
             net_target=net_target,
-            avg_range_pct=float(pick.get("avg_range_pct") or 0) or None,
         )
+        if session_open
+        else {}
+    )
+    if not plan and session_open:
+        plan = compute_trade_plan(
+            entry_price=session_open,
+            deploy_dollar=deploy,
+            net_target=net_target,
+        )
+
+    tradability = pick.get("tradability")
+    limit_entry = plan.get("limit_buy_price") or plan.get("entry_price")
+    if tradability is None and quote and limit_entry:
+        hist = pick.get("dollar_history")
+        tradability = assess_entry_tradability(
+            quote=quote,
+            entry_price=limit_entry,
+            deploy_dollar=deploy,
+            net_target=net_target,
+            avg_range_pct=avg_range or None,
+        )
+
+    live_price = float(quote["price"]) if quote and quote.get("price") else None
     detail = {
         "ticker": pick["ticker"],
         "rank_score": pick.get("score"),
         "hit_rate_pct": pick.get("hit_rate_pct"),
         "source": pick.get("source"),
         "live_pass_today": bool(pick.get("live_pass_today")),
-        "recommended_entry": plan.get("entry_price") or (round(entry, 2) if entry else None),
-        "entry_price": plan.get("entry_price") or (round(entry, 2) if entry else None),
+        "entry_mode": plan.get("entry_mode", "pullback_limit"),
+        "session_open": plan.get("session_open"),
+        "pullback_pct": plan.get("pullback_pct"),
+        "limit_buy_price": plan.get("limit_buy_price"),
+        "limit_sell_price": plan.get("limit_sell_price") or plan.get("target_price"),
+        "limit_fill_deadline_et": plan.get("limit_fill_deadline_et"),
+        "skip_if_not_filled_by": plan.get("skip_if_not_filled_by"),
+        "recommended_entry": plan.get("limit_buy_price") or plan.get("entry_price"),
+        "entry_price": plan.get("limit_buy_price") or plan.get("entry_price"),
         "target_price": plan.get("target_price"),
         "stop_price": plan.get("stop_price"),
         "target_pct": plan.get("target_pct"),
@@ -573,14 +673,16 @@ def _build_pick_detail(
         "net_at_target": plan.get("net_at_target"),
         "net_at_stop": plan.get("net_at_stop"),
         "suggested_size": deploy,
-        "quote_price": live_entry,
+        "quote_price": live_price,
         "quote_as_of": quote.get("captured_at") if quote else None,
-        "stale_entry_price": round(stale_entry, 2) if stale_entry and live_entry and abs(stale_entry - live_entry) > 0.01 else None,
         "thesis_summary": pick.get("thesis_summary"),
         "tradability": tradability,
         "dollar_hit_rate_pct": pick.get("dollar_hit_rate_pct")
         or (tradability or {}).get("dollar_hit_rate_pct"),
-        "expected_net_at_typical_high": (tradability or {}).get("expected_net_at_typical_high"),
+        "dollar_confidence": pick.get("dollar_confidence")
+        or dollar_confidence(float(pick.get("dollar_hit_rate_pct") or 0)),
+        "expected_net_at_typical_high": plan.get("estimated_net_at_typical_high")
+        or (tradability or {}).get("expected_net_at_typical_high"),
         "historical_avg_net_at_high": (tradability or {}).get("historical_avg_net_at_high"),
         "dollar_history": pick.get("dollar_history"),
         "dollar_prediction": (tradability or {}).get("dollar_prediction"),
@@ -784,7 +886,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             detail = trad.get("detail") or detail
             pick_msg += f" · CAUTION: {trad.get('detail', '')[:80]}"
         elif trad_verdict == "TRADABLE":
-            pick_msg += " · tradable for $ goal"
+            pick_msg += " · limit entry tradable for $ goal"
 
         add_check("Top pick", pick_ok if pick_ok else False, pick_msg, blocking=not pick_ok and pick_change is not None and pick_change <= -TOP_PICK_NO_GO_DROP_PCT)
 
@@ -827,6 +929,38 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             pick_detail["intraday_change_pct"] = round(pick_change, 3)
         if pick_range is not None:
             pick_detail["opening_range_pct"] = round(pick_range, 3)
+        if pick_detail and pick_quote:
+            limit_px = pick_detail.get("limit_buy_price")
+            day_low = pick_quote.get("low")
+            if limit_fill_missed(
+                limit_buy_price=float(limit_px or 0),
+                session_low=float(day_low) if day_low is not None else None,
+                as_of_time=now.time(),
+            ):
+                verdict = "NO_GO"
+                headline = f"{pick['ticker']} — pullback limit not filled"
+                detail = (
+                    f"Limit buy ${limit_px:.2f} was not reached by {LIMIT_FILL_DEADLINE.strftime('%H:%M')} ET "
+                    "— skip today, do not chase with a market order."
+                )
+                add_check(
+                    "Limit fill",
+                    False,
+                    detail,
+                    blocking=True,
+                )
+            elif limit_px and day_low is not None and day_low <= limit_px:
+                add_check(
+                    "Limit fill",
+                    True,
+                    f"Session low ${day_low:.2f} touched limit ${limit_px:.2f} — limit may have filled",
+                )
+            elif limit_px:
+                add_check(
+                    "Limit fill",
+                    None,
+                    f"Place limit buy ${limit_px:.2f} · cancel if not filled by 11:30 ET",
+                )
 
     # Second pick: next tradable live name after actionable #1
     second_candidates = _live_ranked_candidates(conn, limit=ACTIONABLE_PICK_SCAN)
@@ -836,26 +970,23 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     for row in second_candidates:
         sym = row["ticker"]
         quote = quotes.get(sym)
-        entry = float(quote["price"]) if quote and quote.get("price") else None
-        if not entry:
+        if not quote or not quote.get("price"):
             continue
-        hist = load_dollar_history(
-            conn,
-            sym,
-            end_date=day,
-            deploy_dollar=float(row.get("suggested_size") or summary.tradable_cash),
+        plan, t, hist_dict = _assess_pick_tradability(
+            row,
+            quote,
+            deploy=float(row.get("suggested_size") or summary.tradable_cash),
             net_target=net_for_plan,
+            conn=conn,
         )
-        t = assess_entry_tradability(
-            quote=quote,
-            entry_price=entry,
-            deploy_dollar=float(row.get("suggested_size") or summary.tradable_cash),
-            net_target=net_for_plan,
-            avg_range_pct=float(row.get("avg_range_pct") or 0) or None,
-            dollar_history=hist,
-        )
-        if t.get("verdict") != "NOT_TRADABLE":
-            second_row = {**row, "tradability": t, "dollar_history": hist.to_dict(), "source": "ranked_#2"}
+        if t.get("verdict") == "TRADABLE":
+            second_row = {
+                **row,
+                **plan,
+                "tradability": t,
+                "dollar_history": hist_dict,
+                "source": "ranked_#2",
+            }
             break
 
     if second_row:
@@ -879,7 +1010,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "daily_target": daily_target,
         "daily_target_met": target_met,
         "stopped_out_today": stopped,
-        "can_enter_new": verdict in ("GO", "CAUTION") and not open_positions and not target_met and not stopped,
+        "can_enter_new": verdict == "GO" and not open_positions and not target_met and not stopped,
         "can_second_trade": can_second_trade,
         "open_positions": open_positions,
         "top_pick": pick_detail,

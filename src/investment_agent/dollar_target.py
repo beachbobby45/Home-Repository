@@ -201,34 +201,57 @@ def evaluate_dollar_history(
     *,
     deploy_dollar: float,
     net_target: float | None = None,
+    avg_range_pct: float | None = None,
 ) -> DollarHistoryStats:
-    """Simulate Growth Plan outcomes on historical daily bars (open entry)."""
+    """Simulate Growth Plan outcomes (pullback limit entry when avg_range_pct set)."""
+    from investment_agent.pullback_entry import (
+        net_at_high_after_pullback_fill,
+        simulate_pullback_dollar_outcome,
+    )
+
     targets = stops = neither = 0
     nets: list[float] = []
 
     for bar in bars:
         if bar.open <= 0:
             continue
-        outcome = simulate_dollar_outcome(
-            bar.open,
-            bar.high,
-            bar.low,
-            deploy_dollar=deploy_dollar,
-            net_target=net_target,
-        )
+        if avg_range_pct is not None and avg_range_pct > 0:
+            outcome = simulate_pullback_dollar_outcome(
+                bar.open,
+                bar.high,
+                bar.low,
+                deploy_dollar=deploy_dollar,
+                avg_range_pct=avg_range_pct,
+                net_target=net_target,
+            )
+            net_high = net_at_high_after_pullback_fill(
+                bar.open,
+                bar.high,
+                bar.low,
+                deploy_dollar=deploy_dollar,
+                avg_range_pct=avg_range_pct,
+            )
+        else:
+            outcome = simulate_dollar_outcome(
+                bar.open,
+                bar.high,
+                bar.low,
+                deploy_dollar=deploy_dollar,
+                net_target=net_target,
+            )
+            net_high = net_at_high_from_open(bar.open, bar.high, deploy_dollar=deploy_dollar)
         if outcome == "target":
             targets += 1
         elif outcome == "stop":
             stops += 1
-        elif outcome == "neither":
+        elif outcome in ("neither", "no_fill"):
             neither += 1
         else:
             continue
-        nets.append(
-            net_at_high_from_open(bar.open, bar.high, deploy_dollar=deploy_dollar)
-        )
+        if net_high > 0:
+            nets.append(net_high)
 
-    days = len(nets)
+    days = targets + stops + neither
     decided = targets + stops
     hit_rate = round(100.0 * targets / max(decided, 1), 1) if decided else 0.0
 
@@ -246,7 +269,7 @@ def evaluate_dollar_history(
             dollar_stops=stops,
             dollar_neither=neither,
             dollar_hit_rate_pct=hit_rate,
-            avg_net_at_high=round(sum(nets) / days, 2),
+            avg_net_at_high=round(sum(nets) / len(nets), 2) if nets else 0.0,
             median_net_at_high=round(median, 2),
             max_net_at_high=round(max(nets), 2),
             min_net_at_high=round(min(nets), 2),
@@ -391,8 +414,9 @@ def load_dollar_history(
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     deploy_dollar: float,
     net_target: float | None = None,
+    avg_range_pct: float | None = None,
 ) -> DollarHistoryStats:
-    """Load recent daily bars and evaluate open→high dollar outcomes."""
+    """Load recent daily bars and evaluate pullback limit dollar outcomes."""
     from investment_agent.db import get_ohlcv_bars
 
     end = end_date or datetime.now().strftime("%Y-%m-%d")
@@ -400,7 +424,12 @@ def load_dollar_history(
     start = (end_dt - timedelta(days=lookback_days * 2)).strftime("%Y-%m-%d")
     rows = get_ohlcv_bars(conn, ticker.upper(), start_date=start, end_date=end)
     if not rows:
-        return evaluate_dollar_history([], deploy_dollar=deploy_dollar, net_target=net_target)
+        return evaluate_dollar_history(
+            [],
+            deploy_dollar=deploy_dollar,
+            net_target=net_target,
+            avg_range_pct=avg_range_pct,
+        )
 
     history_rows = [r for r in rows if r["date"] < end][-lookback_days:]
     bars = [
@@ -412,4 +441,9 @@ def load_dollar_history(
         for r in history_rows
         if r["open"] and r["high"] and r["low"]
     ]
-    return evaluate_dollar_history(bars, deploy_dollar=deploy_dollar, net_target=net_target)
+    return evaluate_dollar_history(
+        bars,
+        deploy_dollar=deploy_dollar,
+        net_target=net_target,
+        avg_range_pct=avg_range_pct,
+    )

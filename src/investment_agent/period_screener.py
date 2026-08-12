@@ -265,6 +265,7 @@ def run_period_screener(
                     "dollar_targets": 0,
                     "dollar_stops": 0,
                     "dollar_neither": 0,
+                    "dollar_no_fill": 0,
                     "last_screened_date": None,
                     "avg_range_pct": 0.0,
                     "_range_sum": 0.0,
@@ -284,6 +285,9 @@ def run_period_screener(
                 bucket["dollar_targets"] += 1
             elif dollar_outcome == "stop":
                 bucket["dollar_stops"] += 1
+            elif dollar_outcome == "no_fill":
+                bucket["dollar_no_fill"] += 1
+                bucket["dollar_neither"] += 1
             else:
                 bucket["dollar_neither"] += 1
             bucket["last_screened_date"] = day["date"]

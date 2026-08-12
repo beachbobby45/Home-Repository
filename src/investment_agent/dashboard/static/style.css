@@ -560,6 +560,30 @@ main {
   outline-offset: 2px;
 }
 
+.confidence-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.confidence-badge.conf-high {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.confidence-badge.conf-medium {
+  background: rgba(234, 179, 8, 0.2);
+  color: #fde047;
+}
+
+.confidence-badge.conf-low {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
 .screener-actions-compact {
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }

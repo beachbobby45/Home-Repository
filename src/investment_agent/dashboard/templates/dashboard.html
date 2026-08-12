@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260811d" />
+  <link rel="stylesheet" href="/static/style.css?v=20260812a" />
 </head>
 <body>
   <header class="app-header">
@@ -71,8 +71,8 @@
         <div class="table-wrap">
           <table class="data-table" id="candidates-table">
             <thead><tr>
-              <th>#</th><th>Ticker</th><th>Hit%</th><th>Buy</th><th>Shares</th><th>Size</th>
-              <th>Sell</th><th>Stop</th><th>Live S3</th>
+              <th>#</th><th>Ticker</th><th>Hit%</th><th>Limit buy</th><th>Shares</th><th>Size</th>
+              <th>Limit sell</th><th>Stop</th><th>Live S3</th>
             </tr></thead>
             <tbody id="candidates-body"><tr><td colspan="9" class="empty">Run Step 2 to populate.</td></tr></tbody>
           </table>
@@ -96,7 +96,7 @@
             <span class="pick-num">1</span>
             <div>
               <h2 class="pick-title">Top pick — buy this first</h2>
-              <p class="pick-sub brief">Ranked #1 that passes tradability for today&apos;s dollar goal</p>
+              <p class="pick-sub brief">Limit buy in the expected pullback · TRADABLE for today&apos;s $ goal only</p>
             </div>
           </header>
           <div class="pick-card-body" id="top-pick-body">Loading…</div>
@@ -118,9 +118,10 @@
         <div class="trade-math-title">Trade math <span class="brief" id="trade-math-goal"></span></div>
         <div class="trade-math-grid">
           <div class="trade-math-box buy">
-            <div class="trade-math-label">Buy at</div>
+            <div class="trade-math-label">Limit buy</div>
             <div class="trade-math-value" id="math-buy">—</div>
             <div class="trade-math-sub" id="math-shares">—</div>
+            <div class="trade-math-sub" id="math-limit-note">—</div>
           </div>
           <div class="trade-math-box stop">
             <div class="trade-math-label">Stop (−0.75%)</div>
@@ -138,11 +139,11 @@
       <section class="validate-panel card rhythm-step3-panel">
         <header class="panel-head">
           <h2>Step 3 — Confirm before you buy</h2>
-          <p class="brief">Click <strong>Refresh live before buy</strong> above, then validate your E*TRADE entry.</p>
+          <p class="brief">Click <strong>Refresh live before buy</strong> above, then place the <strong>limit buy</strong> in E*TRADE (not market).</p>
         </header>
         <form id="planned-trade-form" class="planned-trade-form planned-trade-form-hero">
           <label class="plan-field"><span>Ticker</span><input type="text" id="plan-ticker" placeholder="NFLX" /></label>
-          <label class="plan-field"><span>Buy price ($)</span><input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Live entry" /></label>
+          <label class="plan-field"><span>Limit buy ($)</span><input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Pullback limit" /></label>
           <label class="plan-field"><span>Shares</span><input type="number" id="plan-shares" step="1" min="1" placeholder="Auto" /></label>
           <button class="btn plan-submit" type="submit">Validate trade</button>
         </form>
@@ -734,13 +735,16 @@ PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
 
     function renderPickBlock(pick, td) {
       if (!pick) return "<div class='pick-empty'>No live pick — run ingest and refresh ranked screener.</div>";
-      const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
+      const limitBuy = pick.limit_buy_price ?? pick.recommended_entry ?? pick.entry_price;
+      const limitSell = pick.limit_sell_price ?? pick.target_price;
       const netGoal = pick.net_target ?? td.daily_target;
       const trad = pick.tradability || {};
       const tradClass = (trad.verdict || "unknown").toLowerCase().replace("_", "-");
+      const conf = pick.dollar_confidence || "";
       const rankedNote = td.ranked_first && pick.ticker !== td.ranked_first
         ? `<div class="pick-note warn">Ranked #1 was ${td.ranked_first} — skipped (not tradable for $${fmt(netGoal)})</div>`
         : "";
+      const livePx = pick.quote_price;
       const changeHtml = pick.intraday_change_pct != null
         ? `<span class="pick-change ${pick.intraday_change_pct >= 0 ? "up" : "down"}">${fmtPctLive(pick.intraday_change_pct)} from open</span>`
         : "";
@@ -748,6 +752,7 @@ PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
         <div class="pick-symbol-row">
           <span class="pick-symbol">${pick.ticker}</span>
           <span class="pick-source brief">${pick.source || ""}</span>
+          ${conf ? `<span class="confidence-badge conf-${conf}">${conf} $ confidence</span>` : ""}
           ${trad.verdict ? `<span class="tradability-badge trad-${tradClass}">${trad.verdict.replace(/_/g, " ")}</span>` : ""}
         </div>
         ${rankedNote}
@@ -760,14 +765,18 @@ PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
         </div>
         ${pick.expected_net_at_typical_high != null ? `
         <div class="pick-forecast">
-          Typical high → <strong>$${fmt(pick.expected_net_at_typical_high)}</strong> net
+          Est. high from limit → <strong>$${fmt(pick.expected_net_at_typical_high)}</strong> net
           ${pick.historical_avg_net_at_high != null ? `<span class="brief">(14d avg $${fmt(pick.historical_avg_net_at_high)})</span>` : ""}
           · need <strong>$${fmt(netGoal)}</strong>
         </div>` : ""}
         <div class="pick-prices">
-          <div class="pick-prices-head">Trade now · live quote</div>
+          <div class="pick-prices-head">Pullback limit plan · cancel unfilled by ${pick.limit_fill_deadline_et || "11:30 ET"}</div>
+          ${pick.session_open != null ? `<div class="pick-price-row brief"><span>Today&apos;s open</span><strong>$${fmt(pick.session_open)}</strong>${pick.pullback_pct != null ? `<span class="brief">−${pick.pullback_pct}% limit zone</span>` : ""}</div>` : ""}
           <div class="pick-price-row highlight">
-            <span>Buy at</span><strong class="pick-price">$${fmt(entry)}</strong>${changeHtml}
+            <span>Limit buy</span><strong class="pick-price">$${fmt(limitBuy)}</strong>
+          </div>
+          <div class="pick-price-row brief">
+            <span>Live now</span><strong>$${fmt(livePx)}</strong>${changeHtml}
           </div>
           <div class="pick-price-row">
             <span>${pick.recommended_shares ?? "—"} shares</span>
@@ -778,11 +787,11 @@ PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
             <span class="brief">net ~$${fmt(pick.net_at_stop)}</span>
           </div>
           <div class="pick-price-row target">
-            <span>Sell for $${fmt(netGoal)} net</span><strong>$${fmt(pick.target_price)}</strong>
+            <span>Limit sell $${fmt(netGoal)} net</span><strong>$${fmt(limitSell)}</strong>
             <span class="brief">+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · +$${fmt(pick.net_at_target)}</span>
           </div>
         </div>
-        ${trad.max_net_at_day_high != null ? `<div class="pick-day-high brief">Day high so far → ~$${fmt(trad.max_net_at_day_high)} net from this entry</div>` : ""}
+        ${trad.max_net_at_day_high != null ? `<div class="pick-day-high brief">Day high so far → ~$${fmt(trad.max_net_at_day_high)} net from limit entry</div>` : ""}
         ${pick.quote_as_of ? `<div class="pick-asof brief">Quote ${fmtDateTimePT(pick.quote_as_of)}</div>` : ""}
       `;
     }
@@ -830,17 +839,24 @@ PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
         return;
       }
       panel.hidden = false;
-      const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
+      const limitBuy = pick.limit_buy_price ?? pick.recommended_entry ?? pick.entry_price;
+      const limitSell = pick.limit_sell_price ?? pick.target_price;
       const netGoal = pick.net_target ?? td.daily_target;
       document.getElementById("trade-math-goal").textContent =
-        `(Growth Plan: $${fmt(netGoal)} net after $14 fees · stop −0.75%)`;
-      document.getElementById("math-buy").textContent = "$" + fmt(entry);
+        `(Limit entry · $${fmt(netGoal)} net after $14 fees · cancel if not filled by ${pick.limit_fill_deadline_et || "11:30 ET"})`;
+      document.getElementById("math-buy").textContent = "$" + fmt(limitBuy);
       document.getElementById("math-shares").textContent =
         `${pick.recommended_shares ?? "—"} shares · deploy $${fmt(pick.suggested_size)}`;
+      const limitNote = document.getElementById("math-limit-note");
+      if (limitNote) {
+        limitNote.textContent = pick.session_open != null
+          ? `Open $${fmt(pick.session_open)} · pullback −${pick.pullback_pct ?? "—"}%`
+          : "Place as limit order in E*TRADE";
+      }
       document.getElementById("math-stop").textContent = "$" + fmt(pick.stop_price);
       document.getElementById("math-stop-net").textContent =
         `net ~$${fmt(pick.net_at_stop)} if stopped`;
-      document.getElementById("math-sell").textContent = "$" + fmt(pick.target_price);
+      document.getElementById("math-sell").textContent = "$" + fmt(limitSell);
       document.getElementById("math-sell-net").textContent =
         `+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)}`;
     }
@@ -869,7 +885,7 @@ PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
         const planTicker = document.getElementById("plan-ticker");
         const planPrice = document.getElementById("plan-price");
         const planShares = document.getElementById("plan-shares");
-        const entry = pick.recommended_entry ?? pick.quote_price ?? pick.entry_price;
+        const entry = pick.limit_buy_price ?? pick.recommended_entry ?? pick.entry_price;
         if (planTicker && !planTicker.dataset.userEdited) planTicker.value = pick.ticker;
         if (planPrice && !planPrice.dataset.userEdited) planPrice.value = entry != null ? Number(entry).toFixed(2) : "";
         if (planShares && !planShares.dataset.userEdited && pick.recommended_shares) planShares.value = pick.recommended_shares;
@@ -1123,10 +1139,10 @@ PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
           <td>${i + 1}</td>
           <td><strong>${c.ticker}</strong></td>
           <td>${c.dollar_hit_rate_pct ?? c.hit_rate_pct ?? "—"}%</td>
-          <td>${c.entry_price != null ? "$" + fmt(c.entry_price) : "—"}</td>
+          <td>${c.limit_buy_price != null ? "$" + fmt(c.limit_buy_price) : (c.entry_price != null ? "$" + fmt(c.entry_price) : "—")}</td>
           <td>${c.recommended_shares ?? "—"}</td>
           <td>${c.suggested_size != null ? "$" + fmt(c.suggested_size) : "—"}</td>
-          <td>${c.target_price != null ? "$" + fmt(c.target_price) : "—"}</td>
+          <td>${c.limit_sell_price != null ? "$" + fmt(c.limit_sell_price) : (c.target_price != null ? "$" + fmt(c.target_price) : "—")}</td>
           <td>${c.stop_price != null ? "$" + fmt(c.stop_price) : "—"}</td>
           <td>${c.step3_pass ? "Yes" : "No"}</td>
         </tr>

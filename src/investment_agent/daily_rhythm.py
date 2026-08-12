@@ -18,6 +18,7 @@ from investment_agent.screen_actions import (
     get_screen_action_status,
 )
 from investment_agent.stock_team import build_analysis_card, _latest_metrics
+from investment_agent.pullback_entry import compute_pullback_trade_plan
 from investment_agent.trading_day import compute_trade_plan
 from investment_agent.watchlist import compute_data_freshness
 
@@ -77,21 +78,29 @@ def build_trading_candidates(
     for item in ranked:
         sym = item["ticker"]
         m = metrics.get(sym)
-        quote_px = quotes.get(sym)
-        entry = float(quote_px or 0) or float(m["last_quote"] if m else 0) or float(
-            m["last_close"] if m else 0
+        session_open = (
+            float(m["last_quote"] if m else 0)
+            or float(m["last_close"] if m else 0)
+            or float(quotes.get(sym) or 0)
         )
+        avg_range = float(item.get("avg_range_pct") or (m["avg_range_pct"] if m else 0) or 0)
         card = build_analysis_card(m, deploy) if m else None
         size = float(card.suggested_size) if card else deploy
-        plan = (
-            compute_trade_plan(
-                entry_price=entry,
+        if session_open and avg_range > 0:
+            plan = compute_pullback_trade_plan(
+                session_open=session_open,
+                avg_range_pct=avg_range,
                 deploy_dollar=size,
                 net_target=net_target,
             )
-            if entry > 0
-            else {}
-        )
+        elif session_open:
+            plan = compute_trade_plan(
+                entry_price=session_open,
+                deploy_dollar=size,
+                net_target=net_target,
+            )
+        else:
+            plan = {}
         rows.append(
             {
                 "ticker": sym,
@@ -99,12 +108,17 @@ def build_trading_candidates(
                 "hit_rate_pct": item.get("hit_rate_pct"),
                 "dollar_hit_rate_pct": item.get("dollar_hit_rate_pct"),
                 "live_pass_today": item.get("live_pass_today"),
-                "entry_price": round(entry, 2) if entry else None,
+                "session_open": plan.get("session_open"),
+                "limit_buy_price": plan.get("limit_buy_price"),
+                "limit_sell_price": plan.get("limit_sell_price") or plan.get("target_price"),
+                "limit_fill_deadline_et": plan.get("limit_fill_deadline_et"),
+                "entry_price": plan.get("limit_buy_price") or plan.get("entry_price"),
                 "recommended_shares": plan.get("shares"),
                 "suggested_size": round(size, 0),
                 "target_price": plan.get("target_price"),
                 "stop_price": plan.get("stop_price"),
                 "net_target": plan.get("net_target"),
+                "pullback_pct": plan.get("pullback_pct"),
                 "step3_pass": card is not None,
             }
         )
