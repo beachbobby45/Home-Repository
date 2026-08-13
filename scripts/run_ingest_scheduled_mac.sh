@@ -25,6 +25,10 @@ case "$MODE" in
     ;;
   afterclose)
     "$ROOT/scripts/run_ingest_mac.sh" --after-close
+    echo "── scheduled screener after ingest ──"
+    export PYTHONPATH="$ROOT/src"
+    python3 "$ROOT/scripts/run_period_screener.py" --days 14 --save
+    python3 "$ROOT/scripts/run_daily_close.py" --daily
     ;;
   *)
     echo "ERROR: unknown mode $MODE (use morning or afterclose)"

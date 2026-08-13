@@ -503,32 +503,45 @@
 PYTHONPATH=src python3 scripts/manage_watchlist.py load-preset sp500</pre>
           <p class="brief">Smaller list (SP100): <code>load-preset sp100</code> · Special Watch: <code>load-preset datacenter_us</code></p>
 
-          <h3 style="margin-top:1.25rem">3. Refresh data (run in Terminal)</h3>
-          <p class="brief">Use these when Setup buttons or <code>.command</code> files do not launch. Replace <code>~/Home-Repository</code> with your clone path. Leave the window open — S&amp;P 500 takes ~15–25 minutes.</p>
+          <h3 style="margin-top:1.25rem">3. Daily workflow (recommended)</h3>
+          <p class="brief">In Finder, open <code>Home-Repository/scripts/</code> and double-click:</p>
+          <ul class="setup-workflow-list brief">
+            <li><strong>Run End of Day.command</strong> — after close: ingest + screener + close report</li>
+            <li><strong>Run Morning Prep.command</strong> — before open: screener + today&apos;s candidates</li>
+            <li><strong>Run Refresh Live.command</strong> — right before you buy or sell (limit orders)</li>
+          </ul>
+          <p class="brief">Or paste in Terminal (replace <code>~/Home-Repository</code> with your clone path):</p>
 
-          <p class="setup-terminal-label"><strong>After market close</strong> — quotes + today&apos;s bars (Step 1)</p>
+          <p class="setup-terminal-label"><strong>End of day</strong> — ingest + screener + close report (~15–30 min)</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/run_end_of_day_mac.sh</pre>
+
+          <p class="setup-terminal-label"><strong>Morning precheck</strong> — candidates for Trade tab</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/run_morning_prep_mac.sh</pre>
+
+          <p class="setup-terminal-label"><strong>Before buy/sell</strong> — live Finnhub quotes (Step 3)</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/run_refresh_live_mac.sh</pre>
+
+          <p class="setup-terminal-label"><strong>Check data freshness</strong></p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
+
+          <h3 style="margin-top:1.25rem">4. Individual steps (advanced)</h3>
+          <p class="brief">Use when you only need one piece. S&amp;P 500 ingest takes ~15–25 minutes.</p>
+
+          <p class="setup-terminal-label"><strong>After market close</strong> — quotes + today&apos;s bars only</p>
           <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
 ./scripts/run_ingest_mac.sh --after-close</pre>
 
-          <p class="setup-terminal-label"><strong>Before open</strong> — morning incremental refresh</p>
+          <p class="setup-terminal-label"><strong>Before open</strong> — incremental ingest only</p>
           <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
 ./scripts/run_ingest_mac.sh --incremental</pre>
 
-          <p class="setup-terminal-label"><strong>First time or full rebuild</strong> — all quotes + 60d bars</p>
-          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
-./scripts/run_ingest_mac.sh</pre>
-
-          <p class="setup-terminal-label"><strong>Pull 60-day OHLCV only</strong> (same as Pull 60d OHLCV button)</p>
-          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
-PYTHONPATH=src python3 scripts/run_historical.py pull --lookback-days 60</pre>
-
-          <p class="setup-terminal-label"><strong>Refresh ranked screener</strong> after ingest (14 trading days)</p>
+          <p class="setup-terminal-label"><strong>Screener only</strong> (14 trading days)</p>
           <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
 PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
-
-          <p class="setup-terminal-label"><strong>Check ingest result</strong></p>
-          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
-PYTHONPATH=src python3 scripts/manage_watchlist.py stats</pre>
         </div>
         <div class="actions actions-wrap">
           <button class="btn secondary" id="setup-daily-ingest">Daily ingest (small lists only)</button>
