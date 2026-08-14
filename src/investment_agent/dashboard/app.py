@@ -112,6 +112,10 @@ from investment_agent.trading_day import (
     refresh_live_quotes,
     validate_planned_trade,
 )
+from investment_agent.capital_builder import (
+    build_capital_builder_progress,
+    progress_to_dict,
+)
 from investment_agent.risk_engine import (
     build_portfolio_snapshot,
     is_kill_switch_active,
@@ -641,6 +645,12 @@ def api_risk_kill_switch(
         "kill_switch_active": is_kill_switch_active(conn),
         "status": portfolio_status_dict(snapshot),
     }
+
+
+@app.get("/api/capital-builder/progress")
+def api_capital_builder_progress(conn=Depends(_db)) -> dict[str, Any]:
+    progress = build_capital_builder_progress(conn)
+    return progress_to_dict(progress)
 
 
 @app.get("/api/proposals/today")

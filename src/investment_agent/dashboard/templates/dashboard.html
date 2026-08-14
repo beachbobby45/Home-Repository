@@ -434,6 +434,44 @@
 
     <!-- ═══ ACCOUNT ═══ -->
     <div id="view-account" class="app-view">
+      <section class="view-section capital-builder-section">
+        <header class="view-head">
+          <h2>Capital Builder</h2>
+          <p class="brief">Phase 1 milestone — guidance only, not a trading quota.</p>
+        </header>
+        <div class="card capital-builder-panel" id="capital-builder-panel">
+          <div class="cb-milestone">
+            <div class="cb-milestone-head">
+              <span class="cb-milestone-label" id="cb-phase-label">Phase 1: $10,000 → $30,000</span>
+              <span class="cb-milestone-badge brief" id="cb-milestone-badge"></span>
+            </div>
+            <div class="metric" id="cb-current-equity">—</div>
+            <div class="progress-wrap">
+              <div class="progress-bar phase1-bar"><div class="progress-fill phase1-fill" id="cb-journey-bar"></div></div>
+              <div class="progress-label" id="cb-journey-label">—</div>
+            </div>
+          </div>
+          <div class="cb-grid">
+            <div class="cb-stat">
+              <span class="cb-stat-label">This week</span>
+              <strong class="cb-stat-value" id="cb-weekly">—</strong>
+              <div class="progress-bar weekly-soft-bar"><div class="progress-fill weekly-soft-fill" id="cb-weekly-bar"></div></div>
+              <span class="brief soft-note">~$1,000 soft target — no trade required</span>
+            </div>
+            <div class="cb-stat">
+              <span class="cb-stat-label">High water · Drawdown</span>
+              <strong class="cb-stat-value" id="cb-hw-dd">—</strong>
+            </div>
+            <div class="cb-stat cb-kill-stat">
+              <span class="cb-stat-label">Kill switch</span>
+              <label class="kill-switch-toggle cb-kill-switch" title="Block all new entries until cleared">
+                <input type="checkbox" id="cb-kill-switch-input" />
+                <span id="cb-kill-switch-label">OFF</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
       <div class="grid grid-4 kpi-grid">
         <div class="card kpi-card"><h2>$5M goal</h2><div class="metric" id="goal-pct">—</div>
           <div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" id="goal-bar"></div></div>
@@ -1006,6 +1044,74 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         return risk;
       } catch (_e) {
         return null;
+      }
+    }
+
+    function renderCapitalBuilder(cb) {
+      if (!cb) return;
+      const panel = document.getElementById("capital-builder-panel");
+      panel?.classList.toggle("kill-switch-on", !!cb.kill_switch_active);
+      document.getElementById("cb-phase-label").textContent =
+        `Phase 1: $${fmt(cb.phase1_start)} → $${fmt(cb.phase1_target)}`;
+      const badge = document.getElementById("cb-milestone-badge");
+      if (badge) {
+        badge.textContent = cb.milestone_reached ? "Milestone reached" : "";
+        badge.classList.toggle("cb-milestone-reached", !!cb.milestone_reached);
+      }
+      document.getElementById("cb-current-equity").textContent =
+        `$${fmt(cb.current_equity)} (${Number(cb.of_target_pct || 0).toFixed(1)}% of milestone)`;
+      const journeyPct = Math.min(100, Math.max(0, cb.journey_progress_pct || 0));
+      document.getElementById("cb-journey-bar").style.width = journeyPct + "%";
+      document.getElementById("cb-journey-label").textContent =
+        `$${fmt(cb.phase1_start)} → $${fmt(cb.phase1_target)} · ${journeyPct.toFixed(1)}% of journey`;
+      const wSign = (cb.weekly_realized_net ?? 0) >= 0 ? "+" : "";
+      document.getElementById("cb-weekly").textContent =
+        `${wSign}$${fmt(cb.weekly_realized_net)} / ~$${fmt(cb.weekly_soft_target)} target (soft)`;
+      const weeklyBarPct = Math.min(100, Math.max(0, cb.weekly_soft_progress_pct || 0));
+      document.getElementById("cb-weekly-bar").style.width = weeklyBarPct + "%";
+      const dd = Number(cb.drawdown_pct || 0);
+      document.getElementById("cb-hw-dd").textContent =
+        `High water: $${fmt(cb.high_water_mark)} · Drawdown: ${dd > 0 ? "−" : ""}${dd.toFixed(1)}%`;
+      const cbKs = document.getElementById("cb-kill-switch-input");
+      const tradeKs = document.getElementById("kill-switch-input");
+      if (cbKs && !cbKs.dataset.userToggled) cbKs.checked = !!cb.kill_switch_active;
+      if (tradeKs && !tradeKs.dataset.userToggled) tradeKs.checked = !!cb.kill_switch_active;
+      document.getElementById("cb-kill-switch-label").textContent = cb.kill_switch_active ? "ON" : "OFF";
+    }
+
+    async function loadCapitalBuilder() {
+      try {
+        const cb = await api("/api/capital-builder/progress");
+        renderCapitalBuilder(cb);
+        return cb;
+      } catch (_e) {
+        return null;
+      }
+    }
+
+    async function updateKillSwitch(active, sourceInput) {
+      const inputs = [
+        document.getElementById("kill-switch-input"),
+        document.getElementById("cb-kill-switch-input"),
+      ].filter(Boolean);
+      inputs.forEach((el) => {
+        if (el !== sourceInput) el.dataset.userToggled = "1";
+      });
+      try {
+        await api("/api/risk/kill-switch", {
+          method: "POST",
+          body: JSON.stringify({ active }),
+        });
+        inputs.forEach((el) => { el.checked = active; });
+        document.getElementById("cb-kill-switch-label").textContent = active ? "ON" : "OFF";
+        toast(active ? "Kill switch ON — no new entries" : "Kill switch cleared");
+        await loadTradingDay();
+        await loadCapitalBuilder();
+      } catch (err) {
+        inputs.forEach((el) => { el.checked = !active; });
+        toast(err.message || "Kill switch update failed", 6000);
+      } finally {
+        inputs.forEach((el) => { delete el.dataset.userToggled; });
       }
     }
 
@@ -2082,6 +2188,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       await Promise.all([
         loadTradingDay(),
         loadSummary(),
+        loadCapitalBuilder(),
         loadScenario(),
         loadCio(),
         loadDailyRhythm(),
@@ -2326,22 +2433,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       refreshLiveBeforeBuy().catch((e) => toast(e.message, 8000));
     });
 
-    document.getElementById("kill-switch-input")?.addEventListener("change", async (e) => {
-      const input = e.target;
-      input.dataset.userToggled = "1";
-      try {
-        await api("/api/risk/kill-switch", {
-          method: "POST",
-          body: JSON.stringify({ active: input.checked }),
-        });
-        toast(input.checked ? "Kill switch ON — no new entries" : "Kill switch cleared");
-        await loadTradingDay();
-      } catch (err) {
-        input.checked = !input.checked;
-        toast(err.message || "Kill switch update failed", 6000);
-      } finally {
-        delete input.dataset.userToggled;
-      }
+    document.getElementById("kill-switch-input")?.addEventListener("change", (e) => {
+      updateKillSwitch(e.target.checked, e.target);
+    });
+
+    document.getElementById("cb-kill-switch-input")?.addEventListener("change", (e) => {
+      updateKillSwitch(e.target.checked, e.target);
     });
 
     ["plan-ticker", "plan-price", "plan-shares"].forEach((id) => {

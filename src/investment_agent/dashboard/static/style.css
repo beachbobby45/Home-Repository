@@ -548,6 +548,87 @@ main {
   background: rgba(204, 68, 68, 0.06);
 }
 
+.capital-builder-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.capital-builder-panel.kill-switch-on {
+  border-color: var(--bad, #c44);
+  background: rgba(204, 68, 68, 0.06);
+}
+
+.cb-milestone-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.cb-milestone-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.cb-milestone-badge.cb-milestone-reached {
+  color: var(--green, #2a8);
+  font-weight: 600;
+}
+
+.phase1-fill {
+  background: linear-gradient(90deg, #22c55e, #14b8a6);
+}
+
+.weekly-soft-bar {
+  margin-top: 0.5rem;
+}
+
+.weekly-soft-fill {
+  background: linear-gradient(90deg, #38bdf8, #6366f1);
+}
+
+.cb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.cb-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cb-stat-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cb-stat-value {
+  font-size: 1rem;
+}
+
+.soft-note {
+  margin-top: 0.15rem;
+}
+
+.cb-kill-stat .kill-switch-toggle {
+  margin-top: 0.15rem;
+}
+
+@media (max-width: 900px) {
+  .cb-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .risk-panel-head {
   display: flex;
   align-items: flex-start;
