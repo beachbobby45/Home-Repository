@@ -1918,6 +1918,49 @@ textarea {
   color: var(--muted);
 }
 
+.pick-ext-fill-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.8rem;
+}
+
+.ext-fill-note {
+  color: var(--muted);
+}
+
+.ext-fill-lock {
+  color: #93c5fd;
+  font-size: 0.78rem;
+}
+
+.ext-fill-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ext-fill-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.76rem;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+}
+
+.ext-fill-btn.active {
+  background: rgba(59, 130, 246, 0.25);
+  color: #bfdbfe;
+}
+
+.ext-fill-btn:hover:not(.active) {
+  color: #dbeafe;
+}
+
 .pick-note.warn {
   padding: 0.4rem 0.55rem;
   margin-bottom: 0.5rem;

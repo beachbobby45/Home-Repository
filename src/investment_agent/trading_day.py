@@ -19,6 +19,7 @@ from investment_agent.journal import (
     compute_today_realized_net,
     get_completed_round_trips,
     get_open_positions,
+    open_position_for_ticker,
 )
 from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.regime import REGIME_SYMBOLS
@@ -246,6 +247,9 @@ def build_extended_session(
     limit_sell: float | None,
     shares: int | None = None,
     rth_close: float | None = None,
+    from_journal: bool = False,
+    journal_entry_price: float | None = None,
+    journal_shares: int | None = None,
 ) -> dict | None:
     """Extended-hours context for the live pick card (RTH estimates unchanged)."""
     if phase not in EXTENDED_SESSION_PHASES:
@@ -254,10 +258,12 @@ def build_extended_session(
         return None
 
     price = float(quote["price"])
-    flags: list[dict] = []
+    entry_price = journal_entry_price or limit_buy
+    position_shares = journal_shares or shares
 
+    position_flags: list[dict] = []
     if stop_price and price <= stop_price:
-        flags.append(
+        position_flags.append(
             {
                 "id": "at_or_below_stop",
                 "severity": "danger",
@@ -267,7 +273,7 @@ def build_extended_session(
     elif stop_price and stop_price > 0:
         cushion_pct = ((price - stop_price) / stop_price) * 100.0
         if 0 < cushion_pct <= NEAR_STOP_CUSHION_PCT:
-            flags.append(
+            position_flags.append(
                 {
                     "id": "near_stop",
                     "severity": "warn",
@@ -276,7 +282,7 @@ def build_extended_session(
             )
 
     if limit_sell and price >= limit_sell:
-        flags.append(
+        position_flags.append(
             {
                 "id": "at_or_above_target",
                 "severity": "ok",
@@ -285,7 +291,7 @@ def build_extended_session(
         )
 
     if limit_buy and price < limit_buy:
-        flags.append(
+        position_flags.append(
             {
                 "id": "below_limit_entry",
                 "severity": "info",
@@ -294,7 +300,7 @@ def build_extended_session(
         )
 
     if phase == "weekend":
-        flags.append(
+        position_flags.append(
             {
                 "id": "weekend_gap_risk",
                 "severity": "warn",
@@ -322,15 +328,17 @@ def build_extended_session(
         )
 
     change_vs_entry_pct = None
-    if limit_buy and limit_buy > 0:
-        change_vs_entry_pct = round(((price - limit_buy) / limit_buy) * 100.0, 3)
+    if entry_price and entry_price > 0:
+        change_vs_entry_pct = round(((price - entry_price) / entry_price) * 100.0, 3)
 
     net_if_sold_now = None
-    if shares and limit_buy and shares > 0:
+    if position_shares and entry_price and position_shares > 0:
         net_if_sold_now = round(
-            shares * (price - limit_buy) - round_trip_fees(),
+            position_shares * (price - entry_price) - round_trip_fees(),
             2,
         )
+
+    entry_label = f"journal ${entry_price:.2f}" if from_journal and journal_entry_price else "limit entry"
 
     return {
         "label": EXTENDED_SESSION_LABELS.get(phase, phase.replace("_", " ").title()),
@@ -339,10 +347,24 @@ def build_extended_session(
         "quote_as_of": quote.get("captured_at"),
         "change_vs_reference_pct": change_vs_reference_pct,
         "reference_label": reference_label,
-        "change_vs_entry_pct": change_vs_entry_pct,
-        "flags": flags,
-        "net_if_sold_now": net_if_sold_now,
         "note": "RTH plan and estimates above are unchanged — extended quote for monitoring only.",
+        "fill_status": {
+            "from_journal": from_journal,
+            "default_assume_filled": from_journal,
+            "entry_price": round(entry_price, 2) if entry_price else None,
+            "entry_label": entry_label,
+            "shares": int(position_shares) if position_shares else None,
+        },
+        "position": {
+            "change_vs_entry_pct": change_vs_entry_pct,
+            "entry_label": entry_label,
+            "net_if_sold_now": net_if_sold_now,
+            "flags": position_flags,
+        },
+        "not_filled_hint": (
+            "Limit not assumed filled — toggle Filled to monitor stop/target vs entry, "
+            "or log a BUY in the journal."
+        ),
     }
 
 
@@ -1116,6 +1138,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             pick_detail["intraday_change_pct"] = round(pick_change, 3)
         if pick_range is not None:
             pick_detail["opening_range_pct"] = round(pick_range, 3)
+        open_pos = open_position_for_ticker(conn, pick["ticker"])
         ext = build_extended_session(
             phase=phase,
             quote=pick_quote,
@@ -1124,6 +1147,9 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             limit_sell=pick_detail.get("limit_sell_price"),
             shares=pick_detail.get("recommended_shares"),
             rth_close=_rth_close_for_date(conn, pick["ticker"], day),
+            from_journal=open_pos is not None,
+            journal_entry_price=float(open_pos["avg_cost"]) if open_pos else None,
+            journal_shares=int(open_pos["shares"]) if open_pos else None,
         )
         if ext:
             pick_detail["extended_session"] = ext

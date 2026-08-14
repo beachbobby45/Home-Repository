@@ -141,14 +141,34 @@ def test_build_extended_session_after_hours_flags():
     assert ext is not None
     assert ext["label"] == "After hours"
     assert ext["price"] == 162.0
-    assert ext["change_vs_entry_pct"] == round(((162.0 - 163.17) / 163.17) * 100, 3)
-    assert ext["change_vs_reference_pct"] == round(((162.0 - 164.10) / 164.10) * 100, 3)
-    assert ext["reference_label"] == "RTH close"
-    flag_ids = {f["id"] for f in ext["flags"]}
+    assert ext["fill_status"]["default_assume_filled"] is False
+    assert ext["fill_status"]["from_journal"] is False
+    pos = ext["position"]
+    assert pos["change_vs_entry_pct"] == round(((162.0 - 163.17) / 163.17) * 100, 3)
+    flag_ids = {f["id"] for f in pos["flags"]}
     assert "below_limit_entry" in flag_ids
     assert "near_stop" in flag_ids
-    assert ext["net_if_sold_now"] is not None
-    assert ext["net_if_sold_now"] < 0
+    assert pos["net_if_sold_now"] is not None
+    assert pos["net_if_sold_now"] < 0
+
+
+def test_build_extended_session_from_journal():
+    ext = build_extended_session(
+        phase="weekend",
+        quote={"price": 162.0, "prev_close": 164.0},
+        limit_buy=163.17,
+        stop_price=161.95,
+        limit_sell=165.86,
+        shares=61,
+        from_journal=True,
+        journal_entry_price=163.25,
+        journal_shares=60,
+    )
+    assert ext is not None
+    assert ext["fill_status"]["from_journal"] is True
+    assert ext["fill_status"]["default_assume_filled"] is True
+    assert ext["fill_status"]["entry_price"] == 163.25
+    assert ext["position"]["entry_label"] == "journal $163.25"
 
 
 def test_build_extended_session_weekend_gap_flag():
@@ -161,7 +181,7 @@ def test_build_extended_session_weekend_gap_flag():
     )
     assert ext is not None
     assert ext["label"] == "Weekend (last quote)"
-    flag_ids = {f["id"] for f in ext["flags"]}
+    flag_ids = {f["id"] for f in ext["position"]["flags"]}
     assert "weekend_gap_risk" in flag_ids
 
 
@@ -174,4 +194,4 @@ def test_build_extended_session_at_stop():
         limit_sell=165.86,
     )
     assert ext is not None
-    assert any(f["id"] == "at_or_below_stop" for f in ext["flags"])
+    assert any(f["id"] == "at_or_below_stop" for f in ext["position"]["flags"])

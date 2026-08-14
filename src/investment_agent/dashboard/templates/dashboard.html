@@ -821,22 +821,57 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         .trim();
     }
 
-    function renderExtendedSession(ext) {
+    const EXT_FILL_PREFIX = "ext-fill-assumption";
+
+    function extFillStorageKey(ticker, dateEt) {
+      return `${EXT_FILL_PREFIX}:${ticker}:${dateEt || "unknown"}`;
+    }
+
+    function effectiveAssumeFilled(ext, ticker, dateEt) {
+      const fs = ext?.fill_status || {};
+      if (fs.from_journal) return true;
+      const stored = localStorage.getItem(extFillStorageKey(ticker, dateEt));
+      if (stored === "filled" || stored === "not_filled") return stored === "filled";
+      return Boolean(fs.default_assume_filled);
+    }
+
+    function renderExtendedSession(ext, pick, td) {
       if (!ext) return "";
+      const assumeFilled = effectiveAssumeFilled(ext, pick.ticker, td?.date_et);
+      const fs = ext.fill_status || {};
+      const pos = assumeFilled ? (ext.position || {}) : null;
       const refCh = ext.change_vs_reference_pct != null && ext.reference_label
         ? `<span class="pick-change ${ext.change_vs_reference_pct >= 0 ? "up" : "down"}">${fmtPctLive(ext.change_vs_reference_pct)} vs ${ext.reference_label}</span>`
         : "";
-      const entryCh = ext.change_vs_entry_pct != null
-        ? `<span class="pick-change ${ext.change_vs_entry_pct >= 0 ? "up" : "down"}">${fmtPctLive(ext.change_vs_entry_pct)} vs limit entry</span>`
+      const entryCh = pos?.change_vs_entry_pct != null
+        ? `<span class="pick-change ${pos.change_vs_entry_pct >= 0 ? "up" : "down"}">${fmtPctLive(pos.change_vs_entry_pct)} vs ${pos.entry_label || "limit entry"}</span>`
         : "";
-      const flags = (ext.flags || []).map((f) =>
-        `<span class="ext-flag ext-${f.severity || "info"}">${f.text}</span>`
-      ).join("");
-      const netLine = ext.net_if_sold_now != null
-        ? `<span class="brief">Mark at extended → ~$${fmt(ext.net_if_sold_now)} net from limit entry</span>`
+      const flags = assumeFilled
+        ? (pos?.flags || []).map((f) =>
+            `<span class="ext-flag ext-${f.severity || "info"}">${f.text}</span>`
+          ).join("")
+        : (ext.not_filled_hint
+            ? `<span class="ext-flag ext-info">${ext.not_filled_hint}</span>`
+            : "");
+      const netLine = pos?.net_if_sold_now != null
+        ? `<span class="brief">Mark at extended → ~$${fmt(pos.net_if_sold_now)} net from ${pos.entry_label || "limit entry"}</span>`
         : "";
+      const toggleLocked = Boolean(fs.from_journal);
+      const toggleNote = toggleLocked
+        ? `<span class="ext-fill-note">Filled (journal)</span>`
+        : `<span class="ext-fill-note">Fill assumption</span>`;
+      const toggleBtns = toggleLocked
+        ? `<span class="ext-fill-lock">Filled · logged in journal</span>`
+        : `<span class="ext-fill-toggle" role="group" aria-label="Fill assumption">
+            <button type="button" class="ext-fill-btn ${assumeFilled ? "" : "active"}" data-ext-fill="not_filled">Not filled</button>
+            <button type="button" class="ext-fill-btn ${assumeFilled ? "active" : ""}" data-ext-fill="filled">Filled</button>
+          </span>`;
       return `
-        <div class="pick-extended-session">
+        <div class="pick-extended-session" data-ext-ticker="${pick.ticker}">
+          <div class="pick-ext-fill-row">
+            ${toggleNote}
+            ${toggleBtns}
+          </div>
           <div class="pick-price-row extended">
             <span>${ext.label || "Extended session"}</span>
             <strong>$${fmt(ext.price)}</strong>
@@ -847,6 +882,18 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           ${ext.note ? `<div class="pick-ext-note brief">${ext.note}</div>` : ""}
           ${ext.quote_as_of ? `<div class="pick-asof brief">Extended quote ${fmtDateTimePT(ext.quote_as_of)}</div>` : ""}
         </div>`;
+    }
+
+    function bindExtendedFillToggle(container, pick, td) {
+      if (!container || !pick?.extended_session) return;
+      container.querySelectorAll("[data-ext-fill]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (pick.extended_session.fill_status?.from_journal) return;
+          localStorage.setItem(extFillStorageKey(pick.ticker, td?.date_et), btn.dataset.extFill);
+          container.innerHTML = renderPickBlock(pick, td);
+          bindExtendedFillToggle(container, pick, td);
+        });
+      });
     }
 
     function renderPickBlock(pick, td) {
@@ -916,9 +963,15 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           </div>
         </div>
         ${trad.max_net_at_day_high != null ? `<div class="pick-day-high brief">Day high so far → ~$${fmt(trad.max_net_at_day_high)} net from limit entry</div>` : ""}
-        ${renderExtendedSession(pick.extended_session)}
+        ${renderExtendedSession(pick.extended_session, pick, td)}
         ${pick.quote_as_of && showRthLive ? `<div class="pick-asof brief">Quote ${fmtDateTimePT(pick.quote_as_of)}</div>` : ""}
       `;
+    }
+
+    function mountPickBlock(el, pick, td) {
+      if (!el) return;
+      el.innerHTML = renderPickBlock(pick, td);
+      bindExtendedFillToggle(el, pick, td);
     }
 
     function updateStatusBar(td, summary) {
@@ -1006,7 +1059,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         document.getElementById("second-pick-body").innerHTML =
           "<div class='pick-empty'>Backup pick appears after #1 is ranked and tradable.</div>";
       } else {
-        pickEl.innerHTML = renderPickBlock(pick, td);
+        mountPickBlock(pickEl, pick, td);
         const planTicker = document.getElementById("plan-ticker");
         const planPrice = document.getElementById("plan-price");
         const planShares = document.getElementById("plan-shares");
@@ -1018,7 +1071,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         const second = td.second_pick;
         const secondEl = document.getElementById("second-pick-body");
         if (second) {
-          secondEl.innerHTML = renderPickBlock(second, td);
+          mountPickBlock(secondEl, second, td);
         } else {
           secondEl.innerHTML = "<div class='pick-empty'>No second tradable name on the ranked list yet. Refresh live after ingest.</div>";
         }
@@ -1449,12 +1502,13 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         updateStatusBar(td, null);
         const pick = td.top_pick;
         document.getElementById("top-pick-body").innerHTML = pick
-          ? renderPickBlock(pick, td)
+          ? ""
           : "<div class='pick-empty'>No tradable pick for today's dollar goal.</div>";
+        if (pick) mountPickBlock(document.getElementById("top-pick-body"), pick, td);
         renderTradeMath(pick, td);
-        document.getElementById("second-pick-body").innerHTML = td.second_pick
-          ? renderPickBlock(td.second_pick, td)
-          : "<div class='pick-empty'>No backup pick yet.</div>";
+        const secondEl = document.getElementById("second-pick-body");
+        if (td.second_pick) mountPickBlock(secondEl, td.second_pick, td);
+        else secondEl.innerHTML = "<div class='pick-empty'>No backup pick yet.</div>";
         document.getElementById("verdict-headline").textContent = td.headline || "—";
         document.getElementById("verdict-detail").textContent = td.detail || "";
       }

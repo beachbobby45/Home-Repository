@@ -443,6 +443,15 @@ def get_open_positions(conn: sqlite3.Connection) -> list[dict]:
     return open_positions
 
 
+def open_position_for_ticker(conn: sqlite3.Connection, ticker: str) -> dict | None:
+    """Open FIFO lot for ``ticker``, if any."""
+    sym = ticker.upper()
+    for pos in get_open_positions(conn):
+        if pos["ticker"] == sym:
+            return pos
+    return None
+
+
 def get_completed_round_trips(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
     _, completed = _fifo_ledger(conn)
     completed.sort(key=lambda r: r["sell_at"], reverse=True)
