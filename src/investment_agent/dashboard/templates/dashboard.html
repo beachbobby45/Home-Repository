@@ -68,6 +68,7 @@
           <div>
             <h2>Trade proposals</h2>
             <p class="brief">Step 2b — generate up to 5 scored proposals; approve before logging a BUY in the journal.</p>
+            <p class="brief" id="ai-status-note">AI: loading…</p>
           </div>
           <button class="btn btn-sm" type="button" id="generate-proposals">Generate proposals</button>
         </header>
@@ -2099,12 +2100,22 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const statusCls = (p.status || "").replace(/_/g, "-");
       const canAct = p.status === "proposed";
       const riskOk = p.risk_verdict === "approved";
+      const factors = p.factor_scores || {};
+      const modelLabel = (p.model_version || "rule-based-v1").replace(/-/g, " ");
+      const factorChips = [
+        ["News sent.", factors.news_sentiment],
+        ["AI conf.", factors.ai_confidence],
+        ["R:R", factors.risk_reward],
+      ].filter(([, v]) => v != null).map(
+        ([label, val]) => `<span class="factor-chip">${label} ${Number(val).toFixed(0)}</span>`
+      ).join("");
       return `
         <article class="proposal-card status-${statusCls}" data-id="${p.id}">
           <header class="proposal-card-head">
             <div>
               <strong>${p.ticker}</strong>
               <span class="proposal-score">Score ${p.opportunity_score}</span>
+              <span class="proposal-model">${modelLabel}</span>
               <span class="proposal-status">${p.status.replace(/_/g, " ")}</span>
             </div>
             ${canAct ? `
@@ -2114,6 +2125,9 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
               </div>` : ""}
           </header>
           <p class="brief">${p.explanation_short || p.explanation || ""}</p>
+          ${p.explanation && p.explanation !== p.explanation_short
+            ? `<details class="proposal-details"><summary>Full explanation</summary><p class="brief">${p.explanation}</p></details>` : ""}
+          ${factorChips ? `<div class="proposal-factors">${factorChips}</div>` : ""}
           <div class="proposal-plan-grid">
             <span>Limit buy $${fmt(plan.limit_buy_price || plan.entry_price)}</span>
             <span>Sell $${fmt(plan.limit_sell_price || plan.target_price)}</span>
@@ -2127,10 +2141,27 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         </article>`;
     }
 
+    function renderAiStatusNote(status) {
+      const el = document.getElementById("ai-status-note");
+      if (!el || !status) return;
+      el.textContent = status.note || "";
+    }
+
+    async function loadAiStatus() {
+      try {
+        const status = await api("/api/ai/status");
+        renderAiStatusNote(status);
+        return status;
+      } catch (_e) {
+        return null;
+      }
+    }
+
     async function loadProposals() {
       try {
         const data = await api("/api/proposals/today");
         const el = document.getElementById("proposals-body");
+        if (data.ai_status) renderAiStatusNote(data.ai_status);
         const proposals = data.proposals || [];
         if (!proposals.length) {
           el.innerHTML = "<div class='pick-empty'>No proposals yet — run Generate after morning screener.</div>";
@@ -2193,6 +2224,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadCio(),
         loadDailyRhythm(),
         loadProposals(),
+        loadAiStatus(),
         loadCandidates(),
         loadRankedAndStats(),
         loadHistorical(),

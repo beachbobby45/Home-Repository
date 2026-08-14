@@ -720,6 +720,35 @@ main {
   color: var(--muted);
 }
 
+.proposal-model {
+  margin-left: 0.35rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--accent, #6366f1);
+}
+
+.proposal-factors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0;
+}
+
+.factor-chip {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface2, rgba(255, 255, 255, 0.06));
+  color: var(--muted);
+}
+
+.proposal-details summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--accent, #6366f1);
+  margin: 0.25rem 0;
+}
+
 .proposal-status {
   margin-left: 0.35rem;
   font-size: 0.78rem;

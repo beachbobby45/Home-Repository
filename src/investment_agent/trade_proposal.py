@@ -9,10 +9,16 @@ from datetime import datetime, time, timezone
 from zoneinfo import ZoneInfo
 
 from investment_agent.account import build_dashboard_summary
+from investment_agent.ai_service import enrich_proposal
 from investment_agent.config import Settings
 from investment_agent.finance import ORIGINAL_BASIS, target_move_pct
 from investment_agent.monitor import get_latest_quotes
-from investment_agent.opportunity_score import OPPORTUNITY_FLOOR, passes_opportunity_floor
+from investment_agent.opportunity_score import (
+    OPPORTUNITY_FLOOR,
+    composite_opportunity_score,
+    finalize_proposal_factor_scores,
+    passes_opportunity_floor,
+)
 from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.pullback_entry import LIMIT_FILL_DEADLINE, compute_pullback_trade_plan
 from investment_agent.risk_engine import (
@@ -27,7 +33,6 @@ from investment_agent.trading_day import refresh_live_quotes, today_et_str
 ET = ZoneInfo("America/New_York")
 
 STRATEGY_VERSION = "phase1-capital-builder-v1"
-MODEL_VERSION = "rule-based-v1"
 MAX_PROPOSALS_PER_GENERATE = 5
 DIRECTION_LONG = "long"
 
@@ -93,21 +98,6 @@ def _build_plan_for_candidate(
     if plan:
         plan["liquidity_cap"] = row.get("liquidity_cap")
     return plan
-
-
-def _rule_based_explanation(ticker: str, row: dict, plan: dict, risk_headline: str) -> tuple[str, str]:
-    score = row.get("opportunity_score", 0)
-    hit = row.get("dollar_hit_rate_pct", 0)
-    short = f"{ticker} — score {score} · limit ${plan.get('limit_buy_price', plan.get('entry_price')):.2f}"
-    detail = (
-        f"Opportunity score {score}/100 (floor {OPPORTUNITY_FLOOR}). "
-        f"${hit:.0f}% historical $ hit rate. "
-        f"Limit buy ${plan.get('limit_buy_price', plan.get('entry_price')):.2f} → "
-        f"sell ${plan.get('limit_sell_price', plan.get('target_price')):.2f} "
-        f"(~${plan.get('net_at_target', 0):.0f} net). "
-        f"Risk: {risk_headline}"
-    )
-    return detail, short
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
@@ -239,9 +229,11 @@ def generate_proposals(
     session_date_et: str | None = None,
     max_proposals: int = MAX_PROPOSALS_PER_GENERATE,
     replace_existing: bool = False,
+    settings: Settings | None = None,
 ) -> dict:
     """Morning generate — up to 5 proposals sorted by opportunity score."""
     day = session_date_et or today_et_str()
+    cfg = settings or Settings.from_env()
     summary = build_dashboard_summary(conn)
     deploy = float(summary.tradable_cash or ORIGINAL_BASIS)
     net_target = float(summary.daily_target or 150)
@@ -298,16 +290,6 @@ def generate_proposals(
             block_new_longs=block_new_longs,
             regime_summary=regime_summary,
         )
-        explanation, explanation_short = _rule_based_explanation(
-            ticker, row, plan, risk["headline"]
-        )
-
-        if risk["verdict"] == "approved":
-            status = STATUS_PROPOSED
-            risk_reason = None
-        else:
-            status = STATUS_RISK_REJECTED
-            risk_reason = risk["blockers"][0] if risk.get("blockers") else risk["headline"]
 
         entry = float(plan.get("limit_buy_price") or plan.get("entry_price"))
         target = float(plan.get("limit_sell_price") or plan.get("target_price"))
@@ -329,25 +311,58 @@ def generate_proposals(
             or round(target_move_pct(entry, target), 2),
         }
 
+        enrichment = enrich_proposal(
+            conn,
+            ticker=ticker,
+            session_date_et=day,
+            row={**row, "opportunity_floor": OPPORTUNITY_FLOOR},
+            plan=plan_payload,
+            risk_headline=risk["headline"],
+            settings=cfg,
+        )
+
+        factor_scores = finalize_proposal_factor_scores(
+            row.get("factor_scores") or {},
+            conn=conn,
+            ticker=ticker,
+            expected_rr=expected_rr,
+            news_sentiment=enrichment.news_sentiment,
+            ai_confidence=enrichment.ai_confidence if enrichment.ai_confidence > 0 else None,
+        )
+        opportunity_score, _weights = composite_opportunity_score(factor_scores)
+
+        if not passes_opportunity_floor(opportunity_score):
+            skipped.append({"ticker": ticker, "reason": "Below opportunity floor after AI factors"})
+            continue
+
+        if risk["verdict"] == "approved":
+            status = STATUS_PROPOSED
+            risk_reason = None
+        else:
+            status = STATUS_RISK_REJECTED
+            risk_reason = risk["blockers"][0] if risk.get("blockers") else risk["headline"]
+
         proposal_id = _insert_proposal(
             conn,
             {
                 "proposal_uuid": str(uuid.uuid4()),
                 "strategy_version": STRATEGY_VERSION,
-                "model_version": MODEL_VERSION,
+                "model_version": enrichment.model_version,
                 "created_at": _utc_now(),
                 "valid_until": _valid_until_iso(day),
                 "session_date_et": day,
                 "ticker": ticker,
                 "direction": DIRECTION_LONG,
-                "opportunity_score": float(row.get("opportunity_score") or 0),
-                "factor_scores": row.get("factor_scores") or {},
+                "opportunity_score": float(opportunity_score),
+                "factor_scores": {
+                    k: (round(v, 1) if v is not None else None) for k, v in factor_scores.items()
+                },
                 "plan": plan_payload,
                 "risk_verdict": risk["verdict"],
                 "risk_checks": risk.get("checks") or [],
                 "risk_rejection_reason": risk_reason,
-                "explanation": explanation,
-                "explanation_short": explanation_short,
+                "explanation": enrichment.explanation,
+                "explanation_short": enrichment.explanation_short,
                 "status": status,
             },
         )

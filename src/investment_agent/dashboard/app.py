@@ -110,8 +110,10 @@ from investment_agent.trading_day import (
     clear_pinned_pick,
     pin_top_pick,
     refresh_live_quotes,
+    today_et_str,
     validate_planned_trade,
 )
+from investment_agent.ai_service import ai_service_status
 from investment_agent.capital_builder import (
     build_capital_builder_progress,
     progress_to_dict,
@@ -653,6 +655,11 @@ def api_capital_builder_progress(conn=Depends(_db)) -> dict[str, Any]:
     return progress_to_dict(progress)
 
 
+@app.get("/api/ai/status")
+def api_ai_status(conn=Depends(_db)) -> dict[str, Any]:
+    return ai_service_status(conn, today_et_str())
+
+
 @app.get("/api/proposals/today")
 def api_proposals_today(conn=Depends(_db)) -> dict[str, Any]:
     proposals = list_proposals_for_session(conn)
@@ -660,6 +667,7 @@ def api_proposals_today(conn=Depends(_db)) -> dict[str, Any]:
         "proposals": proposals,
         "rejection_reasons": REJECTION_REASONS,
         "count": len(proposals),
+        "ai_status": ai_service_status(conn, today_et_str()),
     }
 
 
@@ -680,10 +688,12 @@ def api_proposals_generate(
     if ingest_lock_active():
         raise HTTPException(status_code=503, detail=ingest_lock_message())
     opts = body or ProposalGenerateBody()
+    settings = Settings.from_env()
     result = generate_proposals(
         conn,
         max_proposals=opts.max_proposals,
         replace_existing=opts.replace_existing,
+        settings=settings,
     )
     conn.commit()
     return result

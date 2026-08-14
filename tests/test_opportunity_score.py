@@ -63,10 +63,12 @@ def _seed_bars(conn, ticker: str, *, closes: list[float], volumes: list[int] | N
     insert_ohlcv_rows(conn, rows)
 
 
-def test_phase1_weights_include_redistributed_sentiment():
-    assert PHASE1_OPPORTUNITY_WEIGHTS["technical_setup"] == 21.0
-    assert PHASE1_OPPORTUNITY_WEIGHTS["dollar_history"] == 16.0
-    assert sum(PHASE1_OPPORTUNITY_WEIGHTS.values()) == 98.0
+def test_phase1_weights_include_sentiment_and_ai():
+    assert PHASE1_OPPORTUNITY_WEIGHTS["news_sentiment"] == 12.0
+    assert PHASE1_OPPORTUNITY_WEIGHTS["technical_setup"] == 15.0
+    assert PHASE1_OPPORTUNITY_WEIGHTS["dollar_history"] == 10.0
+    assert PHASE1_OPPORTUNITY_WEIGHTS["ai_confidence"] == 10.0
+    assert PHASE1_OPPORTUNITY_WEIGHTS["risk_reward"] == 12.0
 
 
 def test_composite_renormalizes_missing_factors():

@@ -35,6 +35,7 @@ def test_init_db_creates_tables():
         assert "learning_reports" in tables
         assert "news_headlines" in tables
         assert "trade_proposals" in tables
+        assert "ai_explanation_cache" in tables
 
 
 def test_upsert_watchlist():

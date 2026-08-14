@@ -1,9 +1,9 @@
-"""Deterministic Opportunity Score composite (Phase 1 Increment 3).
+"""Deterministic Opportunity Score composite (Phase 1 Increment 3+).
 
 Multi-factor 0–100 score replacing period rank as the primary proposal sort key.
-Increments 3–4 use deterministic factors only; news_sentiment (12%) is redistributed
-to technical_setup and dollar_history until Increment 6. risk_reward (12%) is deferred
-to Increment 4 and excluded from nominal weights (renormalized across available factors).
+Increment 6 adds ``news_sentiment`` and optional ``ai_confidence`` (Claude-gated).
+``risk_reward`` is applied at proposal creation when a trade plan exists.
+Missing factors renormalize across available weights.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import sqlite3
 from statistics import mean
 
 from investment_agent.account import latest_regime
+from investment_agent.ai_service import compute_rule_based_news_sentiment
 from investment_agent.liquidity import MIN_ADV_DOLLAR, SWING_TARGET_PCT
 from investment_agent.news_service import compute_news_significance
 
@@ -21,18 +22,20 @@ MOMENTUM_WINDOWS = (5, 10, 20)
 RS_WINDOW = 20
 VOLUME_WINDOW = 20
 
-# Nominal Phase 1 weights (percent points). Sum = 98; risk_reward (12) deferred to Inc 4.
-# news_sentiment (12) redistributed +6 to technical_setup, +6 to dollar_history per spec §5.2.1.
+# Phase 1 nominal weights (spec §5.2.1). ai_confidence excluded when None/0.
 PHASE1_OPPORTUNITY_WEIGHTS: dict[str, float] = {
     "market_regime": 10.0,
-    "technical_setup": 21.0,
+    "technical_setup": 15.0,
     "momentum": 10.0,
     "relative_strength": 10.0,
     "volume": 10.0,
     "volatility": 8.0,
+    "news_sentiment": 12.0,
     "news_significance": 8.0,
     "earnings_events": 5.0,
-    "dollar_history": 16.0,
+    "risk_reward": 12.0,
+    "ai_confidence": 10.0,
+    "dollar_history": 10.0,
 }
 
 
@@ -52,6 +55,9 @@ def composite_opportunity_score(
         for name, score in factor_scores.items()
         if score is not None and name in wmap
     }
+    # ai_confidence weight excluded when zero (no Claude / fallback per spec §5.5.2)
+    if available.get("ai_confidence") == 0:
+        available.pop("ai_confidence", None)
     if not available:
         return 0, {}
 
@@ -228,6 +234,46 @@ def score_earnings_events(conn: sqlite3.Connection, ticker: str) -> float | None
     return 35.0
 
 
+def score_news_sentiment(conn: sqlite3.Connection, ticker: str) -> float | None:
+    try:
+        value, _detail = compute_rule_based_news_sentiment(conn, ticker)
+    except Exception:
+        return None
+    return value
+
+
+def score_risk_reward(expected_rr: float | None) -> float | None:
+    if expected_rr is None:
+        return None
+    if expected_rr <= 0:
+        return 0.0
+    if expected_rr < 1.0:
+        return _clamp_score(expected_rr * 50.0)
+    return _clamp_score(50.0 + (expected_rr - 1.0) * 40.0)
+
+
+def finalize_proposal_factor_scores(
+    base_scores: dict[str, float | None],
+    *,
+    conn: sqlite3.Connection,
+    ticker: str,
+    expected_rr: float | None,
+    news_sentiment: float | None = None,
+    ai_confidence: float | None = None,
+) -> dict[str, float | None]:
+    """Merge screener factors with proposal-time sentiment, R:R, and optional Claude."""
+    scores = dict(base_scores)
+    scores["news_sentiment"] = (
+        news_sentiment if news_sentiment is not None else score_news_sentiment(conn, ticker)
+    )
+    scores["risk_reward"] = score_risk_reward(expected_rr)
+    if ai_confidence and ai_confidence > 0:
+        scores["ai_confidence"] = ai_confidence
+    else:
+        scores["ai_confidence"] = None
+    return scores
+
+
 def compute_factor_scores(
     conn: sqlite3.Connection,
     *,
@@ -257,6 +303,7 @@ def compute_factor_scores(
         "relative_strength": score_relative_strength(conn, ticker),
         "volume": score_volume(conn, ticker),
         "volatility": score_volatility(avg_range_pct),
+        "news_sentiment": score_news_sentiment(conn, ticker),
         "news_significance": score_news_significance(conn, ticker),
         "earnings_events": score_earnings_events(conn, ticker),
         "dollar_history": score_dollar_history(

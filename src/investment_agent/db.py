@@ -273,6 +273,23 @@ CREATE TABLE IF NOT EXISTS trade_proposals (
 
 CREATE INDEX IF NOT EXISTS idx_trade_proposals_session
   ON trade_proposals(session_date_et, status);
+
+CREATE TABLE IF NOT EXISTS ai_explanation_cache (
+  id INTEGER PRIMARY KEY,
+  cache_key TEXT NOT NULL UNIQUE,
+  ticker TEXT NOT NULL,
+  session_date_et TEXT NOT NULL,
+  headline_hash TEXT NOT NULL,
+  model_version TEXT NOT NULL,
+  explanation TEXT NOT NULL,
+  explanation_short TEXT NOT NULL,
+  ai_confidence REAL NOT NULL DEFAULT 0,
+  news_sentiment REAL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_cache_session
+  ON ai_explanation_cache(session_date_et, model_version);
 """
 
 MIGRATION_SQL = """
@@ -340,6 +357,26 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_trade_proposals_session
               ON trade_proposals(session_date_et, status);
+            """
+        )
+    if "ai_explanation_cache" not in all_tables:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS ai_explanation_cache (
+              id INTEGER PRIMARY KEY,
+              cache_key TEXT NOT NULL UNIQUE,
+              ticker TEXT NOT NULL,
+              session_date_et TEXT NOT NULL,
+              headline_hash TEXT NOT NULL,
+              model_version TEXT NOT NULL,
+              explanation TEXT NOT NULL,
+              explanation_short TEXT NOT NULL,
+              ai_confidence REAL NOT NULL DEFAULT 0,
+              news_sentiment REAL,
+              created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_cache_session
+              ON ai_explanation_cache(session_date_et, model_version);
             """
         )
     if "trade_journal" in all_tables:
