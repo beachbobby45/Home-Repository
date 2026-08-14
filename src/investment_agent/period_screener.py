@@ -19,6 +19,11 @@ from investment_agent.dollar_target import (
 )
 from investment_agent.stock_team import _latest_metrics, screen_candidates
 from investment_agent.strategy import REGIME_ONLY_TICKERS
+from investment_agent.opportunity_score import (
+    OPPORTUNITY_FLOOR,
+    PHASE1_OPPORTUNITY_WEIGHTS,
+    attach_opportunity_score,
+)
 
 # Rank weights — dollar-goal reachability first (pool is smaller but stronger)
 RANK_WEIGHTS = {
@@ -96,6 +101,7 @@ def _enrich_row(
     *,
     period_days: int,
     net_target: float,
+    conn: sqlite3.Connection | None = None,
 ) -> dict:
     adv = float(metrics["adv_dollar"] or 0) if metrics else 0.0
     avg_range = float(row.get("avg_range_pct") or (metrics["avg_range_pct"] if metrics else 0) or 0)
@@ -131,6 +137,13 @@ def _enrich_row(
     out["liquidity_cap"] = round(float(metrics["liquidity_cap"] or 0), 0) if metrics else None
     out["meets_liquidity"] = meets_liq
     out["near_swing_target"] = near_swing
+    if conn is not None:
+        out = attach_opportunity_score(
+            conn,
+            out,
+            net_target=net_target,
+            period_days=period_days,
+        )
     return out
 
 ET = ZoneInfo("America/New_York")
@@ -328,11 +341,17 @@ def run_period_screener(
             "period_trading_days": trading_days_in_period,
             "requested_trading_days": score_period_days,
         }
-        row = _enrich_row(base, m, period_days=score_period_days, net_target=net_target)
+        row = _enrich_row(base, m, period_days=score_period_days, net_target=net_target, conn=conn)
         candidates.append(row)
 
     candidates.sort(
-        key=lambda r: (-r["score"], -r["days_screened"], -r.get("adv_dollar", 0), r["ticker"])
+        key=lambda r: (
+            -(r.get("opportunity_score") or 0),
+            -r["score"],
+            -r["days_screened"],
+            -r.get("adv_dollar", 0),
+            r["ticker"],
+        )
     )
 
     return {
@@ -438,6 +457,7 @@ def build_ranked_candidates(
     tradable_cash: float | None = None,
     net_target: float | None = None,
     require_dollar_rank_gate: bool = True,
+    require_opportunity_floor: bool = False,
 ) -> dict:
     from investment_agent.account import build_dashboard_summary
 
@@ -467,7 +487,7 @@ def build_ranked_candidates(
 
     for c in period["candidates"]:
         card = live_map.get(c["ticker"])
-        row = _enrich_row(c, metrics_by_ticker.get(c["ticker"]), period_days=score_period, net_target=goal)
+        row = _enrich_row(c, metrics_by_ticker.get(c["ticker"]), period_days=score_period, net_target=goal, conn=conn)
         enriched = {
             **row,
             "entry_price": card.entry_price if card else None,
@@ -477,7 +497,9 @@ def build_ranked_candidates(
             "thesis_summary": card.thesis_summary if card else None,
         }
         if require_dollar_rank_gate and not row.get("passes_dollar_rank_gate"):
-            excluded.append(enriched)
+            excluded.append({**enriched, "excluded_reason": "dollar_rank_gate"})
+        elif require_opportunity_floor and not row.get("passes_opportunity_floor"):
+            excluded.append({**enriched, "excluded_reason": "opportunity_floor"})
         else:
             ranked.append(enriched)
         seen.add(c["ticker"])
@@ -504,7 +526,7 @@ def build_ranked_candidates(
             "period_trading_days": period.get("trading_days_in_period", period["days_evaluated"]),
             "requested_trading_days": score_period,
         }
-        row = _enrich_row(base, m, period_days=score_period, net_target=goal)
+        row = _enrich_row(base, m, period_days=score_period, net_target=goal, conn=conn)
         enriched = {
             **row,
             "entry_price": card.entry_price,
@@ -515,12 +537,20 @@ def build_ranked_candidates(
             "liquidity_cap": card.liquidity_cap,
         }
         if require_dollar_rank_gate and not row.get("passes_dollar_rank_gate"):
-            excluded.append(enriched)
+            excluded.append({**enriched, "excluded_reason": "dollar_rank_gate"})
+        elif require_opportunity_floor and not row.get("passes_opportunity_floor"):
+            excluded.append({**enriched, "excluded_reason": "opportunity_floor"})
         else:
             ranked.append(enriched)
 
     ranked.sort(
-        key=lambda r: (-r["score"], -r["days_screened"], -r.get("adv_dollar", 0), r["ticker"])
+        key=lambda r: (
+            -(r.get("opportunity_score") or 0),
+            -r["score"],
+            -r["days_screened"],
+            -r.get("adv_dollar", 0),
+            r["ticker"],
+        )
     )
     return {
         "period_days": period_days,
@@ -540,8 +570,12 @@ def build_ranked_candidates(
             "min_avg_net_ratio": MIN_RANK_AVG_NET_RATIO,
             "min_dollar_days": MIN_RANK_DOLLAR_DAYS,
             "require_dollar_rank_gate": require_dollar_rank_gate,
+            "require_opportunity_floor": require_opportunity_floor,
+            "opportunity_floor": OPPORTUNITY_FLOOR,
         },
         "rank_weights": RANK_WEIGHTS,
+        "opportunity_weights": PHASE1_OPPORTUNITY_WEIGHTS,
+        "opportunity_floor": OPPORTUNITY_FLOOR,
     }
 
 

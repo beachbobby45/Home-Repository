@@ -72,7 +72,9 @@ def build_trading_candidates(
     net_target = float(summary.daily_target or 150)
     quotes = get_latest_quotes(conn)
     metrics = {r["ticker"]: r for r in _latest_metrics(conn)}
-    ranked = build_ranked_candidates(conn, period_days=period_days).get("ranked", [])[:limit]
+    ranked = build_ranked_candidates(
+        conn, period_days=period_days, require_opportunity_floor=True
+    ).get("ranked", [])[:limit]
 
     rows: list[dict] = []
     for item in ranked:

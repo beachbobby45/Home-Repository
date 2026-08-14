@@ -15,7 +15,6 @@ from investment_agent.db import (
     purge_news_older_than,
 )
 from investment_agent.journal import get_open_positions
-from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.providers.finnhub import FinnhubClient, utc_now_iso as fh_now
 
 NEWS_RETENTION_DAYS = 30
@@ -73,6 +72,8 @@ def finnhub_item_to_row(ticker: str, item: dict, *, ingested_at: str | None = No
 
 def resolve_news_tickers(conn: sqlite3.Connection, *, limit: int = RANKED_NEWS_LIMIT) -> list[str]:
     """Top ranked candidates plus any open positions."""
+    from investment_agent.period_screener import build_ranked_candidates
+
     tickers: set[str] = set()
     ranked = build_ranked_candidates(conn, period_days=14).get("ranked") or []
     for row in ranked[:limit]:

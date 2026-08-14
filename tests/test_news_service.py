@@ -217,7 +217,7 @@ def test_purge_stale_news():
 def test_resolve_news_tickers_includes_ranked_and_open_positions():
     conn, path = _conn()
     try:
-        with patch("investment_agent.news_service.build_ranked_candidates") as mock_rank:
+        with patch("investment_agent.period_screener.build_ranked_candidates") as mock_rank:
             mock_rank.return_value = {
                 "ranked": [{"ticker": f"T{i}"} for i in range(55)],
             }

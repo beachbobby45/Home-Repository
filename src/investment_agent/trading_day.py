@@ -217,7 +217,7 @@ def _opening_range_pct(quote: dict) -> float | None:
 def get_top_pick(conn: sqlite3.Connection) -> dict | None:
     """Highest ranked live candidate that passes the dollar-goal rank gate."""
     pinned = get_setting(conn, "pinned_pick_ticker", "").strip().upper()
-    ranked = build_ranked_candidates(conn, period_days=14)["ranked"]
+    ranked = build_ranked_candidates(conn, period_days=14, require_opportunity_floor=True)["ranked"]
     live = [
         r for r in ranked
         if r.get("live_pass_today") and r.get("passes_dollar_rank_gate", True)
@@ -237,7 +237,7 @@ def get_top_pick(conn: sqlite3.Connection) -> dict | None:
 
 
 def _live_ranked_candidates(conn: sqlite3.Connection, limit: int = ACTIONABLE_PICK_SCAN) -> list[dict]:
-    ranked = build_ranked_candidates(conn, period_days=14)["ranked"]
+    ranked = build_ranked_candidates(conn, period_days=14, require_opportunity_floor=True)["ranked"]
     live = [
         r for r in ranked
         if r.get("live_pass_today") and r.get("passes_dollar_rank_gate", True)
@@ -1112,7 +1112,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
 
 
 def _next_ranked(conn: sqlite3.Connection, after_ticker: str | None) -> list[dict]:
-    ranked = build_ranked_candidates(conn, period_days=14)["ranked"]
+    ranked = build_ranked_candidates(conn, period_days=14, require_opportunity_floor=True)["ranked"]
     live = [r for r in ranked if r.get("live_pass_today")]
     if after_ticker:
         live = [r for r in live if r["ticker"] != after_ticker]
