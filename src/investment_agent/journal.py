@@ -73,6 +73,7 @@ class JournalEntry:
     executed_at: str
     notes: str | None
     queue_id: int | None
+    proposal_id: int | None = None
 
 
 def _normalize_side(side: str) -> str:
@@ -93,6 +94,7 @@ def insert_trade(
     executed_at: str | None = None,
     notes: str | None = None,
     queue_id: int | None = None,
+    proposal_id: int | None = None,
 ) -> int:
     if shares <= 0 or price <= 0:
         raise ValueError("shares and price must be positive")
@@ -106,8 +108,8 @@ def insert_trade(
     cur = conn.execute(
         """
         INSERT INTO trade_journal
-          (ticker, side, shares, price, fee, executed_at, notes, queue_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          (ticker, side, shares, price, fee, executed_at, notes, queue_id, proposal_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ticker.upper(),
@@ -118,6 +120,7 @@ def insert_trade(
             when,
             notes,
             queue_id,
+            proposal_id,
         ),
     )
     return int(cur.lastrowid)
@@ -126,7 +129,7 @@ def insert_trade(
 def list_trades(conn: sqlite3.Connection, limit: int = 100) -> list[JournalEntry]:
     rows = conn.execute(
         """
-        SELECT id, ticker, side, shares, price, fee, executed_at, notes, queue_id
+        SELECT id, ticker, side, shares, price, fee, executed_at, notes, queue_id, proposal_id
         FROM trade_journal
         ORDER BY executed_at DESC, id DESC
         LIMIT ?
@@ -144,6 +147,7 @@ def list_trades(conn: sqlite3.Connection, limit: int = 100) -> list[JournalEntry
             executed_at=row["executed_at"],
             notes=row["notes"],
             queue_id=row["queue_id"],
+            proposal_id=row["proposal_id"] if "proposal_id" in row.keys() else None,
         )
         for row in rows
     ]
@@ -343,6 +347,7 @@ def trade_to_dict(entry: JournalEntry) -> dict:
         "executed_at": entry.executed_at,
         "notes": entry.notes,
         "queue_id": entry.queue_id,
+        "proposal_id": entry.proposal_id,
     }
 
 

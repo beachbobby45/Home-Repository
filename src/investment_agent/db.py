@@ -144,8 +144,10 @@ CREATE TABLE IF NOT EXISTS trade_journal (
   executed_at TEXT NOT NULL,
   notes TEXT,
   queue_id INTEGER,
+  proposal_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (queue_id) REFERENCES queue_items(id)
+  FOREIGN KEY (queue_id) REFERENCES queue_items(id),
+  FOREIGN KEY (proposal_id) REFERENCES trade_proposals(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_trade_journal_executed
@@ -238,6 +240,39 @@ CREATE TABLE IF NOT EXISTS news_headlines (
 
 CREATE INDEX IF NOT EXISTS idx_news_ticker_time
   ON news_headlines(ticker, published_at);
+
+CREATE TABLE IF NOT EXISTS trade_proposals (
+  id INTEGER PRIMARY KEY,
+  proposal_uuid TEXT NOT NULL UNIQUE,
+  strategy_version TEXT NOT NULL,
+  model_version TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  valid_until TEXT,
+  session_date_et TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  direction TEXT NOT NULL DEFAULT 'long',
+  opportunity_score REAL NOT NULL,
+  factor_scores_json TEXT NOT NULL,
+  plan_json TEXT NOT NULL,
+  risk_verdict TEXT NOT NULL,
+  risk_checks_json TEXT NOT NULL,
+  risk_rejection_reason TEXT,
+  human_verdict TEXT,
+  human_rejection_reason TEXT,
+  human_approved_at TEXT,
+  explanation TEXT,
+  explanation_short TEXT,
+  status TEXT NOT NULL,
+  journal_buy_id INTEGER,
+  journal_sell_id INTEGER,
+  outcome_net_pnl REAL,
+  outcome_exit_reason TEXT,
+  FOREIGN KEY (journal_buy_id) REFERENCES trade_journal(id),
+  FOREIGN KEY (journal_sell_id) REFERENCES trade_journal(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trade_proposals_session
+  ON trade_proposals(session_date_et, status);
 """
 
 MIGRATION_SQL = """
@@ -271,6 +306,49 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
               ON news_headlines(ticker, published_at);
             """
         )
+    if "trade_proposals" not in all_tables:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS trade_proposals (
+              id INTEGER PRIMARY KEY,
+              proposal_uuid TEXT NOT NULL UNIQUE,
+              strategy_version TEXT NOT NULL,
+              model_version TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              valid_until TEXT,
+              session_date_et TEXT NOT NULL,
+              ticker TEXT NOT NULL,
+              direction TEXT NOT NULL DEFAULT 'long',
+              opportunity_score REAL NOT NULL,
+              factor_scores_json TEXT NOT NULL,
+              plan_json TEXT NOT NULL,
+              risk_verdict TEXT NOT NULL,
+              risk_checks_json TEXT NOT NULL,
+              risk_rejection_reason TEXT,
+              human_verdict TEXT,
+              human_rejection_reason TEXT,
+              human_approved_at TEXT,
+              explanation TEXT,
+              explanation_short TEXT,
+              status TEXT NOT NULL,
+              journal_buy_id INTEGER,
+              journal_sell_id INTEGER,
+              outcome_net_pnl REAL,
+              outcome_exit_reason TEXT,
+              FOREIGN KEY (journal_buy_id) REFERENCES trade_journal(id),
+              FOREIGN KEY (journal_sell_id) REFERENCES trade_journal(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_trade_proposals_session
+              ON trade_proposals(session_date_et, status);
+            """
+        )
+    if "trade_journal" in all_tables:
+        journal_cols = {row[1] for row in conn.execute("PRAGMA table_info(trade_journal)")}
+        if "proposal_id" not in journal_cols:
+            conn.execute(
+                "ALTER TABLE trade_journal ADD COLUMN proposal_id INTEGER "
+                "REFERENCES trade_proposals(id)"
+            )
     tables = {
         row[0]
         for row in conn.execute(

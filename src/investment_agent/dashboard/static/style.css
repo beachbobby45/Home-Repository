@@ -591,6 +591,78 @@ main {
   font-size: 0.92rem;
 }
 
+.proposals-panel {
+  margin-bottom: 0.75rem;
+}
+
+.proposals-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.proposals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.proposal-card {
+  border: 1px solid var(--border, #2a3344);
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.proposal-card.status-human-approved {
+  border-color: rgba(80, 180, 120, 0.45);
+}
+
+.proposal-card.status-risk-rejected,
+.proposal-card.status-human-rejected {
+  opacity: 0.75;
+}
+
+.proposal-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.proposal-score {
+  margin-left: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.proposal-status {
+  margin-left: 0.35rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.proposal-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.proposal-plan-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  font-size: 0.85rem;
+  margin: 0.35rem 0;
+}
+
+.proposal-risk.ok { color: #6ecf9a; }
+.proposal-risk.bad { color: #e88; }
+
 .setup-terminal-note {
   margin: 0.5rem 0 1rem;
   max-width: 52rem;

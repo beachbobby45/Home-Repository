@@ -119,6 +119,16 @@ from investment_agent.risk_engine import (
     set_kill_switch,
     auto_engaged_kill_switch,
 )
+from investment_agent.trade_proposal import (
+    REJECTION_REASONS,
+    approve_proposal,
+    generate_proposals,
+    get_proposal,
+    list_proposals_for_session,
+    mark_proposal_executed,
+    reject_proposal,
+    validate_journal_buy_proposal,
+)
 from investment_agent.daily_rhythm import (
     build_trading_candidates,
     get_daily_rhythm_status,
@@ -178,6 +188,7 @@ class TradeCreate(BaseModel):
     executed_time_pt: str | None = None
     notes: str | None = None
     queue_id: int | None = None
+    proposal_id: int | None = None
 
 
 class TaxRateUpdate(BaseModel):
@@ -219,6 +230,16 @@ class PinPickBody(BaseModel):
 
 class KillSwitchBody(BaseModel):
     active: bool
+
+
+class ProposalRejectBody(BaseModel):
+    reason_code: str
+    reason_text: str | None = None
+
+
+class ProposalGenerateBody(BaseModel):
+    replace_existing: bool = False
+    max_proposals: int = Field(default=5, ge=1, le=5)
 
 
 class ValidateTradeBody(BaseModel):
@@ -622,6 +643,76 @@ def api_risk_kill_switch(
     }
 
 
+@app.get("/api/proposals/today")
+def api_proposals_today(conn=Depends(_db)) -> dict[str, Any]:
+    proposals = list_proposals_for_session(conn)
+    return {
+        "proposals": proposals,
+        "rejection_reasons": REJECTION_REASONS,
+        "count": len(proposals),
+    }
+
+
+@app.get("/api/proposals/{proposal_id}")
+def api_proposal_detail(proposal_id: int, conn=Depends(_db)) -> dict[str, Any]:
+    proposal = get_proposal(conn, proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    return proposal
+
+
+@app.post("/api/proposals/generate")
+def api_proposals_generate(
+    body: ProposalGenerateBody | None = None,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    if ingest_lock_active():
+        raise HTTPException(status_code=503, detail=ingest_lock_message())
+    opts = body or ProposalGenerateBody()
+    result = generate_proposals(
+        conn,
+        max_proposals=opts.max_proposals,
+        replace_existing=opts.replace_existing,
+    )
+    conn.commit()
+    return result
+
+
+@app.post("/api/proposals/{proposal_id}/approve")
+def api_proposal_approve(
+    proposal_id: int,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    settings = Settings.from_env()
+    result = approve_proposal(conn, proposal_id, settings=settings)
+    if result.get("ok"):
+        conn.commit()
+    elif result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@app.post("/api/proposals/{proposal_id}/reject")
+def api_proposal_reject(
+    proposal_id: int,
+    body: ProposalRejectBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    result = reject_proposal(
+        conn,
+        proposal_id,
+        reason_code=body.reason_code,
+        reason_text=body.reason_text,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Reject failed"))
+    conn.commit()
+    return result
+
+
 @app.get("/api/queue")
 def api_queue(conn=Depends(_db)) -> list[dict]:
     quotes = get_latest_quotes(conn)
@@ -716,6 +807,17 @@ def api_journal_create(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if body.proposal_id is not None:
+        check = validate_journal_buy_proposal(
+            conn,
+            proposal_id=body.proposal_id,
+            ticker=body.ticker,
+            side=body.side,
+        )
+        if not check.get("ok"):
+            raise HTTPException(status_code=400, detail=check.get("error", "Invalid proposal"))
+
     trade_id = insert_trade(
         conn,
         ticker=body.ticker,
@@ -726,9 +828,12 @@ def api_journal_create(
         executed_at=executed_at,
         notes=format_journal_notes(body.notes, mode),
         queue_id=body.queue_id,
+        proposal_id=body.proposal_id,
     )
+    if body.proposal_id is not None and body.side.upper() == "BUY":
+        mark_proposal_executed(conn, body.proposal_id, trade_id)
     conn.commit()
-    return {"ok": True, "id": trade_id, "trading_mode": mode}
+    return {"ok": True, "id": trade_id, "trading_mode": mode, "proposal_id": body.proposal_id}
 
 
 @app.post("/api/journal/clear")

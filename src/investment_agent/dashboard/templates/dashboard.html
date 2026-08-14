@@ -63,6 +63,19 @@
         <ol class="rhythm-steps" id="rhythm-steps"></ol>
       </section>
 
+      <section class="card proposals-panel" id="proposals-panel">
+        <header class="panel-head proposals-panel-head">
+          <div>
+            <h2>Trade proposals</h2>
+            <p class="brief">Step 2b — generate up to 5 scored proposals; approve before logging a BUY in the journal.</p>
+          </div>
+          <button class="btn btn-sm" type="button" id="generate-proposals">Generate proposals</button>
+        </header>
+        <div id="proposals-body" class="proposals-list">
+          <div class="pick-empty">No proposals yet — run Generate after morning screener.</div>
+        </div>
+      </section>
+
       <section class="card" id="candidates-panel">
         <header class="panel-head">
           <h2>Today&apos;s candidates</h2>
@@ -1973,6 +1986,98 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       `;
     }
 
+    let activeProposalId = null;
+
+    function renderProposalCard(p) {
+      const plan = p.plan || {};
+      const statusCls = (p.status || "").replace(/_/g, "-");
+      const canAct = p.status === "proposed";
+      const riskOk = p.risk_verdict === "approved";
+      return `
+        <article class="proposal-card status-${statusCls}" data-id="${p.id}">
+          <header class="proposal-card-head">
+            <div>
+              <strong>${p.ticker}</strong>
+              <span class="proposal-score">Score ${p.opportunity_score}</span>
+              <span class="proposal-status">${p.status.replace(/_/g, " ")}</span>
+            </div>
+            ${canAct ? `
+              <div class="proposal-actions">
+                <button type="button" class="btn btn-sm proposal-approve" data-id="${p.id}">Approve</button>
+                <button type="button" class="btn btn-sm secondary proposal-reject" data-id="${p.id}">Reject</button>
+              </div>` : ""}
+          </header>
+          <p class="brief">${p.explanation_short || p.explanation || ""}</p>
+          <div class="proposal-plan-grid">
+            <span>Limit buy $${fmt(plan.limit_buy_price || plan.entry_price)}</span>
+            <span>Sell $${fmt(plan.limit_sell_price || plan.target_price)}</span>
+            <span>Stop $${fmt(plan.stop_price)}</span>
+            <span>${plan.shares || "—"} sh</span>
+          </div>
+          <div class="brief proposal-risk ${riskOk ? "ok" : "bad"}">
+            Risk: ${p.risk_verdict}${p.risk_rejection_reason ? " — " + p.risk_rejection_reason : ""}
+          </div>
+          ${p.human_rejection_reason ? `<div class="brief">Rejected: ${p.human_rejection_reason}</div>` : ""}
+        </article>`;
+    }
+
+    async function loadProposals() {
+      try {
+        const data = await api("/api/proposals/today");
+        const el = document.getElementById("proposals-body");
+        const proposals = data.proposals || [];
+        if (!proposals.length) {
+          el.innerHTML = "<div class='pick-empty'>No proposals yet — run Generate after morning screener.</div>";
+          return;
+        }
+        el.innerHTML = proposals.map(renderProposalCard).join("");
+        el.querySelectorAll(".proposal-approve").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = Number(btn.dataset.id);
+            try {
+              toast("Refreshing live + re-running risk…");
+              const r = await api(`/api/proposals/${id}/approve`, { method: "POST" });
+              if (!r.ok) { toast(r.error || "Approve failed", 8000); return; }
+              activeProposalId = id;
+              const p = r.proposal;
+              const plan = p.plan || {};
+              document.getElementById("plan-ticker").value = p.ticker;
+              document.getElementById("plan-price").value = plan.limit_buy_price || plan.entry_price || "";
+              document.getElementById("plan-shares").value = plan.shares || "";
+              document.getElementById("t-ticker").value = p.ticker;
+              document.getElementById("t-price").value = plan.limit_buy_price || plan.entry_price || "";
+              document.getElementById("t-shares").value = plan.shares || "";
+              toast(`${p.ticker} approved — log BUY in journal with proposal linked`);
+              await loadProposals();
+            } catch (e) { toast(e.message, 8000); }
+          });
+        });
+        el.querySelectorAll(".proposal-reject").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = Number(btn.dataset.id);
+            const code = prompt("Rejection reason code: NO_CONVICTION, NEWS_RISK, MARKET_RISK, SIZE_TOO_LARGE, ALREADY_EXPOSED, TIMING, OTHER");
+            if (!code) return;
+            let text = null;
+            if (code.toUpperCase() === "OTHER") {
+              text = prompt("Enter rejection notes (required for OTHER):");
+              if (!text) return;
+            }
+            try {
+              await api(`/api/proposals/${id}/reject`, {
+                method: "POST",
+                body: JSON.stringify({ reason_code: code.toUpperCase(), reason_text: text }),
+              });
+              toast("Proposal rejected");
+              if (activeProposalId === id) activeProposalId = null;
+              await loadProposals();
+            } catch (e) { toast(e.message); }
+          });
+        });
+      } catch (_e) {
+        /* proposals optional until generated */
+      }
+    }
+
     async function refreshAll() {
       await Promise.all([
         loadTradingDay(),
@@ -1980,6 +2085,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadScenario(),
         loadCio(),
         loadDailyRhythm(),
+        loadProposals(),
         loadCandidates(),
         loadRankedAndStats(),
         loadHistorical(),
@@ -1990,6 +2096,19 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadJournal(),
       ]);
     }
+
+    document.getElementById("generate-proposals")?.addEventListener("click", async () => {
+      try {
+        toast("Generating trade proposals…");
+        const r = await api("/api/proposals/generate", {
+          method: "POST",
+          body: JSON.stringify({ replace_existing: true, max_proposals: 5 }),
+          timeoutMs: 120000,
+        });
+        toast(`Generated ${r.actionable_count || 0} actionable proposal(s)`);
+        await loadProposals();
+      } catch (e) { toast(e.message, 8000); }
+    });
 
     document.getElementById("load-sp500")?.addEventListener("click", async () => {
       if (!confirm("Load ~500 S&P 500 tickers into the watchlist? Existing tickers stay active.")) return;
@@ -2348,9 +2467,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         notes: document.getElementById("t-notes").value || null,
       };
       if (feeVal) payload.fee = Number(feeVal);
+      if (activeProposalId) payload.proposal_id = activeProposalId;
       try {
         await api("/api/journal", { method: "POST", body: JSON.stringify(payload) });
         toast("Trade logged");
+        activeProposalId = null;
         e.target.reset();
         initJournalForm();
         await refreshAll();
