@@ -31,6 +31,15 @@ from investment_agent.pullback_entry import (
     limit_fill_missed,
 )
 from investment_agent.tradability import assess_entry_tradability
+from investment_agent.risk_engine import (
+    MarketSnapshot,
+    auto_engaged_kill_switch,
+    build_portfolio_snapshot,
+    evaluate_proposal_from_plan_dict,
+    portfolio_allows_new_entries,
+    portfolio_status_dict,
+    risk_decision_to_dict,
+)
 
 ET = ZoneInfo("America/New_York")
 MARKET_OPEN = time(9, 30)
@@ -81,6 +90,7 @@ def _assess_pick_tradability(
     deploy: float,
     net_target: float,
     conn: sqlite3.Connection,
+    block_new_longs: bool = False,
 ) -> tuple[dict, dict, dict]:
     """Return (pullback_plan, tradability, dollar_history dict)."""
     avg_range = float(row.get("avg_range_pct") or 0) or None
@@ -101,6 +111,9 @@ def _assess_pick_tradability(
         net_target=net_target,
         avg_range_pct=avg_range,
         dollar_history=hist,
+        conn=conn,
+        ticker=row["ticker"],
+        block_new_longs=block_new_longs,
     ) if limit_entry and quote else {
         "verdict": "UNKNOWN",
         "headline": "No live quote",
@@ -243,6 +256,7 @@ def resolve_actionable_pick(
     quotes: dict[str, dict],
     deploy: float,
     net_target: float,
+    block_new_longs: bool = False,
 ) -> tuple[dict | None, list[dict]]:
     """Pick first live ranked name that passes intraday tradability for today's $ goal."""
     skipped: list[dict] = []
@@ -261,7 +275,8 @@ def resolve_actionable_pick(
             continue
 
         plan, tradability, hist_dict = _assess_pick_tradability(
-            row, quote, deploy=deploy, net_target=net_target, conn=conn
+            row, quote, deploy=deploy, net_target=net_target, conn=conn,
+            block_new_longs=block_new_longs,
         )
         pick = {
             **row,
@@ -542,6 +557,9 @@ def validate_planned_trade(
             net_target=goal,
             avg_range_pct=avg_range,
             dollar_history=hist,
+            conn=conn,
+            ticker=sym,
+            block_new_longs=day_status.get("block_new_longs", False),
         )
         if trad.get("verdict") == "NOT_TRADABLE":
             verdict = "NO_GO"
@@ -714,6 +732,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         quotes=quotes,
         deploy=summary.tradable_cash,
         net_target=net_for_plan,
+        block_new_longs=summary.block_new_longs,
     )
     ranked_first = get_top_pick(conn)
 
@@ -733,6 +752,17 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     verdict = "GO"
     headline = "Good to trade"
     detail = "Conditions favor taking the top ranked setup after the 30-minute gate."
+
+    portfolio_snapshot = build_portfolio_snapshot(conn)
+    if auto_engaged_kill_switch(conn, portfolio_snapshot):
+        portfolio_snapshot = build_portfolio_snapshot(conn)
+    regime_summary = summary.regime["summary"] if summary.regime else None
+    portfolio_risk = portfolio_allows_new_entries(
+        conn,
+        block_new_longs=summary.block_new_longs,
+        regime_summary=regime_summary,
+    )
+    risk_status = portfolio_status_dict(portfolio_snapshot)
 
     def add_check(name: str, ok: bool | None, message: str, *, blocking: bool = False):
         checks.append({"name": name, "ok": ok, "message": message, "blocking": blocking})
@@ -780,6 +810,18 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         regime_msg = summary.regime["summary"] if summary.regime else "Run refresh for live regime"
         add_check("Regime", True, regime_msg)
 
+    for risk_check in portfolio_risk.checks:
+        add_check(
+            risk_check["name"],
+            risk_check["ok"],
+            risk_check["message"],
+            blocking=bool(risk_check.get("blocking")),
+        )
+    if portfolio_risk.verdict == "rejected":
+        verdict = "NO_GO"
+        headline = portfolio_risk.headline
+        detail = portfolio_risk.blockers[0] if portfolio_risk.blockers else portfolio_risk.headline
+
     if quotes_stale:
         if verdict == "GO":
             verdict = "CAUTION"
@@ -816,15 +858,28 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         add_check("Stop-out rule", True, "No stop-out logged today")
 
     if open_positions:
-        if verdict == "GO":
-            verdict = "CAUTION"
-        pos = open_positions[0]
-        detail = f"Open position in {pos['ticker']} — finish before a new full-size entry."
-        add_check(
-            "Open position",
-            None,
-            f"{pos['ticker']}: {pos['shares']:.0f} sh @ ${pos['avg_cost']:.2f}",
-        )
+        pos_count = len(open_positions)
+        if pos_count >= 2:
+            if verdict == "GO":
+                verdict = "NO_GO"
+            pos = open_positions[0]
+            detail = (
+                f"{pos_count} open positions (max 2) — manage existing before new entries."
+            )
+            add_check(
+                "Open position",
+                False,
+                f"{pos_count} open — at max {2} positions",
+                blocking=True,
+            )
+        else:
+            pos = open_positions[0]
+            add_check(
+                "Open position",
+                True,
+                f"{pos['ticker']}: {pos['shares']:.0f} sh @ ${pos['avg_cost']:.2f} "
+                f"({pos_count}/2 slots used)",
+            )
     else:
         add_check("Open position", True, "Flat — ready for one full-size entry")
 
@@ -978,6 +1033,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             deploy=float(row.get("suggested_size") or summary.tradable_cash),
             net_target=net_for_plan,
             conn=conn,
+            block_new_longs=summary.block_new_longs,
         )
         if t.get("verdict") == "TRADABLE":
             second_row = {
@@ -998,6 +1054,23 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             net_target=net_for_plan,
         )
 
+    pick_risk = None
+    if pick_detail and pick_detail.get("stop_price") and pick_detail.get("limit_buy_price"):
+        pick_risk = evaluate_proposal_from_plan_dict(
+            plan=pick_detail,
+            ticker=pick_detail["ticker"],
+            portfolio=portfolio_snapshot,
+            market=MarketSnapshot(
+                block_new_longs=summary.block_new_longs,
+                regime_summary=regime_summary,
+            ),
+        )
+        if pick_risk.verdict == "rejected" and verdict in ("GO", "CAUTION"):
+            verdict = "NO_GO"
+            headline = f"{pick_detail['ticker']} — risk engine rejected"
+            detail = pick_risk.blockers[0] if pick_risk.blockers else pick_risk.headline
+            add_check("Proposal risk", False, detail, blocking=True)
+
     return {
         "as_of_et": now.replace(microsecond=0).isoformat(),
         "date_et": day,
@@ -1010,7 +1083,13 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "daily_target": daily_target,
         "daily_target_met": target_met,
         "stopped_out_today": stopped,
-        "can_enter_new": verdict == "GO" and not open_positions and not target_met and not stopped,
+        "can_enter_new": (
+            verdict == "GO"
+            and len(open_positions) < 2
+            and not target_met
+            and not stopped
+            and portfolio_risk.verdict == "approved"
+        ),
         "can_second_trade": can_second_trade,
         "open_positions": open_positions,
         "top_pick": pick_detail,
@@ -1019,6 +1098,10 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "skipped_not_tradable": skipped_picks,
         "next_ranked": _next_ranked(conn, pick["ticker"] if pick else None),
         "remaining_daily_net": round(remaining_net, 2),
+        "block_new_longs": summary.block_new_longs,
+        "risk": risk_status,
+        "portfolio_risk": risk_decision_to_dict(portfolio_risk),
+        "pick_risk": risk_decision_to_dict(pick_risk) if pick_risk else None,
         "strategy": {
             "daily_net_target": daily_target,
             "stop_pct": STOP_PCT,

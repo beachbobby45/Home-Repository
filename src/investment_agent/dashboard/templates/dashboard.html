@@ -90,6 +90,20 @@
         </div>
       </div>
 
+      <div class="card risk-panel" id="risk-panel">
+        <header class="panel-head risk-panel-head">
+          <div>
+            <h2 class="risk-title">Risk Engine</h2>
+            <p class="brief" id="risk-headline">Portfolio limits — sovereign gate before every entry</p>
+          </div>
+          <label class="kill-switch-toggle" title="Block all new entries until cleared">
+            <input type="checkbox" id="kill-switch-input" />
+            <span>Kill switch</span>
+          </label>
+        </header>
+        <div class="risk-metrics" id="risk-metrics">Loading…</div>
+      </div>
+
       <div class="picks-grid">
         <article class="pick-card pick-card-primary">
           <header class="pick-card-head">
@@ -946,6 +960,40 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         banner.textContent = td.headline + " — " + (td.detail || "");
       }
       updateStatusBar(td, null);
+      if (td.risk) renderRiskStatus(td.risk);
+      else loadRiskStatus();
+    }
+
+    function renderRiskStatus(risk) {
+      if (!risk) return;
+      const panel = document.getElementById("risk-panel");
+      const ks = document.getElementById("kill-switch-input");
+      if (ks && !ks.dataset.userToggled) {
+        ks.checked = !!risk.kill_switch_active;
+      }
+      panel.classList.toggle("kill-switch-on", !!risk.kill_switch_active);
+      const limits = risk.limits || {};
+      document.getElementById("risk-metrics").innerHTML = [
+        ["Today P&L", `$${fmt(risk.today_realized_net)} / −$${fmt(risk.daily_loss_limit_dollars)} limit`],
+        ["Week P&L", `$${fmt(risk.weekly_realized_net)} / −$${fmt(risk.weekly_loss_limit_dollars)} limit`],
+        ["Drawdown", `${Number(risk.drawdown_pct || 0).toFixed(1)}% / ${limits.max_drawdown_pct || 10}% max`],
+        ["Positions", `${risk.open_positions_count || 0} / ${limits.max_open_positions || 2}`],
+        ["Buys today", `${risk.buys_today || 0} / ${limits.max_trades_per_day || 2}`],
+        ["Tradable", `$${fmt(risk.tradable_cash)}`],
+      ].map(([label, val]) => `<div class="risk-metric"><span>${label}</span><strong>${val}</strong></div>`).join("");
+      document.getElementById("risk-headline").textContent = risk.kill_switch_active
+        ? "Kill switch ON — all new entries blocked until cleared"
+        : "Portfolio limits active — Risk Engine approves or rejects every proposal";
+    }
+
+    async function loadRiskStatus() {
+      try {
+        const risk = await api("/api/risk/status");
+        renderRiskStatus(risk);
+        return risk;
+      } catch (_e) {
+        return null;
+      }
     }
 
     function updateTradingModeBanner(mode) {
@@ -2157,6 +2205,24 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
 
     document.getElementById("refresh-trading-day").addEventListener("click", () => {
       refreshLiveBeforeBuy().catch((e) => toast(e.message, 8000));
+    });
+
+    document.getElementById("kill-switch-input")?.addEventListener("change", async (e) => {
+      const input = e.target;
+      input.dataset.userToggled = "1";
+      try {
+        await api("/api/risk/kill-switch", {
+          method: "POST",
+          body: JSON.stringify({ active: input.checked }),
+        });
+        toast(input.checked ? "Kill switch ON — no new entries" : "Kill switch cleared");
+        await loadTradingDay();
+      } catch (err) {
+        input.checked = !input.checked;
+        toast(err.message || "Kill switch update failed", 6000);
+      } finally {
+        delete input.dataset.userToggled;
+      }
     });
 
     ["plan-ticker", "plan-price", "plan-shares"].forEach((id) => {

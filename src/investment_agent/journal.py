@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from investment_agent.finance import DEFAULT_BUY_FEE, DEFAULT_SELL_FEE, ORIGINAL_BASIS
@@ -216,6 +216,74 @@ def compute_today_realized_net(conn: sqlite3.Connection, date_key: str | None = 
                 queue.popleft()
 
     return realized
+
+
+def _week_start_pt(date_key: str | None = None) -> str:
+    """Monday YYYY-MM-DD for the ISO week containing date_key (Pacific)."""
+    when = date_key or today_pt_str()
+    dt = datetime.strptime(when, "%Y-%m-%d").replace(tzinfo=PT)
+    monday = dt - timedelta(days=dt.weekday())
+    return monday.strftime("%Y-%m-%d")
+
+
+def compute_weekly_realized_net(conn: sqlite3.Connection, date_key: str | None = None) -> float:
+    """FIFO round-trip P&L for sells from Monday PT through date_key (inclusive)."""
+    when = date_key or today_pt_str()
+    week_start = _week_start_pt(when)
+    rows = conn.execute(
+        """
+        SELECT ticker, side, shares, price, fee, executed_at
+        FROM trade_journal
+        ORDER BY executed_at ASC, id ASC
+        """
+    ).fetchall()
+
+    buys: dict[str, deque] = {}
+    realized = 0.0
+
+    for row in rows:
+        sell_day = _executed_date_pt(row["executed_at"])
+        if row["side"] == "BUY":
+            buys.setdefault(row["ticker"], deque()).append(
+                {
+                    "shares": float(row["shares"]),
+                    "price": float(row["price"]),
+                    "fee": float(row["fee"]),
+                }
+            )
+            continue
+
+        if sell_day < week_start or sell_day > when:
+            continue
+
+        remaining = float(row["shares"])
+        sell_price = float(row["price"])
+        sell_shares = float(row["shares"])
+        sell_fee_total = float(row["fee"])
+        queue = buys.setdefault(row["ticker"], deque())
+
+        while remaining > 1e-9 and queue:
+            buy = queue[0]
+            matched = min(remaining, buy["shares"])
+            buy_fee = buy["fee"] * (matched / buy["shares"])
+            sell_fee = sell_fee_total * (matched / sell_shares)
+            realized += (sell_price - buy["price"]) * matched - buy_fee - sell_fee
+            remaining -= matched
+            buy["shares"] -= matched
+            buy["fee"] -= buy_fee
+            if buy["shares"] <= 1e-9:
+                queue.popleft()
+
+    return round(realized, 2)
+
+
+def count_buys_today(conn: sqlite3.Connection, date_key: str | None = None) -> int:
+    """Count BUY fills on the Pacific calendar day."""
+    when = date_key or today_pt_str()
+    rows = conn.execute(
+        "SELECT executed_at FROM trade_journal WHERE side = 'BUY'"
+    ).fetchall()
+    return sum(1 for row in rows if _executed_date_pt(row["executed_at"]) == when)
 
 
 def compute_monthly_realized_net(conn: sqlite3.Connection, month_key: str) -> float:

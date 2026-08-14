@@ -112,6 +112,13 @@ from investment_agent.trading_day import (
     refresh_live_quotes,
     validate_planned_trade,
 )
+from investment_agent.risk_engine import (
+    build_portfolio_snapshot,
+    is_kill_switch_active,
+    portfolio_status_dict,
+    set_kill_switch,
+    auto_engaged_kill_switch,
+)
 from investment_agent.daily_rhythm import (
     build_trading_candidates,
     get_daily_rhythm_status,
@@ -208,6 +215,10 @@ class PeriodScreenerBody(BaseModel):
 
 class PinPickBody(BaseModel):
     ticker: str
+
+
+class KillSwitchBody(BaseModel):
+    active: bool
 
 
 class ValidateTradeBody(BaseModel):
@@ -581,6 +592,34 @@ def api_trading_day_clear_pin(
     result = clear_pinned_pick(conn)
     conn.commit()
     return {**result, "status": build_trading_day_status(conn)}
+
+
+@app.get("/api/risk/status")
+def api_risk_status(conn=Depends(_db)) -> dict[str, Any]:
+    snapshot = build_portfolio_snapshot(conn)
+    auto_engaged = auto_engaged_kill_switch(conn, snapshot)
+    if auto_engaged:
+        conn.commit()
+        snapshot = build_portfolio_snapshot(conn)
+    status = portfolio_status_dict(snapshot)
+    status["auto_kill_switch_engaged"] = auto_engaged
+    return status
+
+
+@app.post("/api/risk/kill-switch")
+def api_risk_kill_switch(
+    body: KillSwitchBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    set_kill_switch(conn, body.active)
+    conn.commit()
+    snapshot = build_portfolio_snapshot(conn)
+    return {
+        "ok": True,
+        "kill_switch_active": is_kill_switch_active(conn),
+        "status": portfolio_status_dict(snapshot),
+    }
 
 
 @app.get("/api/queue")

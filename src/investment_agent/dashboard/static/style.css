@@ -530,6 +530,67 @@ main {
   color: var(--muted);
 }
 
+.setup-workflow-list {
+  margin: 0.35rem 0 0.75rem 1.1rem;
+  padding: 0;
+}
+
+.setup-workflow-list li {
+  margin: 0.25rem 0;
+}
+
+.risk-panel {
+  margin-top: 0.75rem;
+}
+
+.risk-panel.kill-switch-on {
+  border-color: var(--bad, #c44);
+  background: rgba(204, 68, 68, 0.06);
+}
+
+.risk-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.risk-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.kill-switch-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.risk-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.risk-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.risk-metric span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.risk-metric strong {
+  font-size: 0.92rem;
+}
+
 .setup-terminal-note {
   margin: 0.5rem 0 1rem;
   max-width: 52rem;

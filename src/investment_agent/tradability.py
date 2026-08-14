@@ -6,6 +6,8 @@ prev_close). No intraday candles or paid APIs required.
 
 from __future__ import annotations
 
+import sqlite3
+
 from investment_agent.finance import (
     DEFAULT_BUY_FEE,
     daily_profit_target,
@@ -23,6 +25,51 @@ MAX_CHASE_ABOVE_OPEN_PCT = 0.50
 MIN_SESSION_RANGE_PCT = 0.40
 MIN_NET_AT_DAY_HIGH_RATIO = 0.95
 TARGET_RETRACE_TOLERANCE = 0.998
+
+
+def _apply_risk_engine(
+    result: dict,
+    *,
+    conn: sqlite3.Connection,
+    ticker: str | None,
+    block_new_longs: bool,
+) -> dict:
+    """Merge portfolio-level Risk Engine checks into tradability output."""
+    plan = result.get("plan") or {}
+    if not plan.get("entry_price"):
+        return result
+
+    from investment_agent.risk_engine import (
+        MarketSnapshot,
+        build_portfolio_snapshot,
+        evaluate_proposal_from_plan_dict,
+        risk_decision_to_dict,
+    )
+
+    portfolio = build_portfolio_snapshot(conn)
+    market = MarketSnapshot(block_new_longs=block_new_longs)
+    risk = evaluate_proposal_from_plan_dict(
+        plan=plan,
+        ticker=(ticker or "—").upper(),
+        portfolio=portfolio,
+        market=market,
+    )
+    result["risk"] = risk_decision_to_dict(risk)
+    for check in risk.checks:
+        result["checks"].append(
+            {
+                "name": f"Risk: {check['name']}",
+                "ok": check["ok"],
+                "message": check["message"],
+            }
+        )
+    if risk.verdict == "rejected":
+        result["verdict"] = "NOT_TRADABLE"
+        result["blockers"] = list(result.get("blockers") or []) + list(risk.blockers)
+        if risk.blockers:
+            result["headline"] = "Not tradable — risk engine blocked"
+            result["detail"] = risk.blockers[0]
+    return result
 
 
 def _gap_at_open_pct(quote: dict) -> float | None:
@@ -77,6 +124,9 @@ def assess_entry_tradability(
     net_target: float | None = None,
     avg_range_pct: float | None = None,
     dollar_history: DollarHistoryStats | None = None,
+    conn: sqlite3.Connection | None = None,
+    ticker: str | None = None,
+    block_new_longs: bool = False,
 ) -> dict:
     """Return tradability verdict for entering at ``entry_price`` right now."""
     goal = net_target if net_target is not None else daily_profit_target(deploy_dollar)
@@ -238,7 +288,7 @@ def assess_entry_tradability(
         headline = "Tradable from this entry"
         detail = f"Room to ${target_px:.2f} sell for ~${goal:.0f} net after fees"
 
-    return {
+    result = {
         "verdict": verdict,
         "headline": headline,
         "detail": detail,
@@ -256,3 +306,11 @@ def assess_entry_tradability(
         "historical_avg_net_at_high": dollar_pred.get("historical_avg_net_at_high"),
         "dollar_hit_rate_pct": dollar_pred.get("dollar_hit_rate_pct"),
     }
+    if conn is not None:
+        result = _apply_risk_engine(
+            result,
+            conn=conn,
+            ticker=ticker,
+            block_new_longs=block_new_longs,
+        )
+    return result
