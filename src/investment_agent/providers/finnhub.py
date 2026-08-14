@@ -84,6 +84,30 @@ class FinnhubClient:
             )
         return rows
 
+    def get_company_news(
+        self,
+        symbol: str,
+        *,
+        from_date: str,
+        to_date: str,
+    ) -> list[dict]:
+        """Fetch company news headlines (Finnhub /company-news)."""
+        self._throttle()
+        resp = self._client.get(
+            f"{FINNHUB_BASE}/company-news",
+            params={
+                "symbol": symbol.upper(),
+                "from": from_date,
+                "to": to_date,
+                "token": self.api_key,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, list):
+            raise ValueError(f"Unexpected company-news payload for {symbol}: {data!r}")
+        return data
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()

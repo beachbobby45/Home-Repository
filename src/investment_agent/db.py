@@ -222,6 +222,22 @@ CREATE TABLE IF NOT EXISTS close_reports (
   payload_json TEXT NOT NULL,
   UNIQUE(report_date, report_type)
 );
+
+CREATE TABLE IF NOT EXISTS news_headlines (
+  id INTEGER PRIMARY KEY,
+  ticker TEXT NOT NULL,
+  headline_hash TEXT NOT NULL,
+  published_at TEXT NOT NULL,
+  headline TEXT NOT NULL,
+  summary TEXT,
+  source TEXT,
+  url TEXT,
+  ingested_at TEXT NOT NULL,
+  UNIQUE(ticker, headline_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_ticker_time
+  ON news_headlines(ticker, published_at);
 """
 
 MIGRATION_SQL = """
@@ -230,6 +246,31 @@ MIGRATION_SQL = """
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
+    all_tables = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    if "news_headlines" not in all_tables:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS news_headlines (
+              id INTEGER PRIMARY KEY,
+              ticker TEXT NOT NULL,
+              headline_hash TEXT NOT NULL,
+              published_at TEXT NOT NULL,
+              headline TEXT NOT NULL,
+              summary TEXT,
+              source TEXT,
+              url TEXT,
+              ingested_at TEXT NOT NULL,
+              UNIQUE(ticker, headline_hash)
+            );
+            CREATE INDEX IF NOT EXISTS idx_news_ticker_time
+              ON news_headlines(ticker, published_at);
+            """
+        )
     tables = {
         row[0]
         for row in conn.execute(
@@ -448,3 +489,66 @@ def insert_regime_snapshot(conn: sqlite3.Connection, row: dict[str, Any]) -> Non
             row["summary"],
         ),
     )
+
+
+def insert_news_headline(conn: sqlite3.Connection, row: dict[str, Any]) -> bool:
+    """Insert headline if new; return True when a row was inserted."""
+    cur = conn.execute(
+        """
+        INSERT OR IGNORE INTO news_headlines
+          (ticker, headline_hash, published_at, headline, summary, source, url, ingested_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            row["ticker"].upper(),
+            row["headline_hash"],
+            row["published_at"],
+            row["headline"],
+            row.get("summary"),
+            row.get("source"),
+            row.get("url"),
+            row["ingested_at"],
+        ),
+    )
+    return cur.rowcount > 0
+
+
+def list_news_headlines(
+    conn: sqlite3.Connection,
+    ticker: str,
+    *,
+    since_iso: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    sym = ticker.upper()
+    if since_iso:
+        rows = conn.execute(
+            """
+            SELECT ticker, headline_hash, published_at, headline, summary, source, url, ingested_at
+            FROM news_headlines
+            WHERE ticker = ? AND published_at >= ?
+            ORDER BY published_at DESC
+            LIMIT ?
+            """,
+            (sym, since_iso, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT ticker, headline_hash, published_at, headline, summary, source, url, ingested_at
+            FROM news_headlines
+            WHERE ticker = ?
+            ORDER BY published_at DESC
+            LIMIT ?
+            """,
+            (sym, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def purge_news_older_than(conn: sqlite3.Connection, cutoff_iso: str) -> int:
+    cur = conn.execute(
+        "DELETE FROM news_headlines WHERE published_at < ?",
+        (cutoff_iso,),
+    )
+    return int(cur.rowcount)

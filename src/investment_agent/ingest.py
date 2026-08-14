@@ -355,6 +355,27 @@ def _run_ingest_body(
                 f"regime: missing index quotes for {', '.join(missing)}"
             )
 
+        # --- Company news (top 50 ranked + open positions) ---
+        try:
+            from investment_agent.news_service import ingest_news_for_targets
+
+            news_summary = ingest_news_for_targets(conn, settings)
+            summary["news"] = news_summary
+            if news_summary.get("inserted"):
+                log_ingest(
+                    conn,
+                    "finnhub_news",
+                    "ok",
+                    f"inserted {news_summary['inserted']} headlines for "
+                    f"{len(news_summary.get('tickers') or [])} tickers",
+                )
+            if news_summary.get("errors"):
+                for err in news_summary["errors"]:
+                    summary["errors"].append(f"news: {err}")
+        except Exception as exc:
+            log_ingest(conn, "finnhub_news", "error", str(exc))
+            summary["errors"].append(f"news: {exc}")
+
         conn.commit()
 
         action_id = ACTION_DAILY_INGEST if incremental else ACTION_FULL_INGEST
