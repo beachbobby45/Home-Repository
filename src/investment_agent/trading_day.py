@@ -214,6 +214,138 @@ def _opening_range_pct(quote: dict) -> float | None:
     return ((high - low) / open_px) * 100.0
 
 
+EXTENDED_SESSION_PHASES = frozenset({"pre_market", "after_hours", "weekend"})
+EXTENDED_SESSION_LABELS = {
+    "pre_market": "Pre-market",
+    "after_hours": "After hours",
+    "weekend": "Weekend (last quote)",
+}
+NEAR_STOP_CUSHION_PCT = 0.35
+
+
+def _rth_close_for_date(
+    conn: sqlite3.Connection,
+    ticker: str,
+    date_et: str,
+) -> float | None:
+    row = conn.execute(
+        "SELECT close FROM ohlcv_daily WHERE ticker = ? AND date = ?",
+        (ticker.upper(), date_et),
+    ).fetchone()
+    if not row or row["close"] is None:
+        return None
+    return float(row["close"])
+
+
+def build_extended_session(
+    *,
+    phase: str,
+    quote: dict | None,
+    limit_buy: float | None,
+    stop_price: float | None,
+    limit_sell: float | None,
+    shares: int | None = None,
+    rth_close: float | None = None,
+) -> dict | None:
+    """Extended-hours context for the live pick card (RTH estimates unchanged)."""
+    if phase not in EXTENDED_SESSION_PHASES:
+        return None
+    if not quote or quote.get("price") is None:
+        return None
+
+    price = float(quote["price"])
+    flags: list[dict] = []
+
+    if stop_price and price <= stop_price:
+        flags.append(
+            {
+                "id": "at_or_below_stop",
+                "severity": "danger",
+                "text": f"At/below stop ${stop_price:.2f}",
+            }
+        )
+    elif stop_price and stop_price > 0:
+        cushion_pct = ((price - stop_price) / stop_price) * 100.0
+        if 0 < cushion_pct <= NEAR_STOP_CUSHION_PCT:
+            flags.append(
+                {
+                    "id": "near_stop",
+                    "severity": "warn",
+                    "text": f"Near stop ${stop_price:.2f} ({cushion_pct:.2f}% cushion)",
+                }
+            )
+
+    if limit_sell and price >= limit_sell:
+        flags.append(
+            {
+                "id": "at_or_above_target",
+                "severity": "ok",
+                "text": f"At/above limit sell ${limit_sell:.2f}",
+            }
+        )
+
+    if limit_buy and price < limit_buy:
+        flags.append(
+            {
+                "id": "below_limit_entry",
+                "severity": "info",
+                "text": f"Below limit entry ${limit_buy:.2f}",
+            }
+        )
+
+    if phase == "weekend":
+        flags.append(
+            {
+                "id": "weekend_gap_risk",
+                "severity": "warn",
+                "text": "Weekend hold — gap risk at next open (news can move price)",
+            }
+        )
+
+    reference_label = None
+    reference_price = None
+    if phase == "pre_market":
+        reference_price = quote.get("prev_close")
+        reference_label = "prior close"
+    elif phase in ("after_hours", "weekend") and rth_close and rth_close > 0:
+        reference_price = rth_close
+        reference_label = "RTH close"
+    elif phase in ("after_hours", "weekend"):
+        reference_price = quote.get("prev_close")
+        reference_label = "prior close"
+
+    change_vs_reference_pct = None
+    if reference_price and reference_price > 0:
+        change_vs_reference_pct = round(
+            ((price - reference_price) / reference_price) * 100.0,
+            3,
+        )
+
+    change_vs_entry_pct = None
+    if limit_buy and limit_buy > 0:
+        change_vs_entry_pct = round(((price - limit_buy) / limit_buy) * 100.0, 3)
+
+    net_if_sold_now = None
+    if shares and limit_buy and shares > 0:
+        net_if_sold_now = round(
+            shares * (price - limit_buy) - round_trip_fees(),
+            2,
+        )
+
+    return {
+        "label": EXTENDED_SESSION_LABELS.get(phase, phase.replace("_", " ").title()),
+        "phase": phase,
+        "price": round(price, 2),
+        "quote_as_of": quote.get("captured_at"),
+        "change_vs_reference_pct": change_vs_reference_pct,
+        "reference_label": reference_label,
+        "change_vs_entry_pct": change_vs_entry_pct,
+        "flags": flags,
+        "net_if_sold_now": net_if_sold_now,
+        "note": "RTH plan and estimates above are unchanged — extended quote for monitoring only.",
+    }
+
+
 def get_top_pick(conn: sqlite3.Connection) -> dict | None:
     """Highest ranked live candidate that passes the dollar-goal rank gate."""
     pinned = get_setting(conn, "pinned_pick_ticker", "").strip().upper()
@@ -984,6 +1116,21 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             pick_detail["intraday_change_pct"] = round(pick_change, 3)
         if pick_range is not None:
             pick_detail["opening_range_pct"] = round(pick_range, 3)
+        ext = build_extended_session(
+            phase=phase,
+            quote=pick_quote,
+            limit_buy=pick_detail.get("limit_buy_price"),
+            stop_price=pick_detail.get("stop_price"),
+            limit_sell=pick_detail.get("limit_sell_price"),
+            shares=pick_detail.get("recommended_shares"),
+            rth_close=_rth_close_for_date(conn, pick["ticker"], day),
+        )
+        if ext:
+            pick_detail["extended_session"] = ext
+            pick_detail["show_rth_live_quote"] = False
+        else:
+            pick_detail["show_rth_live_quote"] = True
+
         if pick_detail and pick_quote:
             limit_px = pick_detail.get("limit_buy_price")
             day_low = pick_quote.get("low")

@@ -13,7 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.db import init_db, insert_regime_snapshot, insert_ticker_metrics
-from investment_agent.trading_day import build_trading_day_status, session_phase, stopped_out_today
+from investment_agent.trading_day import (
+    build_extended_session,
+    build_trading_day_status,
+    session_phase,
+    stopped_out_today,
+)
 
 ET = ZoneInfo("America/New_York")
 
@@ -107,3 +112,66 @@ def test_trading_day_no_go_when_regime_blocks():
     finally:
         conn.close()
         path.unlink(missing_ok=True)
+
+
+def test_build_extended_session_none_during_rth():
+    assert build_extended_session(
+        phase="trade_window",
+        quote={"price": 100.0},
+        limit_buy=99.0,
+        stop_price=98.0,
+        limit_sell=101.0,
+    ) is None
+
+
+def test_build_extended_session_after_hours_flags():
+    ext = build_extended_session(
+        phase="after_hours",
+        quote={
+            "price": 162.0,
+            "prev_close": 164.26,
+            "captured_at": "2026-08-14T21:00:00+00:00",
+        },
+        limit_buy=163.17,
+        stop_price=161.95,
+        limit_sell=165.86,
+        shares=61,
+        rth_close=164.10,
+    )
+    assert ext is not None
+    assert ext["label"] == "After hours"
+    assert ext["price"] == 162.0
+    assert ext["change_vs_entry_pct"] == round(((162.0 - 163.17) / 163.17) * 100, 3)
+    assert ext["change_vs_reference_pct"] == round(((162.0 - 164.10) / 164.10) * 100, 3)
+    assert ext["reference_label"] == "RTH close"
+    flag_ids = {f["id"] for f in ext["flags"]}
+    assert "below_limit_entry" in flag_ids
+    assert "near_stop" in flag_ids
+    assert ext["net_if_sold_now"] is not None
+    assert ext["net_if_sold_now"] < 0
+
+
+def test_build_extended_session_weekend_gap_flag():
+    ext = build_extended_session(
+        phase="weekend",
+        quote={"price": 162.0, "prev_close": 164.0, "captured_at": "2026-08-15T15:00:00+00:00"},
+        limit_buy=163.17,
+        stop_price=161.95,
+        limit_sell=165.86,
+    )
+    assert ext is not None
+    assert ext["label"] == "Weekend (last quote)"
+    flag_ids = {f["id"] for f in ext["flags"]}
+    assert "weekend_gap_risk" in flag_ids
+
+
+def test_build_extended_session_at_stop():
+    ext = build_extended_session(
+        phase="pre_market",
+        quote={"price": 161.90, "prev_close": 164.0},
+        limit_buy=163.17,
+        stop_price=161.95,
+        limit_sell=165.86,
+    )
+    assert ext is not None
+    assert any(f["id"] == "at_or_below_stop" for f in ext["flags"])

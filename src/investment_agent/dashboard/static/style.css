@@ -1866,6 +1866,58 @@ textarea {
 .pick-change.up { color: var(--green); }
 .pick-change.down { color: #fca5a5; }
 
+.pick-extended-session {
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+}
+
+.pick-price-row.extended strong {
+  color: #93c5fd;
+}
+
+.pick-ext-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.ext-flag {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  line-height: 1.3;
+}
+
+.ext-flag.ext-danger {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.ext-flag.ext-warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+
+.ext-flag.ext-ok {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--green);
+}
+
+.ext-flag.ext-info {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--muted);
+}
+
+.pick-ext-note {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .pick-note.warn {
   padding: 0.4rem 0.55rem;
   margin-bottom: 0.5rem;

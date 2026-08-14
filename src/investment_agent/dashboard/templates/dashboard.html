@@ -821,6 +821,34 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         .trim();
     }
 
+    function renderExtendedSession(ext) {
+      if (!ext) return "";
+      const refCh = ext.change_vs_reference_pct != null && ext.reference_label
+        ? `<span class="pick-change ${ext.change_vs_reference_pct >= 0 ? "up" : "down"}">${fmtPctLive(ext.change_vs_reference_pct)} vs ${ext.reference_label}</span>`
+        : "";
+      const entryCh = ext.change_vs_entry_pct != null
+        ? `<span class="pick-change ${ext.change_vs_entry_pct >= 0 ? "up" : "down"}">${fmtPctLive(ext.change_vs_entry_pct)} vs limit entry</span>`
+        : "";
+      const flags = (ext.flags || []).map((f) =>
+        `<span class="ext-flag ext-${f.severity || "info"}">${f.text}</span>`
+      ).join("");
+      const netLine = ext.net_if_sold_now != null
+        ? `<span class="brief">Mark at extended → ~$${fmt(ext.net_if_sold_now)} net from limit entry</span>`
+        : "";
+      return `
+        <div class="pick-extended-session">
+          <div class="pick-price-row extended">
+            <span>${ext.label || "Extended session"}</span>
+            <strong>$${fmt(ext.price)}</strong>
+            ${refCh}${entryCh}
+          </div>
+          ${flags ? `<div class="pick-ext-flags">${flags}</div>` : ""}
+          ${netLine ? `<div class="pick-ext-net brief">${netLine}</div>` : ""}
+          ${ext.note ? `<div class="pick-ext-note brief">${ext.note}</div>` : ""}
+          ${ext.quote_as_of ? `<div class="pick-asof brief">Extended quote ${fmtDateTimePT(ext.quote_as_of)}</div>` : ""}
+        </div>`;
+    }
+
     function renderPickBlock(pick, td) {
       if (!pick) return "<div class='pick-empty'>No live pick — run ingest and refresh ranked screener.</div>";
       const limitBuy = pick.limit_buy_price ?? pick.recommended_entry ?? pick.entry_price;
@@ -833,8 +861,16 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         ? `<div class="pick-note warn">Ranked #1 was ${td.ranked_first} — skipped (not tradable for $${fmt(netGoal)})</div>`
         : "";
       const livePx = pick.quote_price;
+      const showRthLive = pick.show_rth_live_quote !== false && !pick.extended_session;
       const changeHtml = pick.intraday_change_pct != null
         ? `<span class="pick-change ${pick.intraday_change_pct >= 0 ? "up" : "down"}">${fmtPctLive(pick.intraday_change_pct)} from open</span>`
+        : "";
+      const rthRangeHtml = pick.extended_session && pick.session_open != null
+        ? `<div class="pick-price-row brief">
+            <span>RTH session</span>
+            <strong>O $${fmt(pick.session_open)}</strong>
+            <span class="brief">High/low from last regular session quote</span>
+          </div>`
         : "";
       return `
         <div class="pick-symbol-row">
@@ -863,9 +899,9 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           <div class="pick-price-row highlight">
             <span>Limit buy</span><strong class="pick-price">$${fmt(limitBuy)}</strong>
           </div>
-          <div class="pick-price-row brief">
+          ${showRthLive ? `<div class="pick-price-row brief">
             <span>Live now</span><strong>$${fmt(livePx)}</strong>${changeHtml}
-          </div>
+          </div>` : rthRangeHtml}
           <div class="pick-price-row">
             <span>${pick.recommended_shares ?? "—"} shares</span>
             <span class="brief">$${fmt(pick.notional)} notional</span>
@@ -880,7 +916,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           </div>
         </div>
         ${trad.max_net_at_day_high != null ? `<div class="pick-day-high brief">Day high so far → ~$${fmt(trad.max_net_at_day_high)} net from limit entry</div>` : ""}
-        ${pick.quote_as_of ? `<div class="pick-asof brief">Quote ${fmtDateTimePT(pick.quote_as_of)}</div>` : ""}
+        ${renderExtendedSession(pick.extended_session)}
+        ${pick.quote_as_of && showRthLive ? `<div class="pick-asof brief">Quote ${fmtDateTimePT(pick.quote_as_of)}</div>` : ""}
       `;
     }
 
