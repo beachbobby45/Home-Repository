@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from investment_agent.db import (
     init_db,
     insert_macro,
+    insert_news_headline,
     insert_ohlcv_rows,
     insert_quote,
     insert_regime_snapshot,
@@ -17,7 +21,10 @@ from investment_agent.db import (
 )
 from investment_agent.finance import ORIGINAL_BASIS
 from investment_agent.journal import insert_trade
+from investment_agent.news_service import headline_hash
 from investment_agent.strategy import STOP_PCT, TARGET_PCT
+
+ET = ZoneInfo("America/New_York")
 
 NOW = datetime.now(timezone.utc).replace(microsecond=0)
 NOW_ISO = NOW.isoformat()
@@ -81,6 +88,123 @@ def _seed_ohlcv_history(conn: sqlite3.Connection, tickers: list[str], end: datet
         insert_ohlcv_rows(conn, rows)
 
 
+def _seed_demo_proposals(conn: sqlite3.Connection) -> None:
+    """Sample trade proposals for Phase 1 dashboard + learning v2 demos."""
+    session = datetime.now(ET).strftime("%Y-%m-%d")
+    created = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    valid = (
+        datetime.now(ET).replace(hour=11, minute=30, second=0, microsecond=0)
+        .astimezone(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+    )
+    base_plan = {
+        "limit_buy_price": 100.0,
+        "limit_sell_price": 101.5,
+        "stop_price": 99.25,
+        "shares": 100,
+        "net_at_target": 150.0,
+        "expected_rr": 2.0,
+        "max_risk_dollars": 75.0,
+        "entry_mode": "pullback_limit",
+    }
+    specs = [
+        {
+            "ticker": "AAPL",
+            "score": 84.0,
+            "status": "closed",
+            "risk_verdict": "approved",
+            "human_verdict": "approved",
+            "outcome_net_pnl": 120.0,
+            "model_version": "rule-based-v1",
+            "factors": {
+                "market_regime": 80,
+                "technical_setup": 85,
+                "momentum": 78,
+                "news_sentiment": 72,
+                "risk_reward": 88,
+                "dollar_history": 70,
+            },
+            "explanation_short": "AAPL — score 84 · sentiment 72 · limit $100.00",
+        },
+        {
+            "ticker": "NVDA",
+            "score": 79.0,
+            "status": "proposed",
+            "risk_verdict": "approved",
+            "human_verdict": None,
+            "outcome_net_pnl": None,
+            "model_version": "rule-based-v1",
+            "factors": {
+                "market_regime": 80,
+                "technical_setup": 75,
+                "momentum": 82,
+                "news_sentiment": 55,
+                "risk_reward": 80,
+            },
+            "explanation_short": "NVDA — score 79 · sentiment 55 · limit $100.00",
+        },
+        {
+            "ticker": "META",
+            "score": 76.0,
+            "status": "human_rejected",
+            "risk_verdict": "approved",
+            "human_verdict": "rejected",
+            "human_rejection_reason": "NEWS_RISK: News/event too risky",
+            "outcome_net_pnl": None,
+            "model_version": "rule-based-v1",
+            "factors": {"market_regime": 75, "news_sentiment": 38, "risk_reward": 76},
+            "explanation_short": "META — score 76 · sentiment 38 · limit $100.00",
+        },
+    ]
+    for spec in specs:
+        conn.execute(
+            """
+            INSERT INTO trade_proposals (
+              proposal_uuid, strategy_version, model_version, created_at, valid_until,
+              session_date_et, ticker, direction, opportunity_score, factor_scores_json,
+              plan_json, risk_verdict, risk_checks_json, risk_rejection_reason,
+              human_verdict, human_rejection_reason, human_approved_at,
+              explanation, explanation_short, status,
+              journal_buy_id, journal_sell_id, outcome_net_pnl, outcome_exit_reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'long', ?, ?, ?, ?, '[]', NULL, ?, ?, NULL, ?, ?, ?, NULL, NULL, ?, NULL)
+            """,
+            (
+                str(uuid.uuid4()),
+                "phase1-capital-builder-v1",
+                spec["model_version"],
+                created,
+                valid,
+                session,
+                spec["ticker"],
+                spec["score"],
+                json.dumps(spec["factors"]),
+                json.dumps({**base_plan, "ticker": spec["ticker"]}),
+                spec["risk_verdict"],
+                spec.get("human_verdict"),
+                spec.get("human_rejection_reason"),
+                f"Demo explanation for {spec['ticker']}.",
+                spec["explanation_short"],
+                spec["status"],
+                spec.get("outcome_net_pnl"),
+            ),
+        )
+
+    insert_news_headline(
+        conn,
+        {
+            "ticker": "NVDA",
+            "headline_hash": headline_hash("NVDA beats revenue estimates"),
+            "published_at": created,
+            "headline": "NVDA beats revenue estimates with strong data-center growth",
+            "summary": "Demo headline",
+            "source": "demo",
+            "url": None,
+            "ingested_at": created,
+        },
+    )
+
+
 def seed_demo_db(db_path: Path | None = None) -> Path:
     """Populate a database with realistic test data covering every dashboard section.
 
@@ -101,6 +225,9 @@ def seed_demo_db(db_path: Path | None = None) -> Path:
 
         # Clear mutable demo tables for idempotent re-seed
         for table in (
+            "ai_explanation_cache",
+            "trade_proposals",
+            "news_headlines",
             "learning_reports",
             "price_alerts",
             "trade_journal",
@@ -316,6 +443,8 @@ def seed_demo_db(db_path: Path | None = None) -> Path:
         conn.execute(
             "INSERT INTO app_settings (key, value) VALUES ('tax_reserve_rate', '0.25')"
         )
+
+        _seed_demo_proposals(conn)
 
         conn.commit()
 

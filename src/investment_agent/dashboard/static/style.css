@@ -760,6 +760,30 @@ main {
   display: flex;
   gap: 0.35rem;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.reject-reason-select {
+  font-size: 0.75rem;
+  max-width: 11rem;
+}
+
+.proposal-plan-meta {
+  margin-top: 0.25rem;
+  color: var(--muted);
+}
+
+.proposal-learning-panel {
+  margin: 1rem 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border, #2a3344);
+}
+
+.proposal-learning-panel h3,
+.proposal-learning-panel h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
 }
 
 .proposal-plan-grid {

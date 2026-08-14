@@ -350,6 +350,15 @@
         <div class="card" id="learning-panel">
           <div id="learning-highlights" class="brief">Loading…</div>
           <div id="continual-learning" class="brief"></div>
+          <div id="proposal-learning-panel" class="proposal-learning-panel" hidden>
+            <h3>Proposal learning</h3>
+            <p class="brief" id="proposal-learning-note"></p>
+            <div class="grid grid-3" id="proposal-bucket-stats"></div>
+            <div class="grid grid-2">
+              <div id="proposal-rejection-stats"></div>
+              <div id="proposal-outcome-list"></div>
+            </div>
+          </div>
           <div id="learning-prior-screened" class="learning-prior-block" hidden>
             <h3>Prior day screened <span id="learning-prior-date" class="brief"></span></h3>
             <p class="brief" id="learning-prior-summary"></p>
@@ -2014,6 +2023,36 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           + `net $${fmt(j.total_net_pnl || 0)}; `
           + `${cl.reports_saved || 0} saved report(s).`
         : "";
+      const pl = r.proposal_learning || {};
+      const plPanel = document.getElementById("proposal-learning-panel");
+      if (pl.total_proposals) {
+        plPanel.hidden = false;
+        document.getElementById("proposal-learning-note").textContent = pl.note || "";
+        const oppStats = pl.opportunity_bucket_stats || {};
+        document.getElementById("proposal-bucket-stats").innerHTML = Object.entries(oppStats).map(
+          ([bucket, s]) => `
+            <div class="card kpi-card">
+              <h2>Score ${bucket}</h2>
+              <div class="metric small">${s.proposal_count || 0} proposals</div>
+              <div class="brief">${s.with_outcome ? `${s.win_rate_pct}% win · avg $${fmt(s.avg_outcome_pnl || 0)}` : "No closed outcomes yet"}</div>
+            </div>`
+        ).join("");
+        const rejectCounts = pl.rejection_reason_counts || {};
+        document.getElementById("proposal-rejection-stats").innerHTML = Object.keys(rejectCounts).length
+          ? `<h4>Rejection reasons</h4><ul>${Object.entries(rejectCounts).map(
+            ([code, n]) => `<li><strong>${code}</strong>: ${n}</li>`
+          ).join("")}</ul>`
+          : "<h4>Rejection reasons</h4><p class='empty'>None logged yet</p>";
+        const outcomes = pl.proposal_outcomes || [];
+        document.getElementById("proposal-outcome-list").innerHTML = outcomes.length
+          ? `<h4>Linked outcomes</h4><ul>${outcomes.map((o) =>
+            `<li>${o.ticker} · score ${o.opportunity_score} · ${o.status}`
+            + (o.outcome_net_pnl != null ? ` · P&L $${fmt(o.outcome_net_pnl)}` : "")
+            + `</li>`).join("")}</ul>`
+          : "<h4>Linked outcomes</h4><p class='empty'>No journal-linked outcomes yet</p>";
+      } else {
+        plPanel.hidden = true;
+      }
       const details = document.getElementById("learning-details");
       const prior = r.prior_day_evaluation;
       const priorRows = prior && prior.screened_matches ? prior.screened_matches : [];
@@ -2094,6 +2133,35 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     }
 
     let activeProposalId = null;
+    let rejectionReasons = {};
+
+    const FACTOR_LABELS = {
+      market_regime: "Regime",
+      technical_setup: "Tech",
+      momentum: "Mom",
+      relative_strength: "RS",
+      volume: "Vol",
+      volatility: "Volty",
+      news_sentiment: "News",
+      news_significance: "News+",
+      earnings_events: "Earn",
+      risk_reward: "R:R",
+      ai_confidence: "AI",
+      dollar_history: "$Hist",
+    };
+
+    function fmtValidUntilEt(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleString("en-US", {
+          timeZone: "America/New_York",
+          hour: "numeric",
+          minute: "2-digit",
+        }) + " ET";
+      } catch (_e) {
+        return iso;
+      }
+    }
 
     function renderProposalCard(p) {
       const plan = p.plan || {};
@@ -2102,13 +2170,19 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const riskOk = p.risk_verdict === "approved";
       const factors = p.factor_scores || {};
       const modelLabel = (p.model_version || "rule-based-v1").replace(/-/g, " ");
-      const factorChips = [
-        ["News sent.", factors.news_sentiment],
-        ["AI conf.", factors.ai_confidence],
-        ["R:R", factors.risk_reward],
-      ].filter(([, v]) => v != null).map(
-        ([label, val]) => `<span class="factor-chip">${label} ${Number(val).toFixed(0)}</span>`
-      ).join("");
+      const factorChips = Object.entries(factors)
+        .filter(([, v]) => v != null)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .map(([key, val]) => {
+          const label = FACTOR_LABELS[key] || key;
+          return `<span class="factor-chip">${label} ${Number(val).toFixed(0)}</span>`;
+        }).join("");
+      const maxRisk = plan.max_risk_dollars;
+      const rr = plan.expected_rr;
+      const tradable = plan.notional && maxRisk ? ((maxRisk / plan.notional) * 100).toFixed(2) : null;
+      const rejectOptions = Object.entries(rejectionReasons || {})
+        .map(([code, label]) => `<option value="${code}">${code}: ${label}</option>`)
+        .join("");
       return `
         <article class="proposal-card status-${statusCls}" data-id="${p.id}">
           <header class="proposal-card-head">
@@ -2121,6 +2195,10 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
             ${canAct ? `
               <div class="proposal-actions">
                 <button type="button" class="btn btn-sm proposal-approve" data-id="${p.id}">Approve</button>
+                <select class="reject-reason-select" data-id="${p.id}" aria-label="Rejection reason">
+                  <option value="">Reject reason…</option>
+                  ${rejectOptions}
+                </select>
                 <button type="button" class="btn btn-sm secondary proposal-reject" data-id="${p.id}">Reject</button>
               </div>` : ""}
           </header>
@@ -2133,6 +2211,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
             <span>Sell $${fmt(plan.limit_sell_price || plan.target_price)}</span>
             <span>Stop $${fmt(plan.stop_price)}</span>
             <span>${plan.shares || "—"} sh</span>
+          </div>
+          <div class="brief proposal-plan-meta">
+            ${maxRisk != null ? `Max risk $${fmt(maxRisk)}` : ""}
+            ${tradable ? ` (${tradable}%)` : ""}
+            ${rr != null ? ` · R:R ${Number(rr).toFixed(1)}:1` : ""}
+            ${p.valid_until ? ` · Cancel ${fmtValidUntilEt(p.valid_until)}` : ""}
           </div>
           <div class="brief proposal-risk ${riskOk ? "ok" : "bad"}">
             Risk: ${p.risk_verdict}${p.risk_rejection_reason ? " — " + p.risk_rejection_reason : ""}
@@ -2161,6 +2245,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       try {
         const data = await api("/api/proposals/today");
         const el = document.getElementById("proposals-body");
+        rejectionReasons = data.rejection_reasons || {};
         if (data.ai_status) renderAiStatusNote(data.ai_status);
         const proposals = data.proposals || [];
         if (!proposals.length) {
@@ -2192,17 +2277,18 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         el.querySelectorAll(".proposal-reject").forEach((btn) => {
           btn.addEventListener("click", async () => {
             const id = Number(btn.dataset.id);
-            const code = prompt("Rejection reason code: NO_CONVICTION, NEWS_RISK, MARKET_RISK, SIZE_TOO_LARGE, ALREADY_EXPOSED, TIMING, OTHER");
-            if (!code) return;
+            const select = el.querySelector(`.reject-reason-select[data-id="${id}"]`);
+            const code = (select?.value || "").toUpperCase();
+            if (!code) { toast("Select a rejection reason first"); return; }
             let text = null;
-            if (code.toUpperCase() === "OTHER") {
+            if (code === "OTHER") {
               text = prompt("Enter rejection notes (required for OTHER):");
               if (!text) return;
             }
             try {
               await api(`/api/proposals/${id}/reject`, {
                 method: "POST",
-                body: JSON.stringify({ reason_code: code.toUpperCase(), reason_text: text }),
+                body: JSON.stringify({ reason_code: code, reason_text: text }),
               });
               toast("Proposal rejected");
               if (activeProposalId === id) activeProposalId = null;

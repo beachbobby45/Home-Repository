@@ -43,7 +43,32 @@ def test_learning_report_covers_sections():
         assert report["highlights"]
         assert report["claude_ready"] is False
         assert any("NVDA" in h or "round trip" in h.lower() for h in report["highlights"])
+        pl = report.get("proposal_learning") or {}
+        assert pl.get("total_proposals", 0) >= 3
+        assert "opportunity_bucket_stats" in pl
+        assert "rejection_reason_counts" in pl
         rid = save_learning_report(conn, report)
         conn.commit()
         assert rid >= 1
+        conn.close()
+
+
+def test_proposal_learning_rejection_counts():
+    import json
+    import uuid
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    ET = ZoneInfo("America/New_York")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "learn.db"
+        seed_demo_db(path)
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        from investment_agent.learning import _build_proposal_learning
+
+        pl = _build_proposal_learning(conn)
+        assert pl["rejected_count"] >= 1
+        assert "NEWS_RISK" in pl["rejection_reason_counts"]
+        assert pl["opportunity_bucket_stats"]["75-85"]["proposal_count"] >= 1
         conn.close()

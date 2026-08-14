@@ -305,6 +305,166 @@ def _regime_stats(conn: sqlite3.Connection) -> dict:
     }
 
 
+def _opportunity_score_bucket(score: float | int | None) -> str:
+    if score is None:
+        return "unknown"
+    s = float(score)
+    if s >= 85:
+        return "85+"
+    if s >= 75:
+        return "75-85"
+    if s >= 65:
+        return "65-75"
+    return "<65"
+
+
+def _news_sentiment_bucket(score: float | None) -> str:
+    if score is None:
+        return "unknown"
+    s = float(score)
+    if s >= 60:
+        return "positive"
+    if s <= 40:
+        return "negative"
+    return "neutral"
+
+
+def _parse_rejection_code(reason: str | None) -> str | None:
+    if not reason:
+        return None
+    return reason.split(":")[0].strip().upper() or None
+
+
+def _build_proposal_learning(conn: sqlite3.Connection, *, lookback_days: int = 30) -> dict:
+    """Aggregate trade proposal outcomes, factor buckets, and rejection reasons."""
+    cutoff = (datetime.now(ET) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    rows = conn.execute(
+        """
+        SELECT id, ticker, session_date_et, opportunity_score, factor_scores_json,
+               status, human_verdict, human_rejection_reason, outcome_net_pnl,
+               risk_verdict, model_version, journal_buy_id, journal_sell_id, created_at
+        FROM trade_proposals
+        WHERE session_date_et >= ?
+        ORDER BY created_at DESC
+        """,
+        (cutoff,),
+    ).fetchall()
+
+    rejection_counts: dict[str, int] = {}
+    status_counts: dict[str, int] = {}
+    opp_buckets: dict[str, list[sqlite3.Row]] = {"65-75": [], "75-85": [], "85+": []}
+    sent_buckets: dict[str, list[sqlite3.Row]] = {
+        "negative": [],
+        "neutral": [],
+        "positive": [],
+    }
+    outcomes: list[dict] = []
+
+    for row in rows:
+        status = row["status"] or "unknown"
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+        code = _parse_rejection_code(row["human_rejection_reason"])
+        if code:
+            rejection_counts[code] = rejection_counts.get(code, 0) + 1
+
+        bucket = _opportunity_score_bucket(row["opportunity_score"])
+        if bucket in opp_buckets:
+            opp_buckets[bucket].append(row)
+
+        try:
+            factors = json.loads(row["factor_scores_json"] or "{}")
+        except json.JSONDecodeError:
+            factors = {}
+        sent_bucket = _news_sentiment_bucket(factors.get("news_sentiment"))
+        if sent_bucket in sent_buckets:
+            sent_buckets[sent_bucket].append(row)
+
+        if row["outcome_net_pnl"] is not None or row["journal_buy_id"]:
+            outcomes.append(
+                {
+                    "proposal_id": row["id"],
+                    "ticker": row["ticker"],
+                    "session_date_et": row["session_date_et"],
+                    "opportunity_score": row["opportunity_score"],
+                    "status": status,
+                    "outcome_net_pnl": row["outcome_net_pnl"],
+                    "human_verdict": row["human_verdict"],
+                    "risk_verdict": row["risk_verdict"],
+                    "model_version": row["model_version"],
+                }
+            )
+
+    def _bucket_stats(items: list[sqlite3.Row]) -> dict:
+        with_outcome = [r for r in items if r["outcome_net_pnl"] is not None]
+        wins = sum(1 for r in with_outcome if float(r["outcome_net_pnl"]) > 0)
+        avg_pnl = (
+            round(sum(float(r["outcome_net_pnl"]) for r in with_outcome) / len(with_outcome), 2)
+            if with_outcome
+            else None
+        )
+        return {
+            "proposal_count": len(items),
+            "with_outcome": len(with_outcome),
+            "win_rate_pct": round(100.0 * wins / max(len(with_outcome), 1), 1),
+            "avg_outcome_pnl": avg_pnl,
+        }
+
+    opportunity_bucket_stats = {
+        name: _bucket_stats(items) for name, items in opp_buckets.items()
+    }
+    news_sentiment_bucket_stats = {
+        name: _bucket_stats(items) for name, items in sent_buckets.items()
+    }
+
+    approved = sum(1 for r in rows if r["human_verdict"] == "approved")
+    rejected = sum(1 for r in rows if r["human_verdict"] == "rejected")
+    executed = sum(1 for r in rows if r["status"] in ("executed", "closed"))
+
+    questions: list[str] = []
+    if any(v["with_outcome"] for v in opportunity_bucket_stats.values()):
+        best = max(
+            opportunity_bucket_stats.items(),
+            key=lambda kv: kv[1]["win_rate_pct"] if kv[1]["with_outcome"] else -1,
+        )
+        questions.append(
+            f"Highest win rate by opportunity bucket: {best[0]} "
+            f"({best[1]['win_rate_pct']}% over {best[1]['with_outcome']} closed)."
+        )
+    if any(v["with_outcome"] for v in news_sentiment_bucket_stats.values()):
+        pos = news_sentiment_bucket_stats.get("positive", {})
+        neg = news_sentiment_bucket_stats.get("negative", {})
+        if pos.get("with_outcome") and neg.get("with_outcome"):
+            questions.append(
+                f"News sentiment positive bucket win rate {pos['win_rate_pct']}% "
+                f"vs negative {neg['win_rate_pct']}%."
+            )
+    if rejection_counts:
+        top_reason = max(rejection_counts.items(), key=lambda kv: kv[1])
+        questions.append(
+            f"Most common rejection: {top_reason[0]} ({top_reason[1]} time(s))."
+        )
+
+    return {
+        "lookback_days": lookback_days,
+        "cutoff_date": cutoff,
+        "total_proposals": len(rows),
+        "approved_count": approved,
+        "rejected_count": rejected,
+        "executed_count": executed,
+        "status_counts": status_counts,
+        "rejection_reason_counts": rejection_counts,
+        "opportunity_bucket_stats": opportunity_bucket_stats,
+        "news_sentiment_bucket_stats": news_sentiment_bucket_stats,
+        "proposal_outcomes": outcomes[:20],
+        "factor_questions": questions,
+        "note": (
+            f"{len(rows)} proposal(s) since {cutoff}; "
+            f"{approved} approved, {rejected} rejected, {executed} executed/closed."
+        ),
+    }
+
+
 def _multi_round_same_day(conn: sqlite3.Connection, report_date: str) -> list[dict]:
     rows = conn.execute(
         """
@@ -337,6 +497,7 @@ def generate_learning_report(
     today_journal = _journal_legs_for_date(conn, day)
     prior_day = evaluate_prior_day(conn, reference_date=day)
     continual = _build_continual_learning(conn)
+    proposal_learning = _build_proposal_learning(conn)
 
     eod_open = [a for a in active if a.get("queue_state") in ("in_trade", "eod")]
 
@@ -381,6 +542,9 @@ def generate_learning_report(
         near = [w["ticker"] for w in watchlist if w["near_swing_target"]][:3]
         if near:
             highlights.append(f"Watchlist near ~3% swing: {', '.join(near)}.")
+    if proposal_learning["total_proposals"]:
+        highlights.append(proposal_learning["note"])
+        highlights.extend(proposal_learning.get("factor_questions") or [])
 
     return {
         "report_date": day,
@@ -396,6 +560,7 @@ def generate_learning_report(
         "eod_open_positions": eod_open,
         "prior_day_evaluation": prior_day,
         "continual_learning": continual,
+        "proposal_learning": proposal_learning,
         "claude_ready": False,
     }
 
