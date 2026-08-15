@@ -894,6 +894,12 @@ def api_journal_create(
         if not check.get("ok"):
             raise HTTPException(status_code=400, detail=check.get("error", "Invalid proposal"))
 
+    exceptional_snapshot = None
+    if body.side.upper() == "BUY":
+        from investment_agent.trading_day import build_trading_day_status
+
+        exceptional_snapshot = build_trading_day_status(conn)
+
     trade_id = insert_trade(
         conn,
         ticker=body.ticker,
@@ -908,6 +914,21 @@ def api_journal_create(
     )
     if body.proposal_id is not None and body.side.upper() == "BUY":
         mark_proposal_executed(conn, body.proposal_id, trade_id)
+    if exceptional_snapshot and body.side.upper() == "BUY":
+        exc = exceptional_snapshot.get("exceptional_trade") or {}
+        if exc.get("active"):
+            from investment_agent.exceptional_trade import log_exceptional_trade_consumed
+            from investment_agent.quote_snapshots import today_et_str
+
+            log_exceptional_trade_consumed(
+                conn,
+                session_date_et=today_et_str(),
+                ticker=body.ticker,
+                journal_buy_id=trade_id,
+                market_activity=exceptional_snapshot.get("market_activity") or {},
+                confirmation_score=exc.get("confirmation_score"),
+                notes="Exceptional override consumed on journal BUY",
+            )
     conn.commit()
     return {"ok": True, "id": trade_id, "trading_mode": mode, "proposal_id": body.proposal_id}
 

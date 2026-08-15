@@ -589,6 +589,19 @@ def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
         persist=True,
     )
 
+    from investment_agent.decision_attribution import log_decision_attribution
+    from investment_agent.market_activity import market_activity_to_dict
+
+    ma_payload = market_activity_to_dict(market_activity)
+    top_conf = confirmations[0] if confirmations else None
+    log_decision_attribution(
+        conn,
+        event_type="live_refresh",
+        market_activity=ma_payload,
+        confirmation=top_conf,
+        detail={"confirmation_count": len(confirmations)},
+    )
+
     return {
         "ok": len(updated) > 0,
         "updated": updated,
@@ -982,6 +995,36 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     )
     risk_status = portfolio_status_dict(portfolio_snapshot)
 
+    weekly_target = weekly_production_target(float(summary.tradable_cash or 0))
+    pt_day = today_pt_str()
+    weekly_net = compute_weekly_realized_net(conn, pt_day)
+    weekly_target_met = weekly_net >= weekly_target
+    weekly_opportunities = 3
+    opportunities_used = count_weekly_production_opportunities(
+        conn, date_key=pt_day, daily_target=daily_target
+    )
+
+    from investment_agent.exceptional_trade import (
+        count_exceptional_trades_consumed,
+        evaluate_exceptional_trade,
+        exceptional_trade_to_dict,
+    )
+
+    exceptional_consumed = count_exceptional_trades_consumed(conn, date_key=pt_day)
+    exceptional = exceptional_trade_to_dict(
+        evaluate_exceptional_trade(
+            weekly_target_met=weekly_target_met,
+            market_activity=market_activity,
+            confirmations=confirmations,
+            pick_ticker=pick["ticker"] if pick else None,
+            phase=phase,
+            stopped=stopped,
+            open_positions_count=len(open_positions),
+            portfolio_risk_verdict=portfolio_risk.verdict,
+            exceptional_consumed_this_week=exceptional_consumed,
+        )
+    )
+
     def add_check(name: str, ok: bool | None, message: str, *, blocking: bool = False):
         checks.append({"name": name, "ok": ok, "message": message, "blocking": blocking})
 
@@ -1121,17 +1164,65 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     else:
         add_check("Live quotes", True, f"Updated within {max_age:.0f} min")
 
-    if target_met:
+    if target_met and not exceptional.get("active"):
         verdict = "NO_GO"
         headline = "Daily target hit — stop trading"
         detail = f"Today net ${today_net:,.2f} ≥ ${daily_target:,.0f} goal. Protect the green day."
         add_check("Daily target", True, f"${today_net:,.2f} / ${daily_target:,.0f}", blocking=True)
+    elif target_met and exceptional.get("active"):
+        add_check(
+            "Daily target",
+            None,
+            f"${today_net:,.2f} / ${daily_target:,.0f} — exceptional override allows 1 more trade",
+        )
     else:
         remaining = daily_target - today_net
         add_check(
             "Daily target",
             None,
             f"${today_net:,.2f} of ${daily_target:,.2f} (${remaining:,.2f} to go)",
+        )
+
+    if weekly_target_met and not exceptional.get("active"):
+        if verdict in ("GO", "CAUTION"):
+            verdict = "NO_GO"
+        headline = "Weekly target met — stop for the week"
+        detail = (
+            f"Week net ${weekly_net:,.0f} ≥ ${weekly_target:,.0f} guidance. "
+            "Default stop — no new trades unless Exceptional override applies."
+        )
+        add_check(
+            "Weekly guidance",
+            True,
+            f"${weekly_net:,.0f} / ${weekly_target:,.0f} · {opportunities_used} of {weekly_opportunities} opportunities",
+            blocking=True,
+        )
+    elif weekly_target_met and exceptional.get("active"):
+        if verdict in ("NO_GO", "CAUTION"):
+            verdict = "GO"
+        headline = "Exceptional override — 1 extra trade allowed"
+        detail = exceptional.get("summary") or (
+            "Weekly guidance met — Exceptional day + confirmation PASS unlocks one more trade."
+        )
+        add_check(
+            "Weekly guidance",
+            True,
+            f"${weekly_net:,.0f} / ${weekly_target:,.0f} met — Exceptional override active (max 1/week)",
+        )
+    else:
+        add_check(
+            "Weekly guidance",
+            None,
+            f"${weekly_net:,.0f} of ${weekly_target:,.0f} · {opportunities_used} of {weekly_opportunities} opportunities",
+        )
+
+    if exceptional.get("active"):
+        add_check("Exceptional override", True, exceptional.get("summary") or "Active")
+    elif weekly_target_met and exceptional.get("eligible"):
+        add_check(
+            "Exceptional override",
+            None,
+            "Partial signals — not all GO for exceptional trade",
         )
 
     if stopped:
@@ -1247,12 +1338,13 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
 
     # Second trade only if target not met and no stop
     can_second_trade = (
-        not target_met
+        (not target_met or exceptional.get("active"))
         and not stopped
         and not summary.block_new_longs
         and phase == "trade_window"
         and today_net > 0
         and not open_positions
+        and not weekly_target_met
     )
 
     pick_detail = None
@@ -1383,14 +1475,6 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             detail = pick_risk.blockers[0] if pick_risk.blockers else pick_risk.headline
             add_check("Proposal risk", False, detail, blocking=True)
 
-    weekly_target = weekly_production_target(float(summary.tradable_cash or 0))
-    pt_day = today_pt_str()
-    weekly_net = compute_weekly_realized_net(conn, pt_day)
-    opportunities_used = count_weekly_production_opportunities(
-        conn, date_key=pt_day, daily_target=daily_target
-    )
-    weekly_opportunities = 3
-
     show_no_trade_banner = (
         phase in ("trade_window", "opening_wait", "pre_market")
         and (
@@ -1431,6 +1515,14 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         },
         "market_activity_components": market_activity.get("components") or {},
         "block_new_proposals": phase == "trade_window" and not market_activity.get("allow_trade"),
+        "exceptional_trade": exceptional,
+        "show_exceptional_banner": bool(exceptional.get("active")),
+        "exceptional_headline": (
+            "EXCEPTIONAL OVERRIDE — 1 extra trade this week"
+            if exceptional.get("active")
+            else None
+        ),
+        "exceptional_detail": exceptional.get("summary") if exceptional.get("active") else None,
     }
 
     return {
@@ -1448,7 +1540,8 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "can_enter_new": (
             verdict == "GO"
             and len(open_positions) < 2
-            and not target_met
+            and (not target_met or exceptional.get("active"))
+            and (not weekly_target_met or exceptional.get("active"))
             and not stopped
             and portfolio_risk.verdict == "approved"
             and market_activity.get("allow_trade")
@@ -1479,6 +1572,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "market_activity": market_activity,
         "confirmations": confirmations,
         "phase1b": phase1b,
+        "exceptional_trade": exceptional,
     }
 
 

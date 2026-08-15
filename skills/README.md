@@ -51,8 +51,8 @@ Cursor:  ONE skill per domain — narrow context, small diffs, run listed tests.
 | 12 | market-activity | Market Activity Score v0 | **Done Inc 12** |
 | 13 | confirmation-engine | Confirmation on #1–#3 | **Done Inc 13** |
 | 14–16 | dashboard-ux, intraday-trading-day | Banner, exit alert, wiring | **Done Inc 14–16** |
-| 17 | trade-proposals, risk-engine | Exceptional trade rule |
-| 18 | learning-analytics | Score attribution |
+| 17 | trade-proposals, risk-engine | Exceptional trade rule | **Done Inc 17** |
+| 18 | learning-analytics | Score attribution | **Done Inc 18** |
 
 ## Using a skill in Cursor
 

@@ -387,6 +387,17 @@ def generate_proposals(
         if proposal:
             if status == STATUS_PROPOSED:
                 created.append(proposal)
+                from investment_agent.decision_attribution import log_proposal_attribution
+
+                log_proposal_attribution(
+                    conn,
+                    event_type="proposal_generate",
+                    session_date_et=day,
+                    ticker=ticker,
+                    proposal_id=proposal_id,
+                    market_activity=market_activity,
+                    detail={"opportunity_score": opportunity_score},
+                )
             else:
                 skipped.append({"ticker": ticker, "reason": risk_reason, "proposal_id": proposal_id})
 
@@ -492,6 +503,22 @@ def approve_proposal(
         (now, STATUS_HUMAN_APPROVED, proposal_id),
     )
     updated = get_proposal(conn, proposal_id)
+    from investment_agent.decision_attribution import log_proposal_attribution
+    from investment_agent.trading_day import build_trading_day_status
+
+    day_status = build_trading_day_status(conn)
+    exc = day_status.get("exceptional_trade") or {}
+    log_proposal_attribution(
+        conn,
+        event_type="proposal_approve",
+        session_date_et=proposal["session_date_et"],
+        ticker=proposal["ticker"],
+        proposal_id=proposal_id,
+        market_activity=day_status.get("market_activity"),
+        exceptional_active=bool(exc.get("active")),
+        human_verdict="approved",
+        detail={"approved_by": approved_by},
+    )
     return {
         "ok": True,
         "proposal": updated,
@@ -531,6 +558,23 @@ def reject_proposal(
         WHERE id = ?
         """,
         (full_reason, STATUS_HUMAN_REJECTED, proposal_id),
+    )
+    from investment_agent.decision_attribution import log_proposal_attribution
+    from investment_agent.trading_day import build_trading_day_status
+
+    day_status = build_trading_day_status(conn)
+    exc = day_status.get("exceptional_trade") or {}
+    log_proposal_attribution(
+        conn,
+        event_type="proposal_reject",
+        session_date_et=proposal["session_date_et"],
+        ticker=proposal["ticker"],
+        proposal_id=proposal_id,
+        market_activity=day_status.get("market_activity"),
+        exceptional_active=bool(exc.get("active")),
+        human_verdict="rejected",
+        human_rejection_reason=full_reason,
+        detail={"reason_code": code},
     )
     return {"ok": True, "proposal": get_proposal(conn, proposal_id)}
 
