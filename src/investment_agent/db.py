@@ -70,6 +70,23 @@ CREATE TABLE IF NOT EXISTS quote_snapshots (
 CREATE INDEX IF NOT EXISTS idx_quote_snapshots_session
   ON quote_snapshots(session_date_et, slot);
 
+CREATE TABLE IF NOT EXISTS market_activity_evaluations (
+  id INTEGER PRIMARY KEY,
+  session_date_et TEXT NOT NULL,
+  captured_at TEXT NOT NULL,
+  slot TEXT,
+  score INTEGER NOT NULL,
+  band TEXT NOT NULL,
+  allow_trade INTEGER NOT NULL DEFAULT 0,
+  bull_gate_ok INTEGER NOT NULL DEFAULT 0,
+  exit_alert INTEGER NOT NULL DEFAULT 0,
+  components_json TEXT,
+  summary TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_activity_session
+  ON market_activity_evaluations(session_date_et, captured_at);
+
 CREATE TABLE IF NOT EXISTS macro_snapshots (
   id INTEGER PRIMARY KEY,
   captured_at TEXT NOT NULL,

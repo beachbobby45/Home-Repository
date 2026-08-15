@@ -491,6 +491,24 @@ def api_trading_day_snapshots(
     return get_session_snapshot_status(conn, session_date_et)
 
 
+@app.get("/api/trading-day/market-activity")
+def api_trading_day_market_activity(
+    conn=Depends(_db),
+    session_date_et: str | None = None,
+) -> dict[str, Any]:
+    from investment_agent.market_activity import (
+        evaluate_market_activity,
+        list_recent_evaluations,
+        market_activity_to_dict,
+    )
+    from investment_agent.trading_day import today_et_str
+
+    day = session_date_et or today_et_str()
+    result = market_activity_to_dict(evaluate_market_activity(conn, persist=False))
+    result["recent_evaluations"] = list_recent_evaluations(conn, day, limit=5)
+    return result
+
+
 @app.get("/api/daily-rhythm/status")
 def api_daily_rhythm_status(conn=Depends(_db)) -> dict[str, Any]:
     return get_daily_rhythm_status(conn)

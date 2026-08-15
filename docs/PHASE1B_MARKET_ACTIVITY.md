@@ -1,6 +1,6 @@
 # Phase 1B — Market Activity & Confirmation (Spec v0)
 
-> **Status:** Spec for Inc 12–13 — **not implemented** at `v0.8-pre-phase1b`  
+> **Status:** Market Activity v0 implemented (Inc 12); Confirmation Inc 13 pending  
 > **Assumptions:** [PHASE1B_ASSUMPTIONS_AND_DEFINITIONS.md](./PHASE1B_ASSUMPTIONS_AND_DEFINITIONS.md)
 
 ---

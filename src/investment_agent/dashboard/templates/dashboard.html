@@ -103,6 +103,7 @@
           </div>
         </div>
         <div class="quote-snapshot-row" id="quote-snapshot-row"></div>
+        <div class="market-activity-row" id="market-activity-row"></div>
       </div>
         <header class="panel-head risk-panel-head">
           <div>
@@ -1043,6 +1044,29 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         `+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)}`;
     }
 
+    function renderMarketActivity(ma) {
+      const el = document.getElementById("market-activity-row");
+      if (!el || !ma) {
+        if (el) el.innerHTML = "";
+        return;
+      }
+      const cls = ma.allow_trade ? "trade-ok" : "no-trade";
+      const band = ma.band_label || ma.band || "—";
+      const bull = ma.bull_gate_ok === false
+        ? `<span class="ma-bull off">Bull gate off${ma.spy_20d_return_pct != null ? ` (SPY 20d ${Number(ma.spy_20d_return_pct).toFixed(2)}%)` : ""}</span>`
+        : "";
+      const exit = ma.exit_alert
+        ? `<span class="ma-exit">Exit alert — sell at market if holding</span>`
+        : "";
+      el.innerHTML = `
+        <div class="market-activity-head">
+          <span class="market-activity-title">Market Activity</span>
+          <span class="market-activity-score ${cls}">${ma.score ?? "—"}/100 · ${band}</span>
+          ${bull}${exit}
+        </div>
+        <div class="brief ma-summary">${ma.summary || ""}</div>`;
+    }
+
     function renderQuoteSnapshots(snap) {
       const el = document.getElementById("quote-snapshot-row");
       if (!el) return;
@@ -1085,6 +1109,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       document.getElementById("verdict-asof").textContent =
         `Session: ${fmtSessionPhase(td.session_phase)} · ${fmtDateTimePT(td.as_of_et)}`;
       renderQuoteSnapshots(td.quote_snapshots);
+      renderMarketActivity(td.market_activity);
 
       const pick = td.top_pick;
       const pickEl = document.getElementById("top-pick-body");

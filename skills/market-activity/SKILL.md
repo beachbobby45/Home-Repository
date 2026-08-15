@@ -7,7 +7,7 @@ description: Phase 1B Market Activity Engine — 0–100 day score, TRADE/NO TRA
 
 ## Status
 
-**Not implemented.** Baseline: `v0.8-pre-phase1b`. Target: Inc 12.
+**Implemented (Inc 12).** Baseline scoring v0 with bull gate and flip detection.
 
 ## When to use
 

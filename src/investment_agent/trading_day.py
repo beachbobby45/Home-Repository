@@ -563,12 +563,17 @@ def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
 
     snapshot = maybe_record_snapshots_after_refresh(conn, quote_rows)
 
+    from investment_agent.market_activity import evaluate_market_activity
+
+    market_activity = evaluate_market_activity(conn, persist=True)
+
     return {
         "ok": len(updated) > 0,
         "updated": updated,
         "errors": errors,
         "symbols_requested": sorted(symbols),
         "snapshot": snapshot,
+        "market_activity": market_activity,
     }
 
 
@@ -925,6 +930,10 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     )
     risk_status = portfolio_status_dict(portfolio_snapshot)
 
+    from investment_agent.market_activity import evaluate_market_activity, market_activity_to_dict
+
+    market_activity = market_activity_to_dict(evaluate_market_activity(conn, when=now, persist=False))
+
     def add_check(name: str, ok: bool | None, message: str, *, blocking: bool = False):
         checks.append({"name": name, "ok": ok, "message": message, "blocking": blocking})
 
@@ -970,6 +979,41 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     elif phase in ("trade_window", "opening_wait", "pre_market"):
         regime_msg = summary.regime["summary"] if summary.regime else "Run refresh for live regime"
         add_check("Regime", True, regime_msg)
+
+    ma_summary = market_activity.get("summary") or "Market Activity pending"
+    if not market_activity.get("allow_trade"):
+        add_check(
+            "Market Activity",
+            False,
+            f"{market_activity.get('score', 0)}/100 — {market_activity.get('band_label', 'blocked')} · NO TRADE",
+            blocking=phase == "trade_window",
+        )
+        if phase == "trade_window" and verdict in ("GO", "CAUTION"):
+            verdict = "NO_GO"
+            headline = "DO NOT TRADE TODAY"
+            detail = ma_summary
+        elif phase in ("opening_wait", "pre_market"):
+            detail = f"{detail} · Preliminary: {ma_summary}"
+    else:
+        add_check(
+            "Market Activity",
+            True,
+            f"{market_activity.get('score', 0)}/100 — {market_activity.get('band_label', 'ok')} · entries allowed",
+        )
+
+    if market_activity.get("exit_alert") and open_positions:
+        pos = open_positions[0]
+        exit_msg = market_activity.get("flip_reason") or "Day flipped NO TRADE — sell at market"
+        add_check(
+            "Exit alert",
+            False,
+            f"{exit_msg} ({pos['ticker']} open)",
+            blocking=True,
+        )
+        if verdict == "GO":
+            verdict = "NO_GO"
+        headline = "EXIT AT MARKET"
+        detail = exit_msg
 
     for risk_check in portfolio_risk.checks:
         add_check(
@@ -1273,6 +1317,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             and not target_met
             and not stopped
             and portfolio_risk.verdict == "approved"
+            and market_activity.get("allow_trade")
         ),
         "can_second_trade": can_second_trade,
         "open_positions": open_positions,
@@ -1293,6 +1338,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             "entry_window_et": ENTRY_WINDOW_ET,
         },
         "quote_snapshots": quote_snapshot_status,
+        "market_activity": market_activity,
     }
 
 

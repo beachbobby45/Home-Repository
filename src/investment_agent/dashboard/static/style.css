@@ -378,6 +378,60 @@ main {
   opacity: 0.75;
 }
 
+.market-activity-row {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.market-activity-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+}
+
+.market-activity-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.market-activity-score {
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--surface2);
+}
+
+.market-activity-score.trade-ok {
+  color: var(--green);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.market-activity-score.no-trade {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.ma-bull.off {
+  font-size: 0.78rem;
+  color: #fcd34d;
+}
+
+.ma-exit {
+  font-size: 0.78rem;
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+.ma-summary {
+  margin-top: 0.35rem;
+}
+
 .trading-verdict {
   display: flex;
   gap: 1rem;
