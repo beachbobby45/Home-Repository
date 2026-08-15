@@ -49,12 +49,12 @@ python3 -m pytest tests/test_dashboard.py tests/test_dashboard_integration.py -q
 
 ## Phase 1B notes (Inc 14–16)
 
-- Red **DO NOT TRADE TODAY** banner; ranked list still visible.
-- Weekly progress: `n of 3 · $X / $450` (tier-scaled).
+- Red **DO NOT TRADE TODAY** banner (`#no-trade-banner`); ranked list still visible.
+- **EXIT — sell at market** banner when day flips and position open.
+- Weekly progress in status bar: `n of 3 · $X / $tier`.
 - Market Activity breakdown panel (with n/a labels).
-- Confirmation chips on #1–#3.
-- **EXIT: sell at market** alert when day flips NO TRADE and position open.
-- Use `mountPickBlock()` pattern for interactive pick card.
+- Confirmation chips on #1–#3 (Inc 13).
+- Proposal generate blocked when Market Activity = NO TRADE.
 
 ## Run locally
 

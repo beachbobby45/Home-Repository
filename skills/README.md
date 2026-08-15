@@ -50,7 +50,7 @@ Cursor:  ONE skill per domain — narrow context, small diffs, run listed tests.
 | 11 | intraday-trading-day, eod-ingest-screener | Quote snapshots | **Done Inc 11** |
 | 12 | market-activity | Market Activity Score v0 | **Done Inc 12** |
 | 13 | confirmation-engine | Confirmation on #1–#3 | **Done Inc 13** |
-| 14–16 | dashboard-ux, intraday-trading-day | Banner, exit alert, wiring |
+| 14–16 | dashboard-ux, intraday-trading-day | Banner, exit alert, wiring | **Done Inc 14–16** |
 | 17 | trade-proposals, risk-engine | Exceptional trade rule |
 | 18 | learning-analytics | Score attribution |
 

@@ -14,12 +14,16 @@ from investment_agent.finance import (
     round_trip_fees,
     sell_price_for_net_target,
     target_move_pct,
+    weekly_production_target,
 )
 from investment_agent.journal import (
     compute_today_realized_net,
+    compute_weekly_realized_net,
+    count_weekly_production_opportunities,
     get_completed_round_trips,
     get_open_positions,
     open_position_for_ticker,
+    today_pt_str,
 )
 from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.regime import REGIME_SYMBOLS
@@ -1379,6 +1383,56 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             detail = pick_risk.blockers[0] if pick_risk.blockers else pick_risk.headline
             add_check("Proposal risk", False, detail, blocking=True)
 
+    weekly_target = weekly_production_target(float(summary.tradable_cash or 0))
+    pt_day = today_pt_str()
+    weekly_net = compute_weekly_realized_net(conn, pt_day)
+    opportunities_used = count_weekly_production_opportunities(
+        conn, date_key=pt_day, daily_target=daily_target
+    )
+    weekly_opportunities = 3
+
+    show_no_trade_banner = (
+        phase in ("trade_window", "opening_wait", "pre_market")
+        and (
+            not market_activity.get("allow_trade")
+            or headline in ("DO NOT TRADE TODAY", "No confirming setup")
+        )
+    )
+    exit_ticker = open_positions[0]["ticker"] if open_positions else None
+    show_exit_alert = bool(market_activity.get("exit_alert") and open_positions)
+    exit_message = market_activity.get("flip_reason") or (
+        "Market Activity flipped NO TRADE — sell at market to exit"
+    )
+
+    phase1b = {
+        "show_no_trade_banner": show_no_trade_banner,
+        "no_trade_headline": "DO NOT TRADE TODAY" if show_no_trade_banner else None,
+        "no_trade_detail": (
+            market_activity.get("summary")
+            if not market_activity.get("allow_trade")
+            else detail
+        )
+        if show_no_trade_banner
+        else None,
+        "show_exit_alert": show_exit_alert,
+        "exit_alert_headline": "EXIT — sell at market" if show_exit_alert else None,
+        "exit_alert_message": exit_message if show_exit_alert else None,
+        "exit_ticker": exit_ticker,
+        "weekly_progress": {
+            "opportunities_used": opportunities_used,
+            "opportunities_target": weekly_opportunities,
+            "weekly_realized_net": round(weekly_net, 2),
+            "weekly_production_target": round(weekly_target, 2),
+            "weekly_target_met": weekly_net >= weekly_target,
+            "label": (
+                f"{opportunities_used} of {weekly_opportunities} · "
+                f"${weekly_net:,.0f} / ${weekly_target:,.0f}"
+            ),
+        },
+        "market_activity_components": market_activity.get("components") or {},
+        "block_new_proposals": phase == "trade_window" and not market_activity.get("allow_trade"),
+    }
+
     return {
         "as_of_et": now.replace(microsecond=0).isoformat(),
         "date_et": day,
@@ -1424,6 +1478,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "quote_snapshots": quote_snapshot_status,
         "market_activity": market_activity,
         "confirmations": confirmations,
+        "phase1b": phase1b,
     }
 
 

@@ -218,6 +218,57 @@ main {
   color: #fca5a5;
 }
 
+.banner.no-trade {
+  background: rgba(220, 38, 38, 0.22);
+  border: 2px solid rgba(239, 68, 68, 0.65);
+  color: #fecaca;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.banner.exit-alert {
+  background: rgba(234, 88, 12, 0.2);
+  border: 2px solid rgba(249, 115, 22, 0.65);
+  color: #fdba74;
+  font-weight: 700;
+}
+
+.status-chip.status-weekly-met {
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.market-activity-breakdown {
+  margin-top: 0.65rem;
+}
+
+.market-activity-breakdown summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--muted);
+  user-select: none;
+}
+
+.ma-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.ma-breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ma-breakdown-item span {
+  color: var(--muted);
+}
+
 .grid {
   display: grid;
   gap: 1rem;

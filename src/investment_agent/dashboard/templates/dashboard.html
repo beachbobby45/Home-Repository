@@ -31,11 +31,14 @@
   </header>
 
   <div id="trading-mode-banner" class="banner paper app-banner-compact">Loading trading mode…</div>
+  <div id="exit-alert-banner" class="banner exit-alert app-banner-compact" hidden></div>
+  <div id="no-trade-banner" class="banner no-trade app-banner-compact" hidden></div>
   <div id="regime-banner" class="banner ok app-banner-compact">Loading regime…</div>
 
   <div class="status-bar" id="status-bar">
     <div class="status-chip" id="status-verdict-chip"><span class="status-label">Session</span><span id="status-verdict-text">—</span></div>
     <div class="status-chip status-chip-accent"><span class="status-label">Today</span><span id="status-daily-text">—</span></div>
+    <div class="status-chip" id="status-weekly-chip"><span class="status-label">Week</span><span id="status-weekly-text">—</span></div>
     <div class="status-chip"><span class="status-label">Cash</span><span id="status-cash-text">—</span></div>
     <div class="status-chip"><span class="status-label">Goal</span><span id="status-goal-text">—</span></div>
   </div>
@@ -105,6 +108,10 @@
         <div class="quote-snapshot-row" id="quote-snapshot-row"></div>
         <div class="market-activity-row" id="market-activity-row"></div>
         <div class="confirmation-row" id="confirmation-row"></div>
+        <details class="market-activity-breakdown" id="market-activity-breakdown">
+          <summary>Market Activity breakdown</summary>
+          <div class="ma-breakdown-grid" id="ma-breakdown-grid"></div>
+        </details>
       </div>
         <header class="panel-head risk-panel-head">
           <div>
@@ -991,6 +998,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         document.getElementById("status-verdict-chip")?.classList.toggle("status-go", td.verdict === "GO");
         document.getElementById("status-verdict-chip")?.classList.toggle("status-nogo", td.verdict === "NO_GO");
       }
+      const weeklyEl = document.getElementById("status-weekly-text");
+      const weeklyChip = document.getElementById("status-weekly-chip");
+      if (td?.phase1b?.weekly_progress && weeklyEl) {
+        weeklyEl.textContent = td.phase1b.weekly_progress.label || "—";
+        weeklyChip?.classList.toggle("status-weekly-met", !!td.phase1b.weekly_progress.weekly_target_met);
+      }
       if (summary && dailyEl) {
         const todayNet = summary.today_realized_net ?? 0;
         const target = summary.daily_target ?? 150;
@@ -1044,6 +1057,67 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       document.getElementById("math-sell").textContent = "$" + fmt(limitSell);
       document.getElementById("math-sell-net").textContent =
         `+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)}`;
+    }
+
+    function renderPhase1bBanners(td) {
+      const p1b = td?.phase1b || {};
+      const exitEl = document.getElementById("exit-alert-banner");
+      const noTradeEl = document.getElementById("no-trade-banner");
+      if (exitEl) {
+        if (p1b.show_exit_alert) {
+          exitEl.hidden = false;
+          exitEl.className = "banner exit-alert app-banner-compact";
+          const sym = p1b.exit_ticker ? ` (${p1b.exit_ticker})` : "";
+          exitEl.textContent =
+            `${p1b.exit_alert_headline || "EXIT — sell at market"}${sym} — ${p1b.exit_alert_message || ""}`;
+        } else {
+          exitEl.hidden = true;
+          exitEl.textContent = "";
+        }
+      }
+      if (noTradeEl) {
+        if (p1b.show_no_trade_banner) {
+          noTradeEl.hidden = false;
+          noTradeEl.className = "banner no-trade app-banner-compact";
+          noTradeEl.textContent =
+            `${p1b.no_trade_headline || "DO NOT TRADE TODAY"} — ${p1b.no_trade_detail || td.detail || ""}`;
+        } else {
+          noTradeEl.hidden = true;
+          noTradeEl.textContent = "";
+        }
+      }
+      const genBtn = document.getElementById("generate-proposals");
+      if (genBtn) {
+        const blocked = !!p1b.block_new_proposals;
+        genBtn.disabled = blocked;
+        genBtn.title = blocked
+          ? "Blocked — Market Activity is NO TRADE today"
+          : "Step 2b — generate up to 5 scored proposals";
+      }
+    }
+
+    function renderMarketActivityBreakdown(ma, p1b) {
+      const grid = document.getElementById("ma-breakdown-grid");
+      const panel = document.getElementById("market-activity-breakdown");
+      if (!grid || !panel) return;
+      const components = (p1b && p1b.market_activity_components) || ma?.components || {};
+      const labels = {
+        market_direction: "Market direction",
+        market_volume: "Market volume",
+        volatility: "Volatility",
+        momentum: "Momentum",
+        sector_participation: "Sector participation",
+        news_catalysts: "News / catalysts",
+        market_breadth: "Market breadth (n/a v0)",
+        vwap_trend: "VWAP / trend (n/a v0)",
+      };
+      const entries = Object.keys(labels).map((key) => {
+        const val = components[key];
+        const text = val == null ? "n/a" : `${val}/100`;
+        return `<div class="ma-breakdown-item"><span>${labels[key]}</span><strong>${text}</strong></div>`;
+      });
+      grid.innerHTML = entries.join("");
+      panel.hidden = !ma;
     }
 
     function renderConfirmations(items, marketActivity) {
@@ -1135,6 +1209,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       renderQuoteSnapshots(td.quote_snapshots);
       renderMarketActivity(td.market_activity);
       renderConfirmations(td.confirmations, td.market_activity);
+      renderPhase1bBanners(td);
+      renderMarketActivityBreakdown(td.market_activity, td.phase1b);
 
       const pick = td.top_pick;
       const pickEl = document.getElementById("top-pick-body");
@@ -1182,7 +1258,10 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       hint.textContent = hintText;
 
       const banner = document.getElementById("regime-banner");
-      if (td.verdict === "NO_GO") {
+      if (td.phase1b?.show_no_trade_banner || td.phase1b?.show_exit_alert) {
+        banner.className = "banner ok app-banner-compact";
+        banner.textContent = td.headline + " — " + (td.detail || "");
+      } else if (td.verdict === "NO_GO") {
         banner.className = "banner block app-banner-compact";
         banner.textContent = td.headline + " — " + (td.detail || "");
       } else if (td.verdict === "WAIT") {

@@ -458,6 +458,34 @@ def get_completed_round_trips(conn: sqlite3.Connection, limit: int = 50) -> list
     return completed[:limit]
 
 
+def count_weekly_production_opportunities(
+    conn: sqlite3.Connection,
+    *,
+    date_key: str | None = None,
+    daily_target: float,
+    min_win_pct: float = 0.67,
+    stop_out_threshold: float = -20.0,
+) -> int:
+    """Count weekly production opportunities per Phase 1B journal rules."""
+    when = date_key or today_pt_str()
+    week_start = _week_start_pt(when)
+    win_floor = daily_target * min_win_pct if daily_target > 0 else 0.0
+    count = 0
+    for trip in get_completed_round_trips(conn, limit=500):
+        try:
+            sell_day = _executed_date_pt(trip["sell_at"])
+        except ValueError:
+            sell_day = trip["sell_at"][:10]
+        if sell_day < week_start or sell_day > when:
+            continue
+        net = float(trip["net_pnl"])
+        if net <= stop_out_threshold:
+            count += 1
+        elif win_floor > 0 and net >= win_floor:
+            count += 1
+    return count
+
+
 def clear_all_trades(conn: sqlite3.Connection) -> int:
     """Delete every row in trade_journal. Returns number of rows removed."""
     row = conn.execute("SELECT COUNT(*) AS c FROM trade_journal").fetchone()

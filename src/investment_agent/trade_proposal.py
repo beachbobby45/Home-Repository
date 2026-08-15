@@ -235,6 +235,23 @@ def generate_proposals(
     day = session_date_et or today_et_str()
     cfg = settings or Settings.from_env()
     summary = build_dashboard_summary(conn)
+
+    from investment_agent.market_activity import evaluate_market_activity, market_activity_to_dict
+    from investment_agent.trading_day import now_et, session_phase
+
+    now = now_et()
+    phase = session_phase(now)
+    market_activity = market_activity_to_dict(evaluate_market_activity(conn, when=now, persist=False))
+    if phase == "trade_window" and not market_activity.get("allow_trade"):
+        return {
+            "ok": False,
+            "error": "Market Activity blocks new trades today — DO NOT TRADE",
+            "market_activity": market_activity,
+            "created": [],
+            "skipped": [],
+            "actionable_count": 0,
+        }
+
     deploy = float(summary.tradable_cash or ORIGINAL_BASIS)
     net_target = float(summary.daily_target or 150)
 

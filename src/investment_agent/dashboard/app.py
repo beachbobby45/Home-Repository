@@ -749,6 +749,8 @@ def api_proposals_generate(
         replace_existing=opts.replace_existing,
         settings=settings,
     )
+    if not result.get("ok", True):
+        raise HTTPException(status_code=409, detail=result.get("error") or "Proposal generate blocked")
     conn.commit()
     return result
 
