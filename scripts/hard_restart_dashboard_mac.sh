@@ -13,6 +13,12 @@ echo "=== Hard restart AI Investment Agent Dashboard ==="
 echo "Repo: $ROOT"
 echo ""
 
+if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Pulling latest from origin/main…"
+  git -C "$ROOT" pull --ff-only origin main 2>/dev/null || echo "(git pull skipped — update manually if needed)"
+  echo ""
+fi
+
 mkdir -p "$ROOT/data"
 
 stop_pid() {
@@ -102,6 +108,12 @@ if [[ "$READY" != "1" ]]; then
 fi
 
 echo "Dashboard UP: $URL"
+VER=$(curl -s --connect-timeout 2 "$URL/api/version" 2>/dev/null || echo "")
+if [[ -n "$VER" ]]; then
+  echo "Version: $(echo "$VER" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('label','?'))" 2>/dev/null || echo "$VER")"
+else
+  echo "Version: (could not read /api/version)"
+fi
 if command -v open >/dev/null 2>&1; then
   open "$URL"
   echo "Opened in your default browser."

@@ -340,6 +340,7 @@ def dashboard_page(request: Request) -> HTMLResponse:
             "app_version": info["version"],
             "app_version_label": info["label"],
             "app_release": info["release"],
+            "app_release_tag": info["tag"],
         },
     )
 

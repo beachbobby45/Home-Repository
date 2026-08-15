@@ -1675,16 +1675,17 @@ textarea {
 .ui-version {
   display: inline-block;
   margin-left: 0.35rem;
-  padding: 0.12rem 0.45rem;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
   vertical-align: middle;
-  color: #93c5fd;
-  background: rgba(59, 130, 246, 0.18);
-  border: 1px solid rgba(59, 130, 246, 0.45);
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(96, 165, 250, 0.55);
   border-radius: 999px;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-header-actions {
