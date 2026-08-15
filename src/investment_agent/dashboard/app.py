@@ -144,6 +144,7 @@ from investment_agent.daily_rhythm import (
 DASHBOARD_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DASHBOARD_DIR.parents[2]
 ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
+OPERATOR_CHECKLIST_PDF = REPO_ROOT / "docs" / "DAILY_OPERATOR_CHECKLIST.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
 app = FastAPI(title="AI Investment Agent Dashboard", version="0.8.0")
@@ -296,6 +297,17 @@ def one_pager_pdf() -> FileResponse:
         ONE_PAGER_PDF,
         media_type="application/pdf",
         filename="AI-Investment-Agent-Daily-One-Pager.pdf",
+    )
+
+
+@app.get("/operator-checklist.pdf")
+def operator_checklist_pdf() -> FileResponse:
+    if not OPERATOR_CHECKLIST_PDF.is_file():
+        raise HTTPException(status_code=404, detail="Operator checklist PDF not found")
+    return FileResponse(
+        OPERATOR_CHECKLIST_PDF,
+        media_type="application/pdf",
+        filename="AI-Investment-Agent-Daily-Operator-Checklist.pdf",
     )
 
 
