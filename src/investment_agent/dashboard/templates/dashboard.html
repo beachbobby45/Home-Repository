@@ -102,9 +102,8 @@
             <div class="brief" id="verdict-asof"></div>
           </div>
         </div>
+        <div class="quote-snapshot-row" id="quote-snapshot-row"></div>
       </div>
-
-      <div class="card risk-panel" id="risk-panel">
         <header class="panel-head risk-panel-head">
           <div>
             <h2 class="risk-title">Risk Engine</h2>
@@ -1044,6 +1043,36 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         `+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)}`;
     }
 
+    function renderQuoteSnapshots(snap) {
+      const el = document.getElementById("quote-snapshot-row");
+      if (!el) return;
+      if (!snap || !(snap.slots || []).length) {
+        el.innerHTML = "";
+        return;
+      }
+      const slots = snap.slots || [];
+      const slotHtml = slots.map((s) => {
+        const cls = s.captured
+          ? "captured"
+          : snap.active_slot === s.slot
+            ? "active"
+            : "pending";
+        const count = s.ticker_count ? ` · ${s.ticker_count}` : "";
+        return `<span class="quote-snapshot-slot ${cls}" title="${s.captured_at || "Not captured"}">${s.label}${s.captured ? " ✓" : ""}${count}</span>`;
+      }).join("");
+      const activeNote = snap.active_slot_label
+        ? `<span class="quote-snapshot-active">Window: ${snap.active_slot_label}</span>`
+        : snap.complete
+          ? `<span class="quote-snapshot-active complete">All slots captured today</span>`
+          : "";
+      el.innerHTML = `
+        <div class="quote-snapshot-head">
+          <span class="quote-snapshot-title">Quote snapshots</span>
+          ${activeNote}
+        </div>
+        <div class="quote-snapshot-slots">${slotHtml}</div>`;
+    }
+
     async function loadTradingDay() {
       const td = await api("/api/trading-day/status");
       const badge = document.getElementById("verdict-badge");
@@ -1055,6 +1084,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       document.getElementById("verdict-detail").textContent = td.detail || "";
       document.getElementById("verdict-asof").textContent =
         `Session: ${fmtSessionPhase(td.session_phase)} · ${fmtDateTimePT(td.as_of_et)}`;
+      renderQuoteSnapshots(td.quote_snapshots);
 
       const pick = td.top_pick;
       const pickEl = document.getElementById("top-pick-body");

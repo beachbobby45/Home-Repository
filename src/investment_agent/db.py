@@ -52,6 +52,24 @@ CREATE TABLE IF NOT EXISTS quotes (
 CREATE INDEX IF NOT EXISTS idx_quotes_ticker_time
   ON quotes(ticker, captured_at);
 
+CREATE TABLE IF NOT EXISTS quote_snapshots (
+  id INTEGER PRIMARY KEY,
+  session_date_et TEXT NOT NULL,
+  slot TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  captured_at TEXT NOT NULL,
+  price REAL NOT NULL,
+  open REAL,
+  high REAL,
+  low REAL,
+  prev_close REAL,
+  source TEXT NOT NULL DEFAULT 'finnhub',
+  UNIQUE(session_date_et, slot, ticker)
+);
+
+CREATE INDEX IF NOT EXISTS idx_quote_snapshots_session
+  ON quote_snapshots(session_date_et, slot);
+
 CREATE TABLE IF NOT EXISTS macro_snapshots (
   id INTEGER PRIMARY KEY,
   captured_at TEXT NOT NULL,

@@ -481,6 +481,16 @@ def api_trading_day_status(conn=Depends(_db)) -> dict[str, Any]:
     return build_trading_day_status(conn)
 
 
+@app.get("/api/trading-day/snapshots")
+def api_trading_day_snapshots(
+    conn=Depends(_db),
+    session_date_et: str | None = None,
+) -> dict[str, Any]:
+    from investment_agent.quote_snapshots import get_session_snapshot_status
+
+    return get_session_snapshot_status(conn, session_date_et)
+
+
 @app.get("/api/daily-rhythm/status")
 def api_daily_rhythm_status(conn=Depends(_db)) -> dict[str, Any]:
     return get_daily_rhythm_status(conn)

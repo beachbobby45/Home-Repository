@@ -508,6 +508,7 @@ def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
     errors: list[str] = []
     updated: list[str] = []
     index_quotes = {}
+    quote_rows: dict[str, dict] = {}
 
     if not settings.finnhub_api_key:
         return {
@@ -521,18 +522,19 @@ def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
         for symbol in sorted(symbols):
             try:
                 q = fh.get_quote(symbol)
-                insert_quote(
-                    conn,
-                    {
-                        "ticker": symbol,
-                        "captured_at": fh_now(),
-                        "price": float(q["c"]),
-                        "open": float(q.get("o") or 0) or None,
-                        "high": float(q.get("h") or 0) or None,
-                        "low": float(q.get("l") or 0) or None,
-                        "prev_close": float(q.get("pc") or 0) or None,
-                    },
-                )
+                captured = fh_now()
+                row = {
+                    "ticker": symbol,
+                    "captured_at": captured,
+                    "price": float(q["c"]),
+                    "open": float(q.get("o") or 0) or None,
+                    "high": float(q.get("h") or 0) or None,
+                    "low": float(q.get("l") or 0) or None,
+                    "prev_close": float(q.get("pc") or 0) or None,
+                    "source": "finnhub",
+                }
+                insert_quote(conn, row)
+                quote_rows[symbol] = row
                 updated.append(symbol)
                 if symbol in REGIME_SYMBOLS:
                     index_quotes[symbol] = index_quote_from_finnhub(symbol, q)
@@ -557,11 +559,16 @@ def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
     finally:
         fh.close()
 
+    from investment_agent.quote_snapshots import maybe_record_snapshots_after_refresh
+
+    snapshot = maybe_record_snapshots_after_refresh(conn, quote_rows)
+
     return {
         "ok": len(updated) > 0,
         "updated": updated,
         "errors": errors,
         "symbols_requested": sorted(symbols),
+        "snapshot": snapshot,
     }
 
 
@@ -1227,6 +1234,10 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             net_target=net_for_plan,
         )
 
+    from investment_agent.quote_snapshots import get_session_snapshot_status
+
+    quote_snapshot_status = get_session_snapshot_status(conn, day)
+
     pick_risk = None
     if pick_detail and pick_detail.get("stop_price") and pick_detail.get("limit_buy_price"):
         pick_risk = evaluate_proposal_from_plan_dict(
@@ -1281,6 +1292,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             "entry_delay_minutes": ENTRY_DELAY_MINUTES,
             "entry_window_et": ENTRY_WINDOW_ET,
         },
+        "quote_snapshots": quote_snapshot_status,
     }
 
 

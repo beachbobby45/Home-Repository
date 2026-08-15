@@ -47,7 +47,7 @@ Cursor:  ONE skill per domain — narrow context, small diffs, run listed tests.
 |-----|-------------------|-------------|
 | 9 | (docs only) | `PHASE1B_*` specs |
 | 10 | journal-capital | Split-lot tier + weekly 3× daily | **Done Inc 10** |
-| 11 | intraday-trading-day, eod-ingest-screener | Quote snapshots |
+| 11 | intraday-trading-day, eod-ingest-screener | Quote snapshots | **Done Inc 11** |
 | 12 | market-activity | Market Activity Score v0 |
 | 13 | confirmation-engine | Confirmation on #1–#3 |
 | 14–16 | dashboard-ux, intraday-trading-day | Banner, exit alert, wiring |
