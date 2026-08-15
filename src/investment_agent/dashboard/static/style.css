@@ -768,6 +768,29 @@ main {
   border-color: rgba(99, 102, 241, 0.35);
 }
 
+.setup-version-card {
+  margin-bottom: 1rem;
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.setup-version-card h3 {
+  margin-top: 0;
+}
+
+.setup-version-running {
+  font-size: 1rem;
+  margin: 0.35rem 0 0.5rem;
+}
+
+.setup-version-ok {
+  color: #86efac;
+}
+
+.setup-version-warn {
+  color: #fdba74;
+}
+
 .setup-onboarding h3 {
   margin: 0 0 0.35rem;
   font-size: 0.95rem;
