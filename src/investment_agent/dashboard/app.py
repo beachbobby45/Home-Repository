@@ -25,6 +25,7 @@ from investment_agent.account import (
 )
 from investment_agent.cio import build_cio_summary
 from investment_agent.config import Settings
+from investment_agent.version import version_info
 from investment_agent.finance import ORIGINAL_BASIS
 from investment_agent.historical import (
     build_historical_summary,
@@ -147,7 +148,7 @@ ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
 OPERATOR_CHECKLIST_PDF = REPO_ROOT / "docs" / "DAILY_OPERATOR_CHECKLIST.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
-app = FastAPI(title="AI Investment Agent Dashboard", version="0.8.0")
+app = FastAPI(title="AI Investment Agent Dashboard", version=version_info()["version"])
 
 
 @app.exception_handler(sqlite3.OperationalError)
@@ -320,16 +321,25 @@ def api_config() -> dict[str, bool]:
     }
 
 
+@app.get("/api/version")
+def api_version() -> dict[str, str]:
+    return version_info()
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard_page(request: Request) -> HTMLResponse:
     settings = Settings.from_env()
     key = settings.app_api_key.strip()
+    info = version_info()
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         {
             "request": request,
             "api_key_required": bool(key and key != "change-me-to-a-random-secret"),
+            "app_version": info["version"],
+            "app_version_label": info["label"],
+            "app_release": info["release"],
         },
     )
 
