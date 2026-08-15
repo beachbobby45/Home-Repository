@@ -10,10 +10,13 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.finance import (
     GOAL_ACCOUNT_VALUE,
+    capital_tier_detail,
     compute_month_end_sweep,
+    daily_profit_target,
     goal_progress_pct,
     round_trip_fees,
     tradable_after_sweep,
+    weekly_production_target,
 )
 
 
@@ -46,3 +49,11 @@ def test_tradable_after_sweep():
 def test_editable_tax_rate():
     sweep = compute_month_end_sweep(1000.0, tax_rate=0.30)
     assert sweep.tax_sweep == 300.0
+
+
+def test_split_lot_weekly_at_10k():
+    detail = capital_tier_detail(10_000)
+    assert detail["daily_production_target"] == 150.0
+    assert detail["weekly_production_target"] == 450.0
+    assert weekly_production_target(10_000) == 450.0
+    assert daily_profit_target(10_000) == 150.0

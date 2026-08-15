@@ -46,7 +46,7 @@ Cursor:  ONE skill per domain — narrow context, small diffs, run listed tests.
 | Inc | Skill(s) to invoke | Deliverable |
 |-----|-------------------|-------------|
 | 9 | (docs only) | `PHASE1B_*` specs |
-| 10 | journal-capital | Split-lot tier + weekly 3× daily |
+| 10 | journal-capital | Split-lot tier + weekly 3× daily | **Done Inc 10** |
 | 11 | intraday-trading-day, eod-ingest-screener | Quote snapshots |
 | 12 | market-activity | Market Activity Score v0 |
 | 13 | confirmation-engine | Confirmation on #1–#3 |
@@ -66,4 +66,4 @@ Cursor:  ONE skill per domain — narrow context, small diffs, run listed tests.
 - [docs/PHASE1_CAPITAL_BUILDER_SPEC.md](../docs/PHASE1_CAPITAL_BUILDER_SPEC.md)
 - [docs/PHASE1_TECHNICAL_AUDIT.md](../docs/PHASE1_TECHNICAL_AUDIT.md)
 - [docs/PRODUCT_SPEC_V3.md](../docs/PRODUCT_SPEC_V3.md)
-- Phase 1B specs (Inc 9, not yet committed)
+- Phase 1B specs (Inc 9): [PHASE1B_ASSUMPTIONS_AND_DEFINITIONS.md](../docs/PHASE1B_ASSUMPTIONS_AND_DEFINITIONS.md), [PHASE1B_MARKET_ACTIVITY.md](../docs/PHASE1B_MARKET_ACTIVITY.md)

@@ -1,4 +1,4 @@
-"""Tests for Phase 1 Capital Builder progress (Increment 5)."""
+"""Tests for Phase 1 Capital Builder progress (Increment 5 + Phase 1B tier model)."""
 
 from __future__ import annotations
 
@@ -18,15 +18,15 @@ from investment_agent.capital_builder import (
     PHASE1_START,
     PHASE1_TARGET,
     SOFT_TARGET_NOTE,
-    WEEKLY_SOFT_TARGET,
     build_capital_builder_progress,
     phase1_journey_progress_pct,
     phase1_of_target_pct,
     progress_to_dict,
-    weekly_soft_progress_pct,
+    weekly_production_progress_pct,
 )
 from investment_agent.dashboard.app import app
 from investment_agent.db import init_db
+from investment_agent.finance import weekly_production_target
 from investment_agent.journal import compute_weekly_realized_net, insert_trade, journal_cash_balance
 from investment_agent.risk_engine import PHASE1_HIGH_WATER_KEY
 
@@ -98,9 +98,24 @@ def test_phase1_of_target_pct():
     assert phase1_of_target_pct(12_450) == (12_450 / PHASE1_TARGET) * 100
 
 
-def test_weekly_soft_progress_pct():
-    assert weekly_soft_progress_pct(320) == 32.0
-    assert weekly_soft_progress_pct(WEEKLY_SOFT_TARGET) == 100.0
+def test_weekly_production_progress_at_10k_tier():
+    assert abs(weekly_production_progress_pct(150, 450) - (100 / 3)) < 0.01
+    assert weekly_production_progress_pct(450, 450) == 100.0
+
+
+def test_build_progress_includes_tier_at_10k():
+    conn, path = _conn()
+    try:
+        _set_tradable_cash(conn, 10_000)
+        conn.commit()
+        progress = build_capital_builder_progress(conn)
+        assert progress.daily_production_target == 150.0
+        assert progress.weekly_production_target == 450.0
+        assert progress.structure_label == "$10K"
+        assert progress.weekly_opportunities == 3
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
 
 
 def test_build_progress_includes_high_water_and_drawdown():
@@ -117,12 +132,10 @@ def test_build_progress_includes_high_water_and_drawdown():
             progress = build_capital_builder_progress(conn, date_key=FRIDAY.split("T")[0])
 
         assert progress.current_equity == 12_800.0
+        assert progress.tier_threshold == 10_000.0
+        assert progress.daily_production_target == 150.0
         assert progress.high_water_mark == 12_800.0
         assert progress.drawdown_pct == 0.0
-        assert progress.of_target_pct == round((12_800 / PHASE1_TARGET) * 100, 1)
-        assert progress.journey_progress_pct == round(
-            phase1_journey_progress_pct(12_800), 1
-        )
     finally:
         conn.close()
         path.unlink(missing_ok=True)
@@ -178,23 +191,23 @@ def test_build_progress_weekly_realized_net():
 
         expected_weekly = compute_weekly_realized_net(conn, FRIDAY.split("T")[0])
         assert progress.weekly_realized_net == expected_weekly
-        assert progress.weekly_soft_progress_pct == round(
-            weekly_soft_progress_pct(expected_weekly), 1
-        )
+        assert progress.weekly_production_target == 450.0
     finally:
         conn.close()
         path.unlink(missing_ok=True)
 
 
-def test_progress_to_dict_includes_soft_note():
+def test_progress_to_dict_includes_tier_fields():
     conn, path = _conn()
     try:
         _set_tradable_cash(conn, 10_000)
         conn.commit()
         payload = progress_to_dict(build_capital_builder_progress(conn))
         assert payload["phase1_start"] == PHASE1_START
-        assert payload["phase1_target"] == PHASE1_TARGET
-        assert payload["weekly_soft_target"] == WEEKLY_SOFT_TARGET
+        assert payload["weekly_production_target"] == 450.0
+        assert payload["daily_production_target"] == 150.0
+        assert payload["structure_label"] == "$10K"
+        assert payload["weekly_soft_target"] == 450.0
         assert payload["soft_target_note"] == SOFT_TARGET_NOTE
         assert payload["milestone_reached"] is False
     finally:
@@ -225,5 +238,5 @@ def test_api_capital_builder_progress():
                 assert resp.status_code == 200
                 data = resp.json()
                 assert data["current_equity"] == 12_450.0
-                assert data["of_target_pct"] == round((12_450 / PHASE1_TARGET) * 100, 1)
-                assert "soft_target_note" in data
+                assert data["daily_production_target"] == 150.0
+                assert data["weekly_production_target"] == weekly_production_target(12_450)
