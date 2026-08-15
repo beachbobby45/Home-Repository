@@ -577,6 +577,17 @@
     <div id="view-setup" class="app-view">
       <section class="view-section">
         <header class="view-head"><h2>Setup</h2><p class="brief">One-time — then the daily rhythm runs automatically.</p></header>
+        <div class="card setup-version-card">
+          <h3>App version</h3>
+          <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
+          <p class="brief">Latest release: <strong>v0.9.0 · Phase 1B</strong> (Phase 1B complete)</p>
+          <p class="brief setup-version-help" id="setup-version-help"></p>
+          <ul class="setup-workflow-list brief">
+            <li><strong>Update dashboard</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Update and Open Dashboard.command</strong></li>
+            <li><strong>Open dashboard only</strong> — double-click <strong>Open Dashboard.command</strong></li>
+            <li><strong>Print daily checklist</strong> — <a href="/operator-checklist.pdf" target="_blank" rel="noopener">Download operator checklist (PDF)</a></li>
+          </ul>
+        </div>
         <div class="card setup-onboarding">
           <h3>1. Enable automatic data refresh (recommended)</h3>
           <p class="brief">Updates metrics after close (4:30 PM) and before open (6:30 AM).</p>
@@ -651,6 +662,28 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
   <div class="toast" id="toast"></div>
 
   <script>
+    fetch("/api/version")
+      .then((r) => r.json())
+      .then((v) => {
+        const el = document.getElementById("app-version-badge");
+        if (el && v?.version) el.textContent = `v${v.version} · ${v.release || ""}`.trim();
+        const setupVer = document.getElementById("setup-version-text");
+        const setupHelp = document.getElementById("setup-version-help");
+        if (setupVer && v?.version) {
+          setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
+          if (setupHelp) {
+            if (v.version === "0.9.0") {
+              setupHelp.textContent = "You are on the current release. If the header still shows UI v2, hard-refresh the browser (Cmd+Shift+R).";
+              setupHelp.className = "brief setup-version-help setup-version-ok";
+            } else {
+              setupHelp.textContent = "Your dashboard is behind. Double-click Update and Open Dashboard.command in Finder (no Terminal typing).";
+              setupHelp.className = "brief setup-version-help setup-version-warn";
+            }
+          }
+        }
+      })
+      .catch(() => {});
+
     const fmt = (n) => n == null ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtPct = (n) => n == null ? "—" : Number(n).toFixed(4) + "%";
     const PT = "America/Los_Angeles";
