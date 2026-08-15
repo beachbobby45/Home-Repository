@@ -9,6 +9,8 @@ Intraday **alerting and analysis** system: CIO + sub-agents → dashboard recomm
 | **[PRODUCT_SPEC_V3.md](docs/PRODUCT_SPEC_V3.md)** | **Authoritative** product & financial rules |
 | **[PHASE_0.md](docs/PHASE_0.md)** | Gate 0 checklist |
 | **[FEES_AT_A_GLANCE.md](docs/FEES_AT_A_GLANCE.md)** | API costs |
+| **[PHASE1_CAPITAL_BUILDER_SPEC.md](docs/PHASE1_CAPITAL_BUILDER_SPEC.md)** | Phase 1 Capital Builder spec |
+| **[skills/README.md](skills/README.md)** | Cursor domain skills + baseline restore (`v0.8-pre-phase1b`) |
 | **[AI_Investment_Agent_Spec.md](docs/AI_Investment_Agent_Spec.md)** | Technical appendix (gates, schemas; some v2 items superseded by v3) |
 
 ## Phase 0 — Start here
