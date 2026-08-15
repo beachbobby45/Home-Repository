@@ -1,6 +1,6 @@
 # Phase 1B — Market Activity & Confirmation (Spec v0)
 
-> **Status:** Market Activity v0 implemented (Inc 12); Confirmation Inc 13 pending  
+> **Status:** Market Activity v0 (Inc 12) + Confirmation v0 (Inc 13) implemented  
 > **Assumptions:** [PHASE1B_ASSUMPTIONS_AND_DEFINITIONS.md](./PHASE1B_ASSUMPTIONS_AND_DEFINITIONS.md)
 
 ---
@@ -77,4 +77,3 @@ Two consecutive refreshes below Above Average **or** single refresh in Negative 
 
 - `market_activity.py` (Inc 12)
 - `confirmation.py` (Inc 13)
-- `quote_snapshots` table (Inc 11)

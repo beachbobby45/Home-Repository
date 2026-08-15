@@ -87,6 +87,22 @@ CREATE TABLE IF NOT EXISTS market_activity_evaluations (
 CREATE INDEX IF NOT EXISTS idx_market_activity_session
   ON market_activity_evaluations(session_date_et, captured_at);
 
+CREATE TABLE IF NOT EXISTS confirmation_evaluations (
+  id INTEGER PRIMARY KEY,
+  session_date_et TEXT NOT NULL,
+  captured_at TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  rank INTEGER NOT NULL,
+  score INTEGER NOT NULL,
+  passes INTEGER NOT NULL DEFAULT 0,
+  blocked_by_day INTEGER NOT NULL DEFAULT 0,
+  components_json TEXT,
+  summary TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_confirmation_session
+  ON confirmation_evaluations(session_date_et, captured_at);
+
 CREATE TABLE IF NOT EXISTS macro_snapshots (
   id INTEGER PRIMARY KEY,
   captured_at TEXT NOT NULL,

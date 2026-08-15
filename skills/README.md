@@ -30,7 +30,7 @@ See [baseline-reference.md](./baseline-reference.md) for DB backup and Mac resto
 | [journal-capital](./journal-capital/SKILL.md) | Journal, P&L, capital tiers (Phase 1B tiers TBD) | `journal.py`, `finance.py`, `capital_builder.py` | **Active** |
 | [intraday-trading-day](./intraday-trading-day/SKILL.md) | Go/no-go, live refresh, extended session | `trading_day.py`, `tradability.py`, `regime.py` | **Active** |
 | [market-activity](./market-activity/SKILL.md) | Day gate: TRADE / NO TRADE (Phase 1B) | `market_activity.py` | **Active Inc 12** |
-| [confirmation-engine](./confirmation-engine/SKILL.md) | Stock confirms today (Phase 1B) | `confirmation.py` (planned) | **Planned Inc 13** |
+| [confirmation-engine](./confirmation-engine/SKILL.md) | Stock confirms today (Phase 1B) | `confirmation.py` | **Active Inc 13** |
 | [dashboard-ux](./dashboard-ux/SKILL.md) | Dashboard UI, banners, APIs | `dashboard/app.py`, `templates/dashboard.html`, `static/style.css` | **Active** |
 | [learning-analytics](./learning-analytics/SKILL.md) | Learning reports, proposal attribution | `learning.py`, `close_report.py` | **Active** |
 
@@ -49,7 +49,7 @@ Cursor:  ONE skill per domain — narrow context, small diffs, run listed tests.
 | 10 | journal-capital | Split-lot tier + weekly 3× daily | **Done Inc 10** |
 | 11 | intraday-trading-day, eod-ingest-screener | Quote snapshots | **Done Inc 11** |
 | 12 | market-activity | Market Activity Score v0 | **Done Inc 12** |
-| 13 | confirmation-engine | Confirmation on #1–#3 |
+| 13 | confirmation-engine | Confirmation on #1–#3 | **Done Inc 13** |
 | 14–16 | dashboard-ux, intraday-trading-day | Banner, exit alert, wiring |
 | 17 | trade-proposals, risk-engine | Exceptional trade rule |
 | 18 | learning-analytics | Score attribution |

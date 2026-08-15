@@ -7,7 +7,7 @@ description: Phase 1B Candidate Confirmation Score — does #1/#2/#3 confirm thi
 
 ## Status
 
-**Not implemented.** Target: Inc 13.
+**Implemented (Inc 13).** Per-ticker confirmation on ranked #1–#3; never overrides NO TRADE day.
 
 ## When to use
 

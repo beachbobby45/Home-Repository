@@ -31,6 +31,7 @@ def test_init_db_creates_tables():
         assert "regime_snapshots" in tables
         assert "quote_snapshots" in tables
         assert "market_activity_evaluations" in tables
+        assert "confirmation_evaluations" in tables
         assert "queue_items" in tables
         assert "trade_journal" in tables
         assert "price_alerts" in tables

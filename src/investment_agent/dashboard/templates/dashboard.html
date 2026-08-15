@@ -104,6 +104,7 @@
         </div>
         <div class="quote-snapshot-row" id="quote-snapshot-row"></div>
         <div class="market-activity-row" id="market-activity-row"></div>
+        <div class="confirmation-row" id="confirmation-row"></div>
       </div>
         <header class="panel-head risk-panel-head">
           <div>
@@ -930,6 +931,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           <span class="pick-source brief">${pick.source || ""}</span>
           ${conf ? `<span class="confidence-badge conf-${conf}">${conf} $ confidence</span>` : ""}
           ${trad.verdict ? `<span class="tradability-badge trad-${tradClass}">${trad.verdict.replace(/_/g, " ")}</span>` : ""}
+          ${pick.confirmation_score != null ? `<span class="confirmation-badge ${pick.confirmation_passes ? "pass" : "fail"}">${pick.confirmation_passes ? "PASS" : "FAIL"} ${pick.confirmation_score}</span>` : ""}
         </div>
         ${rankedNote}
         ${trad.detail ? `<div class="pick-tradability-detail">${trad.detail}</div>` : ""}
@@ -1044,6 +1046,28 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         `+${pick.target_pct != null ? Number(pick.target_pct).toFixed(2) : "—"}% · net ~+$${fmt(pick.net_at_target)}`;
     }
 
+    function renderConfirmations(items, marketActivity) {
+      const el = document.getElementById("confirmation-row");
+      if (!el) return;
+      if (!items || !items.length) {
+        el.innerHTML = "";
+        return;
+      }
+      const dayBlocked = marketActivity && !marketActivity.allow_trade;
+      const chips = items.map((c) => {
+        const passCls = c.passes ? "pass" : c.blocked_by_day ? "blocked" : "fail";
+        const label = c.passes ? "PASS" : c.blocked_by_day ? "DAY BLOCK" : "FAIL";
+        const eligible = c.eligible === false ? " · not eligible" : "";
+        return `<span class="confirmation-chip ${passCls}" title="${c.summary || ""}">#${c.rank} ${c.ticker} ${c.score ?? "—"} ${label}${eligible}</span>`;
+      }).join("");
+      el.innerHTML = `
+        <div class="confirmation-head">
+          <span class="confirmation-title">Confirmation #1–#3</span>
+          ${dayBlocked ? `<span class="confirmation-note">Day NO TRADE — scores informational</span>` : ""}
+        </div>
+        <div class="confirmation-chips">${chips}</div>`;
+    }
+
     function renderMarketActivity(ma) {
       const el = document.getElementById("market-activity-row");
       if (!el || !ma) {
@@ -1110,6 +1134,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         `Session: ${fmtSessionPhase(td.session_phase)} · ${fmtDateTimePT(td.as_of_et)}`;
       renderQuoteSnapshots(td.quote_snapshots);
       renderMarketActivity(td.market_activity);
+      renderConfirmations(td.confirmations, td.market_activity);
 
       const pick = td.top_pick;
       const pickEl = document.getElementById("top-pick-body");

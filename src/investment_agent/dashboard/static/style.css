@@ -432,6 +432,81 @@ main {
   margin-top: 0.35rem;
 }
 
+.confirmation-row {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.confirmation-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.confirmation-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.confirmation-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.confirmation-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.confirmation-chip {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+
+.confirmation-chip.pass {
+  color: var(--green);
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.confirmation-chip.fail {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.confirmation-chip.blocked {
+  opacity: 0.85;
+}
+
+.confirmation-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+}
+
+.confirmation-badge.pass {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--green);
+}
+
+.confirmation-badge.fail {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
 .trading-verdict {
   display: flex;
   gap: 1rem;

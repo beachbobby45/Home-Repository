@@ -509,6 +509,32 @@ def api_trading_day_market_activity(
     return result
 
 
+@app.get("/api/trading-day/confirmation")
+def api_trading_day_confirmation(
+    conn=Depends(_db),
+    session_date_et: str | None = None,
+) -> dict[str, Any]:
+    from investment_agent.confirmation import (
+        confirmations_to_dict,
+        evaluate_session_confirmations,
+        list_recent_confirmations,
+    )
+    from investment_agent.market_activity import evaluate_market_activity, market_activity_to_dict
+    from investment_agent.trading_day import today_et_str
+
+    day = session_date_et or today_et_str()
+    market_activity = market_activity_to_dict(evaluate_market_activity(conn, persist=False))
+    confirmations = confirmations_to_dict(
+        evaluate_session_confirmations(conn, market_activity=market_activity)
+    )
+    return {
+        "session_date_et": day,
+        "market_activity": market_activity,
+        "confirmations": confirmations,
+        "recent_evaluations": list_recent_confirmations(conn, day, limit=9),
+    }
+
+
 @app.get("/api/daily-rhythm/status")
 def api_daily_rhythm_status(conn=Depends(_db)) -> dict[str, Any]:
     return get_daily_rhythm_status(conn)

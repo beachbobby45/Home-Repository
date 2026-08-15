@@ -411,13 +411,22 @@ def resolve_actionable_pick(
     deploy: float,
     net_target: float,
     block_new_longs: bool = False,
+    confirmation_filter: callable | None = None,
 ) -> tuple[dict | None, list[dict]]:
     """Pick first live ranked name that passes intraday tradability for today's $ goal."""
     skipped: list[dict] = []
     candidates = _live_ranked_candidates(conn)
 
-    for row in candidates:
+    for idx, row in enumerate(candidates):
         sym = row["ticker"]
+        if confirmation_filter is not None and not confirmation_filter(sym, idx):
+            skipped.append({
+                "ticker": sym,
+                "rank_score": row.get("score"),
+                "reason": "Confirmation below threshold or rank not eligible today",
+                "verdict": "NOT_CONFIRMED",
+            })
+            continue
         quote = quotes.get(sym)
         if not quote or not quote.get("price"):
             skipped.append({
@@ -567,6 +576,15 @@ def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
 
     market_activity = evaluate_market_activity(conn, persist=True)
 
+    from investment_agent.confirmation import evaluate_session_confirmations
+
+    confirmations = evaluate_session_confirmations(
+        conn,
+        market_activity=market_activity,
+        live_quotes=quote_rows,
+        persist=True,
+    )
+
     return {
         "ok": len(updated) > 0,
         "updated": updated,
@@ -574,6 +592,7 @@ def refresh_live_quotes(conn: sqlite3.Connection, settings) -> dict:
         "symbols_requested": sorted(symbols),
         "snapshot": snapshot,
         "market_activity": market_activity,
+        "confirmations": confirmations,
     }
 
 
@@ -893,12 +912,41 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         watch.append(row["ticker"])
     quotes = _latest_quote_rows(conn, watch)
 
+    from investment_agent.confirmation import (
+        _rank_eligible,
+        confirmations_to_dict,
+        evaluate_session_confirmations,
+    )
+    from investment_agent.market_activity import evaluate_market_activity, market_activity_to_dict
+
+    market_activity = market_activity_to_dict(evaluate_market_activity(conn, when=now, persist=False))
+    confirmations = confirmations_to_dict(
+        evaluate_session_confirmations(
+            conn,
+            market_activity=market_activity,
+            live_quotes=quotes,
+            when=now,
+        )
+    )
+
+    confirmation_filter = None
+    if market_activity.get("allow_trade"):
+        conf_map = {item["ticker"]: item for item in confirmations}
+        market_band = market_activity.get("band")
+
+        def confirmation_filter(ticker: str, rank_index: int) -> bool:
+            if not _rank_eligible(rank_index, market_band):
+                return False
+            item = conf_map.get(ticker)
+            return bool(item and item.get("passes"))
+
     pick, skipped_picks = resolve_actionable_pick(
         conn,
         quotes=quotes,
         deploy=summary.tradable_cash,
         net_target=net_for_plan,
         block_new_longs=summary.block_new_longs,
+        confirmation_filter=confirmation_filter,
     )
     ranked_first = get_top_pick(conn)
 
@@ -929,10 +977,6 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         regime_summary=regime_summary,
     )
     risk_status = portfolio_status_dict(portfolio_snapshot)
-
-    from investment_agent.market_activity import evaluate_market_activity, market_activity_to_dict
-
-    market_activity = market_activity_to_dict(evaluate_market_activity(conn, when=now, persist=False))
 
     def add_check(name: str, ok: bool | None, message: str, *, blocking: bool = False):
         checks.append({"name": name, "ok": ok, "message": message, "blocking": blocking})
@@ -1000,6 +1044,38 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             True,
             f"{market_activity.get('score', 0)}/100 — {market_activity.get('band_label', 'ok')} · entries allowed",
         )
+
+    if market_activity.get("allow_trade") and phase == "trade_window":
+        confirmed = [c for c in confirmations if c.get("passes") and c.get("eligible")]
+        if pick and pick.get("ticker"):
+            pick_conf = next((c for c in confirmations if c.get("ticker") == pick["ticker"]), None)
+            if pick_conf:
+                add_check(
+                    "Confirmation",
+                    True,
+                    f"{pick['ticker']} {pick_conf.get('score', 0)}/100 — PASS",
+                )
+            else:
+                add_check("Confirmation", False, f"{pick['ticker']} — no confirmation score", blocking=True)
+        elif confirmed:
+            add_check(
+                "Confirmation",
+                None,
+                "Names confirm but none tradable for today's $ goal",
+            )
+        else:
+            top = confirmations[0] if confirmations else None
+            if top:
+                if verdict in ("GO", "CAUTION"):
+                    verdict = "NO_GO"
+                headline = "No confirming setup"
+                detail = top.get("summary") or f"Ranked #{top.get('rank')} below {75} confirmation threshold"
+                add_check(
+                    "Confirmation",
+                    False,
+                    detail,
+                    blocking=True,
+                )
 
     if market_activity.get("exit_alert") and open_positions:
         pos = open_positions[0]
@@ -1189,6 +1265,10 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             pick_detail["intraday_change_pct"] = round(pick_change, 3)
         if pick_range is not None:
             pick_detail["opening_range_pct"] = round(pick_range, 3)
+        pick_conf = next((c for c in confirmations if c.get("ticker") == pick["ticker"]), None)
+        if pick_conf:
+            pick_detail["confirmation_score"] = pick_conf.get("score")
+            pick_detail["confirmation_passes"] = pick_conf.get("passes")
         open_pos = open_position_for_ticker(conn, pick["ticker"])
         ext = build_extended_session(
             phase=phase,
@@ -1318,6 +1398,10 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             and not stopped
             and portfolio_risk.verdict == "approved"
             and market_activity.get("allow_trade")
+            and (
+                not confirmation_filter
+                or (pick and pick.get("ticker"))
+            )
         ),
         "can_second_trade": can_second_trade,
         "open_positions": open_positions,
@@ -1339,6 +1423,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         },
         "quote_snapshots": quote_snapshot_status,
         "market_activity": market_activity,
+        "confirmations": confirmations,
     }
 
 
