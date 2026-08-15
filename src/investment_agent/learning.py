@@ -498,6 +498,9 @@ def generate_learning_report(
     prior_day = evaluate_prior_day(conn, reference_date=day)
     continual = _build_continual_learning(conn)
     proposal_learning = _build_proposal_learning(conn)
+    from investment_agent.decision_attribution import build_market_activity_band_stats
+
+    market_activity_attribution = build_market_activity_band_stats(conn)
 
     eod_open = [a for a in active if a.get("queue_state") in ("in_trade", "eod")]
 
@@ -545,6 +548,15 @@ def generate_learning_report(
     if proposal_learning["total_proposals"]:
         highlights.append(proposal_learning["note"])
         highlights.extend(proposal_learning.get("factor_questions") or [])
+    if market_activity_attribution.get("bands"):
+        bands = market_activity_attribution["bands"]
+        trade_bands = [b for b in bands if b.get("with_outcome")]
+        if trade_bands:
+            top = max(trade_bands, key=lambda b: b.get("win_rate_pct") or 0)
+            highlights.append(
+                f"MA band attribution ({market_activity_attribution['lookback_days']}d): "
+                f"{top['band']} best win rate ({top.get('win_rate_pct')}%)."
+            )
 
     return {
         "report_date": day,
@@ -561,6 +573,7 @@ def generate_learning_report(
         "prior_day_evaluation": prior_day,
         "continual_learning": continual,
         "proposal_learning": proposal_learning,
+        "market_activity_attribution": market_activity_attribution,
         "claude_ready": False,
     }
 

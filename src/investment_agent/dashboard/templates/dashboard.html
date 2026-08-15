@@ -33,6 +33,7 @@
   <div id="trading-mode-banner" class="banner paper app-banner-compact">Loading trading mode…</div>
   <div id="exit-alert-banner" class="banner exit-alert app-banner-compact" hidden></div>
   <div id="no-trade-banner" class="banner no-trade app-banner-compact" hidden></div>
+  <div id="exceptional-banner" class="banner exceptional app-banner-compact" hidden></div>
   <div id="regime-banner" class="banner ok app-banner-compact">Loading regime…</div>
 
   <div class="status-bar" id="status-bar">
@@ -1063,6 +1064,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const p1b = td?.phase1b || {};
       const exitEl = document.getElementById("exit-alert-banner");
       const noTradeEl = document.getElementById("no-trade-banner");
+      const exceptionalEl = document.getElementById("exceptional-banner");
       if (exitEl) {
         if (p1b.show_exit_alert) {
           exitEl.hidden = false;
@@ -1073,6 +1075,17 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         } else {
           exitEl.hidden = true;
           exitEl.textContent = "";
+        }
+      }
+      if (exceptionalEl) {
+        if (p1b.show_exceptional_banner) {
+          exceptionalEl.hidden = false;
+          exceptionalEl.className = "banner exceptional app-banner-compact";
+          exceptionalEl.textContent =
+            `${p1b.exceptional_headline || "EXCEPTIONAL OVERRIDE"} — ${p1b.exceptional_detail || td.exceptional_trade?.summary || ""}`;
+        } else {
+          exceptionalEl.hidden = true;
+          exceptionalEl.textContent = "";
         }
       }
       if (noTradeEl) {

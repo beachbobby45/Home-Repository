@@ -103,6 +103,44 @@ CREATE TABLE IF NOT EXISTS confirmation_evaluations (
 CREATE INDEX IF NOT EXISTS idx_confirmation_session
   ON confirmation_evaluations(session_date_et, captured_at);
 
+CREATE TABLE IF NOT EXISTS exceptional_trade_log (
+  id INTEGER PRIMARY KEY,
+  week_start_pt TEXT NOT NULL,
+  session_date_et TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  journal_buy_id INTEGER,
+  consumed_at TEXT NOT NULL,
+  market_activity_score INTEGER,
+  market_activity_band TEXT,
+  confirmation_score INTEGER,
+  notes TEXT,
+  FOREIGN KEY (journal_buy_id) REFERENCES trade_journal(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exceptional_trade_week
+  ON exceptional_trade_log(week_start_pt);
+
+CREATE TABLE IF NOT EXISTS decision_attribution_log (
+  id INTEGER PRIMARY KEY,
+  session_date_et TEXT NOT NULL,
+  captured_at TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  ticker TEXT,
+  proposal_id INTEGER,
+  market_activity_score INTEGER,
+  market_activity_band TEXT,
+  confirmation_score INTEGER,
+  confirmation_passes INTEGER,
+  authorization_outcome TEXT NOT NULL,
+  human_verdict TEXT,
+  human_rejection_reason TEXT,
+  detail_json TEXT,
+  FOREIGN KEY (proposal_id) REFERENCES trade_proposals(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_attribution_session
+  ON decision_attribution_log(session_date_et, event_type);
+
 CREATE TABLE IF NOT EXISTS macro_snapshots (
   id INTEGER PRIMARY KEY,
   captured_at TEXT NOT NULL,
