@@ -32,6 +32,7 @@ data/
 .idea/
 .vscode/
 .DS_Store
+desktop/*.app
 *.swp
 *.swo
 
