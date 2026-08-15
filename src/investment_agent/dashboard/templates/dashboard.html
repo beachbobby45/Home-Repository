@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260815b" />
+  <link rel="stylesheet" href="/static/style.css?v=20260816a" />
 </head>
 <body>
   <header class="app-header">
@@ -114,6 +114,8 @@
           <div class="ma-breakdown-grid" id="ma-breakdown-grid"></div>
         </details>
       </div>
+
+      <div class="card risk-panel" id="risk-panel">
         <header class="panel-head risk-panel-head">
           <div>
             <h2 class="risk-title">Risk Engine</h2>
@@ -847,17 +849,38 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       });
     }
 
+    function startLoadingWatchdog() {
+      setTimeout(() => {
+        const tm = document.getElementById("trading-mode-banner");
+        const rg = document.getElementById("regime-banner");
+        if (tm?.textContent?.includes("Loading trading mode")) {
+          tm.className = "banner wait app-banner-compact";
+          tm.textContent =
+            "Still loading account summary — click Refresh all (top right) or hard-reload the page (Cmd+Shift+R).";
+        }
+        if (rg?.textContent?.includes("Loading regime")) {
+          rg.className = "banner wait app-banner-compact";
+          rg.textContent =
+            "Still loading session status — click Refresh all (top right) or hard-reload the page (Cmd+Shift+R).";
+        }
+      }, 12000);
+    }
+
     async function initDashboard() {
-      const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => ({ api_key_required: false }));
-      apiKeyRequired = !!cfg.api_key_required;
-      if (!apiKeyRequired) {
-        localStorage.removeItem(API_KEY_STORAGE);
-      } else {
-        initApiKeyBar();
+      startLoadingWatchdog();
+      try {
+        const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => ({ api_key_required: false }));
+        apiKeyRequired = !!cfg.api_key_required;
+        if (!apiKeyRequired) {
+          localStorage.removeItem(API_KEY_STORAGE);
+        } else {
+          initApiKeyBar();
+        }
+      } catch (err) {
+        toast(err.message || "Could not read dashboard config", 6000);
       }
-      initAppNav();
-      await refreshAll();
       initJournalForm();
+      refreshAll().catch((e) => toast(e.message || "Refresh failed", 6000));
     }
 
     function formatWhyOnly(thesis) {
@@ -1048,21 +1071,23 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
     }
 
-    function initAppNav() {
-      const saved = localStorage.getItem("dashboard-view") || "trade";
-      document.querySelectorAll(".app-nav-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const view = btn.dataset.view;
-          localStorage.setItem("dashboard-view", view);
-          document.querySelectorAll(".app-nav-btn").forEach((b) => b.classList.toggle("active", b === btn));
-          document.querySelectorAll(".app-view").forEach((v) => {
-            v.classList.toggle("active", v.id === "view-" + view);
-          });
-        });
+    function switchDashboardView(view) {
+      if (!view) return;
+      localStorage.setItem("dashboard-view", view);
+      document.querySelectorAll(".app-nav-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.view === view);
       });
-      const btn = document.querySelector(`.app-nav-btn[data-view="${saved}"]`);
-      if (btn) btn.click();
-      else document.querySelector('.app-nav-btn[data-view="trade"]')?.click();
+      document.querySelectorAll(".app-view").forEach((v) => {
+        v.classList.toggle("active", v.id === "view-" + view);
+      });
+    }
+
+    function initAppNav() {
+      document.querySelectorAll(".app-nav-btn").forEach((btn) => {
+        btn.addEventListener("click", () => switchDashboardView(btn.dataset.view));
+      });
+      const saved = localStorage.getItem("dashboard-view") || "trade";
+      switchDashboardView(saved);
     }
 
     function renderTradeMath(pick, td) {
@@ -1247,9 +1272,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const td = await api("/api/trading-day/status");
       const badge = document.getElementById("verdict-badge");
       const panel = document.getElementById("trading-day-panel");
-      badge.textContent = td.verdict.replace("_", " ");
-      badge.className = "verdict-badge " + (td.verdict || "").toLowerCase();
-      panel.className = "card trading-day-panel verdict-" + (td.verdict || "").toLowerCase();
+      const verdict = td.verdict || "WAIT";
+      if (badge) {
+        badge.textContent = verdict.replace("_", " ");
+        badge.className = "verdict-badge " + verdict.toLowerCase();
+      }
+      if (panel) panel.className = "card trading-day-panel verdict-" + verdict.toLowerCase();
       document.getElementById("verdict-headline").textContent = td.headline || "—";
       document.getElementById("verdict-detail").textContent = td.detail || "";
       document.getElementById("verdict-asof").textContent =
@@ -1327,9 +1355,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       else loadRiskStatus();
       } catch (err) {
         const banner = document.getElementById("regime-banner");
-        banner.className = "banner wait app-banner-compact";
-        banner.textContent =
-          "Could not load trading-day status — click Refresh all (top right). " + (err.message || "");
+        if (banner) {
+          banner.className = "banner wait app-banner-compact";
+          banner.textContent =
+            "Could not load trading-day status — click Refresh all (top right). " + (err.message || "");
+        }
         toast(err.message || "Could not load trading-day panel", 6000);
       }
     }
@@ -1337,6 +1367,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     function renderRiskStatus(risk) {
       if (!risk) return;
       const panel = document.getElementById("risk-panel");
+      if (!panel) return;
       const ks = document.getElementById("kill-switch-input");
       if (ks && !ks.dataset.userToggled) {
         ks.checked = !!risk.kill_switch_active;
@@ -1535,7 +1566,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         document.getElementById("sweep-preview").innerHTML = sweepHtml;
         updateStatusBar(null, s);
       } catch (err) {
-        updateTradingModeBanner("paper");
+        const tm = document.getElementById("trading-mode-banner");
+        if (tm) {
+          tm.className = "banner wait app-banner-compact";
+          tm.textContent =
+            "Could not load account summary — click Refresh all (top right). " + (err.message || "");
+        } else {
+          updateTradingModeBanner("paper");
+        }
         toast(err.message || "Could not load account summary", 6000);
       }
     }
@@ -2651,6 +2689,15 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       ]);
     }
 
+    initAppNav();
+
+    function on(id, event, handler) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener(event, handler);
+    }
+
+    try {
+
     document.getElementById("generate-proposals")?.addEventListener("click", async () => {
       try {
         toast("Generating trade proposals…");
@@ -2740,12 +2787,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     });
 
     ["special-watch-filter-ticker", "special-watch-filter-status"].forEach((id) => {
-      document.getElementById(id).addEventListener("input", () => renderSpecialWatchTable());
-      document.getElementById(id).addEventListener("change", () => renderSpecialWatchTable());
+      on(id, "input", () => renderSpecialWatchTable());
+      on(id, "change", () => renderSpecialWatchTable());
     });
-    document.getElementById("special-watch-active-only").addEventListener("change", () => renderSpecialWatchTable());
-    document.getElementById("special-watch-add-btn").addEventListener("click", () => addSpecialWatchTicker());
-    document.getElementById("special-watch-add-ticker").addEventListener("keydown", (e) => {
+    on("special-watch-active-only", "change", () => renderSpecialWatchTable());
+    on("special-watch-add-btn", "click", () => addSpecialWatchTicker());
+    on("special-watch-add-ticker", "keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         addSpecialWatchTicker();
@@ -2766,10 +2813,10 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     });
 
     ["screener-filter-ticker", "screener-min-hit", "screener-min-days"].forEach((id) => {
-      document.getElementById(id).addEventListener("input", () => renderScreenerTable());
+      on(id, "input", () => renderScreenerTable());
     });
-    document.getElementById("screener-live-only").addEventListener("change", () => renderScreenerTable());
-    document.getElementById("screener-period-days").addEventListener("change", () => {
+    on("screener-live-only", "change", () => renderScreenerTable());
+    on("screener-period-days", "change", () => {
       loadPeriodScreener().catch((e) => toast(e.message));
     });
     document.querySelectorAll("#ranked-screener-table th.sortable").forEach((th) => {
@@ -2827,7 +2874,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       "learning-prior-count",
     );
 
-    document.getElementById("pull-historical").addEventListener("click", async () => {
+    on("pull-historical", "click", async () => {
       try {
         const r = await api("/api/historical/pull?lookback_days=60", { method: "POST" });
         toast(`Pulled ${r.bars_inserted || 0} bar(s)`);
@@ -2835,13 +2882,13 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         await loadLearning();
       } catch (e) { toast(e.message); }
     });
-    document.getElementById("refresh-historical").addEventListener("click", () => loadHistorical().catch((e) => toast(e.message)));
-    document.getElementById("learning-date").addEventListener("change", () => loadLearning().catch((e) => toast(e.message)));
+    on("refresh-historical", "click", () => loadHistorical().catch((e) => toast(e.message)));
+    on("learning-date", "change", () => loadLearning().catch((e) => toast(e.message)));
 
-    document.getElementById("load-daily-close").addEventListener("click", () => loadDailyClose(false).catch((e) => toast(e.message)));
-    document.getElementById("load-weekly-close").addEventListener("click", () => loadWeeklyClose(false).catch((e) => toast(e.message)));
-    document.getElementById("refresh-close").addEventListener("click", () => loadDailyClose(true).catch((e) => toast(e.message)));
-    document.getElementById("close-date").addEventListener("change", () => loadDailyClose(false).catch((e) => toast(e.message)));
+    on("load-daily-close", "click", () => loadDailyClose(false).catch((e) => toast(e.message)));
+    on("load-weekly-close", "click", () => loadWeeklyClose(false).catch((e) => toast(e.message)));
+    on("refresh-close", "click", () => loadDailyClose(true).catch((e) => toast(e.message)));
+    on("close-date", "change", () => loadDailyClose(false).catch((e) => toast(e.message)));
     document.querySelectorAll(".close-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
         closeActiveTab = btn.dataset.tab;
@@ -2856,7 +2903,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       });
     });
 
-    document.getElementById("generate-learning").addEventListener("click", async () => {
+    on("generate-learning", "click", async () => {
       try {
         const dateInput = document.getElementById("learning-date");
         const q = dateInput.value ? `?date=${dateInput.value}` : "";
@@ -2867,16 +2914,16 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       } catch (e) { toast(e.message); }
     });
 
-    document.getElementById("run-monitor").addEventListener("click", async () => {
+    on("run-monitor", "click", async () => {
       try {
         const r = await api("/api/monitor/run", { method: "POST" });
         toast(`Monitor: ${r.new_alerts} new alert(s)`);
         await refreshAll();
       } catch (e) { toast(e.message); }
     });
-    document.getElementById("refresh-alerts").addEventListener("click", () => loadAlerts().catch((e) => toast(e.message)));
+    on("refresh-alerts", "click", () => loadAlerts().catch((e) => toast(e.message)));
 
-    document.getElementById("refresh-trading-day").addEventListener("click", () => {
+    on("refresh-trading-day", "click", () => {
       refreshLiveBeforeBuy().catch((e) => toast(e.message, 8000));
     });
 
@@ -2894,7 +2941,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       });
     });
 
-    document.getElementById("planned-trade-form").addEventListener("submit", async (e) => {
+    on("planned-trade-form", "submit", async (e) => {
       e.preventDefault();
       const ticker = document.getElementById("plan-ticker").value.trim();
       const price = Number(document.getElementById("plan-price").value);
@@ -2919,7 +2966,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       } catch (err) { toast(err.message, 6000); }
     });
 
-    document.getElementById("pin-top-pick").addEventListener("click", async () => {
+    on("pin-top-pick", "click", async () => {
       try {
         const td = await api("/api/trading-day/status");
         const ticker = td.top_pick?.ticker;
@@ -2931,14 +2978,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       } catch (e) { toast(e.message); }
     });
 
-    document.getElementById("refresh-all").addEventListener("click", () => refreshAll().catch((e) => toast(e.message)));
+    on("refresh-all", "click", () => refreshAll().catch((e) => toast(e.message)));
     document.getElementById("setup-daily-ingest")?.addEventListener("click", () => {
       runIngest(true).catch((e) => toast(e.message));
     });
     document.getElementById("setup-pull-historical")?.addEventListener("click", () => {
       document.getElementById("pull-historical")?.click();
     });
-    document.getElementById("sync-queue").addEventListener("click", async () => {
+    on("sync-queue", "click", async () => {
       try {
         const r = await api("/api/queue/sync", { method: "POST" });
         const msg = r.message || (r.added ? `Added ${r.added} ticker(s)` : "Sync complete — no new tickers");
@@ -2947,7 +2994,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         await loadCio();
       } catch (e) { toast(e.message); }
     });
-    document.getElementById("save-tax").addEventListener("click", async () => {
+    on("save-tax", "click", async () => {
       try {
         const rate = Number(document.getElementById("tax-rate").value) / 100;
         await api("/api/settings/tax-rate", { method: "PUT", body: JSON.stringify({ tax_rate: rate }) });
@@ -2955,7 +3002,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         await loadSummary();
       } catch (e) { toast(e.message); }
     });
-    document.getElementById("save-trading-mode").addEventListener("click", async () => {
+    on("save-trading-mode", "click", async () => {
       const select = document.getElementById("trading-mode");
       const mode = select.value;
       const status = document.getElementById("trading-mode-status");
@@ -2978,7 +3025,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         toast(e.message);
       }
     });
-    document.getElementById("clear-journal").addEventListener("click", async () => {
+    on("clear-journal", "click", async () => {
       const ok = window.confirm(
         "Clear ALL journal entries? This resets cash/P&L to the $10K basis and cannot be undone."
       );
@@ -2989,7 +3036,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         await refreshAll();
       } catch (e) { toast(e.message); }
     });
-    document.getElementById("apply-sweep").addEventListener("click", async () => {
+    on("apply-sweep", "click", async () => {
       try {
         const r = await api("/api/sweeps/apply", { method: "POST" });
         if (!r.ok) { toast(r.error || "Sweep not applied"); return; }
@@ -2997,8 +3044,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         await refreshAll();
       } catch (e) { toast(e.message); }
     });
-    document.getElementById("t-side").addEventListener("change", updateTradeTimeLabel);
-    document.getElementById("trade-form").addEventListener("submit", async (e) => {
+    on("t-side", "change", updateTradeTimeLabel);
+    on("trade-form", "submit", async (e) => {
       e.preventDefault();
       const feeVal = document.getElementById("t-fee").value;
       const payload = {
@@ -3021,6 +3068,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         await refreshAll();
       } catch (err) { toast(err.message); }
     });
+
+    } catch (err) {
+      console.error("Dashboard wiring error", err);
+      toast(err.message || "Dashboard controls partially failed to load", 8000);
+    }
 
     initDashboard().catch((e) => toast(e.message));
   </script>
