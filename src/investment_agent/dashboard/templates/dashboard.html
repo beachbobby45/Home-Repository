@@ -1243,6 +1243,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     }
 
     async function loadTradingDay() {
+      try {
       const td = await api("/api/trading-day/status");
       const badge = document.getElementById("verdict-badge");
       const panel = document.getElementById("trading-day-panel");
@@ -1324,6 +1325,13 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       updateStatusBar(td, null);
       if (td.risk) renderRiskStatus(td.risk);
       else loadRiskStatus();
+      } catch (err) {
+        const banner = document.getElementById("regime-banner");
+        banner.className = "banner wait app-banner-compact";
+        banner.textContent =
+          "Could not load trading-day status — click Refresh all (top right). " + (err.message || "");
+        toast(err.message || "Could not load trading-day panel", 6000);
+      }
     }
 
     function renderRiskStatus(risk) {
@@ -1449,82 +1457,87 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     }
 
     async function loadSummary() {
-      const s = await api("/api/summary");
-      updateTradingModeBanner(s.trading_mode || "paper");
-      document.getElementById("trading-mode").value = s.trading_mode || "paper";
-      document.getElementById("goal-pct").textContent = fmtPct(s.goal_pct);
-      document.getElementById("goal-bar").style.width = Math.min(100, s.goal_pct) + "%";
-      document.getElementById("goal-label").textContent =
-        `$${fmt(s.tradable_cash)} of $${fmt(s.goal_target)} goal`;
-      document.getElementById("tradable-cash").textContent = "$" + fmt(s.tradable_cash);
-      document.getElementById("original-basis").textContent = "$" + fmt(s.original_basis);
+      try {
+        const s = await api("/api/summary");
+        updateTradingModeBanner(s.trading_mode || "paper");
+        document.getElementById("trading-mode").value = s.trading_mode || "paper";
+        document.getElementById("goal-pct").textContent = fmtPct(s.goal_pct);
+        document.getElementById("goal-bar").style.width = Math.min(100, s.goal_pct) + "%";
+        document.getElementById("goal-label").textContent =
+          `$${fmt(s.tradable_cash)} of $${fmt(s.goal_target)} goal`;
+        document.getElementById("tradable-cash").textContent = "$" + fmt(s.tradable_cash);
+        document.getElementById("original-basis").textContent = "$" + fmt(s.original_basis);
 
-      const dailyTarget = s.daily_target ?? 150;
-      document.getElementById("daily-target").textContent = "$" + fmt(dailyTarget) + "/day";
-      const todayNet = s.today_realized_net ?? 0;
-      const dailyPct = Math.min(100, Math.max(0, s.today_target_progress_pct ?? 0));
-      document.getElementById("daily-bar").style.width = dailyPct + "%";
-      const todaySign = todayNet >= 0 ? "+" : "";
-      document.getElementById("daily-progress-label").textContent =
-        `Today ${todaySign}$${fmt(todayNet)} of $${fmt(dailyTarget)} (${dailyPct.toFixed(0)}%)`;
+        const dailyTarget = s.daily_target ?? 150;
+        document.getElementById("daily-target").textContent = "$" + fmt(dailyTarget) + "/day";
+        const todayNet = s.today_realized_net ?? 0;
+        const dailyPct = Math.min(100, Math.max(0, s.today_target_progress_pct ?? 0));
+        document.getElementById("daily-bar").style.width = dailyPct + "%";
+        const todaySign = todayNet >= 0 ? "+" : "";
+        document.getElementById("daily-progress-label").textContent =
+          `Today ${todaySign}$${fmt(todayNet)} of $${fmt(dailyTarget)} (${dailyPct.toFixed(0)}%)`;
 
-      const tier = s.growth_tier || {};
-      const nextAmt = tier.amount_to_next_tier ?? 0;
-      document.getElementById("next-tier-label").textContent = nextAmt > 0
-        ? `$${fmt(nextAmt)} to $${fmt(tier.next_balance)} → $${fmt(tier.next_daily_target)}/day`
-        : "At top growth tier shown";
+        const tier = s.growth_tier || {};
+        const nextAmt = tier.amount_to_next_tier ?? 0;
+        document.getElementById("next-tier-label").textContent = nextAmt > 0
+          ? `$${fmt(nextAmt)} to $${fmt(tier.next_balance)} → $${fmt(tier.next_daily_target)}/day`
+          : "At top growth tier shown";
 
-      const st = s.strategy || {};
-      const dailyNet = st.daily_net_target ?? s.daily_target ?? 150;
-      document.getElementById("strategy-rules").innerHTML = [
-        `Sell for <strong>$${fmt(dailyNet)} net/day</strong> (split-lot tier — 3× weekly at current balance)`,
-        `Stop <strong>−${st.stop_pct ?? 0.75}%</strong> · Max <strong>${st.max_trades_per_day ?? 2}</strong> trades/day`,
-        `<strong>${st.entry_delay_minutes ?? 30}m</strong> entry delay · Window <strong>${st.entry_window_et ?? "10:00–14:30"}</strong> ET`,
-        `Stop day after stop-out · Trade #2 only after a win on #1`,
-      ].join("<br>");
+        const st = s.strategy || {};
+        const dailyNet = st.daily_net_target ?? s.daily_target ?? 150;
+        document.getElementById("strategy-rules").innerHTML = [
+          `Sell for <strong>$${fmt(dailyNet)} net/day</strong> (split-lot tier — 3× weekly at current balance)`,
+          `Stop <strong>−${st.stop_pct ?? 0.75}%</strong> · Max <strong>${st.max_trades_per_day ?? 2}</strong> trades/day`,
+          `<strong>${st.entry_delay_minutes ?? 30}m</strong> entry delay · Window <strong>${st.entry_window_et ?? "10:00–14:30"}</strong> ET`,
+          `Stop day after stop-out · Trade #2 only after a win on #1`,
+        ].join("<br>");
 
-      const plan = s.growth_plan || [];
-      const balance = s.tradable_cash ?? 0;
-      const weeklyTier = tier.current_weekly_target ?? (dailyTarget * 3);
-      document.getElementById("growth-tier-summary").textContent =
-        `Current balance $${fmt(balance)} → ${tier.current_tier_label || "tier"} · `
-        + `$${fmt(dailyTarget)}/day · $${fmt(weeklyTier)}/week (3 opportunities). `
-        + (tier.next_balance && tier.amount_to_next_tier > 0
-          ? `$${fmt(tier.amount_to_next_tier)} to $${fmt(tier.next_balance)} tier.`
-          : "");
-      document.getElementById("growth-plan-body").innerHTML = plan.length
-        ? plan.map((row, i) => {
-            const nextBalance = i < plan.length - 1 ? plan[i + 1].balance_at_least : Infinity;
-            const active = balance >= row.balance_at_least && balance < nextBalance;
-            const reached = balance >= row.balance_at_least;
-            const status = active ? "Current tier" : reached ? "Reached" : "Upcoming";
-            return `<tr class="${active ? "growth-active" : ""}"><td>$${fmt(row.balance_at_least)}</td>`
-              + `<td>${row.structure_label || "—"}</td>`
-              + `<td>$${fmt(row.daily_target)}/day</td>`
-              + `<td>$${fmt(row.weekly_target ?? row.daily_target * 3)}/wk</td>`
-              + `<td>${status}</td></tr>`;
-          }).join("")
-        : "<tr><td colspan='5' class='empty'>No growth tiers</td></tr>";
+        const plan = s.growth_plan || [];
+        const balance = s.tradable_cash ?? 0;
+        const weeklyTier = tier.current_weekly_target ?? (dailyTarget * 3);
+        document.getElementById("growth-tier-summary").textContent =
+          `Current balance $${fmt(balance)} → ${tier.current_tier_label || "tier"} · `
+          + `$${fmt(dailyTarget)}/day · $${fmt(weeklyTier)}/week (3 opportunities). `
+          + (tier.next_balance && tier.amount_to_next_tier > 0
+            ? `$${fmt(tier.amount_to_next_tier)} to $${fmt(tier.next_balance)} tier.`
+            : "");
+        document.getElementById("growth-plan-body").innerHTML = plan.length
+          ? plan.map((row, i) => {
+              const nextBalance = i < plan.length - 1 ? plan[i + 1].balance_at_least : Infinity;
+              const active = balance >= row.balance_at_least && balance < nextBalance;
+              const reached = balance >= row.balance_at_least;
+              const status = active ? "Current tier" : reached ? "Reached" : "Upcoming";
+              return `<tr class="${active ? "growth-active" : ""}"><td>$${fmt(row.balance_at_least)}</td>`
+                + `<td>${row.structure_label || "—"}</td>`
+                + `<td>$${fmt(row.daily_target)}/day</td>`
+                + `<td>$${fmt(row.weekly_target ?? row.daily_target * 3)}/wk</td>`
+                + `<td>${status}</td></tr>`;
+            }).join("")
+          : "<tr><td colspan='5' class='empty'>No growth tiers</td></tr>";
 
-      const pnlEl = document.getElementById("month-pnl");
-      pnlEl.textContent = (s.monthly_realized_net >= 0 ? "+" : "") + "$" + fmt(s.monthly_realized_net);
-      pnlEl.className = "metric " + (s.monthly_realized_net >= 0 ? "positive" : s.monthly_realized_net < 0 ? "negative" : "");
+        const pnlEl = document.getElementById("month-pnl");
+        pnlEl.textContent = (s.monthly_realized_net >= 0 ? "+" : "") + "$" + fmt(s.monthly_realized_net);
+        pnlEl.className = "metric " + (s.monthly_realized_net >= 0 ? "positive" : s.monthly_realized_net < 0 ? "negative" : "");
 
-      document.getElementById("month-key").textContent = s.month_key;
-      document.getElementById("total-fees").textContent = "$" + fmt(s.total_fees_paid);
-      document.getElementById("mgmt-jar").textContent = "$" + fmt(s.management_jar);
-      document.getElementById("tax-jar").textContent = "$" + fmt(s.tax_jar);
-      document.getElementById("market-brief").textContent = s.market_brief;
-      document.getElementById("tax-rate").value = Math.round(s.tax_rate * 100);
+        document.getElementById("month-key").textContent = s.month_key;
+        document.getElementById("total-fees").textContent = "$" + fmt(s.total_fees_paid);
+        document.getElementById("mgmt-jar").textContent = "$" + fmt(s.management_jar);
+        document.getElementById("tax-jar").textContent = "$" + fmt(s.tax_jar);
+        document.getElementById("market-brief").textContent = s.market_brief;
+        document.getElementById("tax-rate").value = Math.round(s.tax_rate * 100);
 
-      const sp = s.sweep_preview;
-      let sweepHtml = sp.applies
-        ? `Realized net $${fmt(sp.monthly_realized_net)} → sweep $${fmt(sp.total_sweep)} `
-          + `(mgmt $${fmt(sp.management_sweep)} + tax $${fmt(sp.tax_sweep)})`
-        : `No sweep this month (realized net $${fmt(sp.monthly_realized_net)} ≤ 0)`;
-      if (s.sweep_already_applied) sweepHtml += " · <strong>Already applied</strong>";
-      document.getElementById("sweep-preview").innerHTML = sweepHtml;
-      updateStatusBar(null, s);
+        const sp = s.sweep_preview;
+        let sweepHtml = sp.applies
+          ? `Realized net $${fmt(sp.monthly_realized_net)} → sweep $${fmt(sp.total_sweep)} `
+            + `(mgmt $${fmt(sp.management_sweep)} + tax $${fmt(sp.tax_sweep)})`
+          : `No sweep this month (realized net $${fmt(sp.monthly_realized_net)} ≤ 0)`;
+        if (s.sweep_already_applied) sweepHtml += " · <strong>Already applied</strong>";
+        document.getElementById("sweep-preview").innerHTML = sweepHtml;
+        updateStatusBar(null, s);
+      } catch (err) {
+        updateTradingModeBanner("paper");
+        toast(err.message || "Could not load account summary", 6000);
+      }
     }
 
     const fmtPctLive = (n) => n == null ? "—" : (Number(n) >= 0 ? "+" : "") + Number(n).toFixed(2) + "%";
@@ -2618,7 +2631,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     }
 
     async function refreshAll() {
-      await Promise.all([
+      await Promise.allSettled([
         loadTradingDay(),
         loadSummary(),
         loadCapitalBuilder(),
