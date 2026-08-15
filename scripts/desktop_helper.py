@@ -62,6 +62,7 @@ class DesktopHelperApp:
         self.root = root
         self.repo = repo
         self.running = False
+        self.current_task = ""
         self.root.title("AI Investment Agent")
         self.root.minsize(420, 520)
         self.root.geometry("480x580")
