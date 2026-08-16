@@ -1264,16 +1264,19 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             verdict = "NO_GO"
         if skipped_picks:
             skipped_names = ", ".join(s["ticker"] for s in skipped_picks[:5])
-            headline = "No tradable setup for today's $ goal"
-            detail = (
+            trad_detail = (
                 f"Step 3 passers fail live tradability for ${net_for_plan:.0f} net: "
                 f"{skipped_names}"
                 + (f" +{len(skipped_picks) - 5} more" if len(skipped_picks) > 5 else "")
             )
-            add_check("Top pick", False, detail, blocking=True)
+            if phase != "weekend":
+                headline = "No tradable setup for today's $ goal"
+                detail = trad_detail
+            add_check("Top pick", False, trad_detail, blocking=True)
         else:
-            headline = "No live top pick"
-            detail = "No ticker passes Step 3 today — run ingest and refresh ranked screener."
+            if phase != "weekend":
+                headline = "No live top pick"
+                detail = "No ticker passes Step 3 today — run ingest and refresh ranked screener."
             add_check("Top pick", False, "No live Step 3 candidates today", blocking=True)
     else:
         pick_ok = True
