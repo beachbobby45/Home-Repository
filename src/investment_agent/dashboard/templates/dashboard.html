@@ -1426,7 +1426,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const weeklyGoal = cb.weekly_production_target ?? cb.weekly_soft_target ?? 450;
       document.getElementById("cb-weekly").textContent =
         `${wSign}$${fmt(cb.weekly_realized_net)} / $${fmt(weeklyGoal)} weekly guidance`;
-      const weeklyBarPct = Math.min(100, Math.max(0, cb.weekly_production_progress_pct ?? cb.weekly_soft_progress_pct || 0));
+      const weeklyBarPct = Math.min(100, Math.max(0, cb.weekly_production_progress_pct ?? cb.weekly_soft_progress_pct ?? 0));
       document.getElementById("cb-weekly-bar").style.width = weeklyBarPct + "%";
       const dd = Number(cb.drawdown_pct || 0);
       document.getElementById("cb-hw-dd").textContent =
