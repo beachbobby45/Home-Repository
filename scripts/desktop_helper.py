@@ -372,6 +372,7 @@ class DesktopHelperApp:
 
         def worker() -> None:
             exit_code = 1
+            tail_lines: list[str] = []
             try:
                 proc = subprocess.Popen(
                     ["/bin/bash", str(script)],
@@ -382,7 +383,11 @@ class DesktopHelperApp:
                 )
                 assert proc.stdout is not None
                 for line in proc.stdout:
-                    self.root.after(0, lambda l=line: self.log(l.rstrip()))
+                    text = line.rstrip()
+                    tail_lines.append(text)
+                    if len(tail_lines) > 30:
+                        tail_lines.pop(0)
+                    self.root.after(0, lambda l=text: self.log(l))
                 exit_code = proc.wait()
                 finished = now_pt_label() if now_pt_label else datetime.now().strftime("%H:%M")
                 if exit_code == 0:
@@ -418,9 +423,17 @@ class DesktopHelperApp:
                     else:
                         banner = f"✗ {title} failed — see Activity log ({finished})"
                         self._set_task_banner(banner, running=False)
+                        hint = "\n".join(tail_lines[-10:]) if tail_lines else "(no output captured)"
+                        extra = ""
+                        if task_key == "end_of_day":
+                            extra = (
+                                "\n\nEnd of Day stops at Step 1 if ingest fails. "
+                                "'Restarting dashboard' lines are normal — ingest pauses "
+                                "then restarts the dashboard.\n"
+                            )
                         messagebox.showerror(
                             f"{title} failed",
-                            f"Exit code {exit_code}. Scroll the Activity log for details.",
+                            f"Exit code {exit_code}.{extra}\n\nLast log lines:\n{hint}",
                         )
                     self.current_task = ""
                     self.current_task_key = ""

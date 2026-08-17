@@ -29,6 +29,7 @@ PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 PAUSED=0
 
 cleanup() {
+  local code=$?
   if [[ "$PAUSED" -eq 1 && -f "$PLIST_PATH" ]]; then
     echo ""
     echo "Restarting dashboard service…"
@@ -36,6 +37,12 @@ cleanup() {
     launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
     echo "Dashboard back at http://127.0.0.1:8080"
   fi
+  if [[ "$code" -ne 0 ]]; then
+    echo ""
+    echo "Ingest failed (exit $code). Scroll up in the Activity log for INGEST FAILED lines."
+    echo "Dashboard was restarted anyway so the browser works again."
+  fi
+  exit "$code"
 }
 trap cleanup EXIT
 

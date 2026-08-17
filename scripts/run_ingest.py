@@ -108,6 +108,15 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(0)
+    print("\nINGEST FAILED — errors:", file=sys.stderr)
+    for err in (summary.get("errors") or [])[:12]:
+        print(f"  • {err}", file=sys.stderr)
+    if summary.get("error_count", 0) > 12:
+        print(f"  … and {summary['error_count'] - 12} more", file=sys.stderr)
+    print(
+        "\nFix: check FRED_API_KEY and FINNHUB_API_KEY in .env, then retry End of Day.",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 
