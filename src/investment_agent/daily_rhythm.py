@@ -15,6 +15,7 @@ from investment_agent.period_screener import build_ranked_candidates
 from investment_agent.screen_actions import (
     ACTION_DAILY_INGEST,
     ACTION_PERIOD_SCREENER,
+    ACTION_REFRESH_LIVE,
     get_screen_action_status,
 )
 from investment_agent.stock_team import build_analysis_card, _latest_metrics
@@ -141,6 +142,8 @@ def get_daily_rhythm_status(conn: sqlite3.Connection) -> dict:
         ingest_action.get("completed_at")
     )
     screener_at = _parse_iso(screener_action.get("completed_at"))
+    refresh_live_action = actions.get(ACTION_REFRESH_LIVE, {})
+    refresh_live_at = _parse_iso(refresh_live_action.get("completed_at"))
     quote_age = fresh.get("quotes_max_age_hours")
     metric_age = fresh.get("metrics_max_age_hours")
 
@@ -207,7 +210,7 @@ def get_daily_rhythm_status(conn: sqlite3.Connection) -> dict:
                 "title": "Right before you buy",
                 "subtitle": "Confirm live prices",
                 "state": step3_state,
-                "last_at": None,
+                "last_at": refresh_live_at.isoformat() if refresh_live_at else None,
                 "detail": step3_detail,
                 "browser_action": "refresh_live",
             },

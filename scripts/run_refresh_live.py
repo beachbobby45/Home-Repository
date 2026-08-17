@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.config import Settings
 from investment_agent.db import connect, init_db
+from investment_agent.screen_actions import ACTION_REFRESH_LIVE, record_screen_action
 from investment_agent.trading_day import build_trading_day_status, refresh_live_quotes
 
 
@@ -36,6 +37,8 @@ def main() -> None:
         if not refresh.get("ok"):
             print(refresh.get("error") or "Refresh failed")
             sys.exit(1)
+        n = len(refresh.get("updated") or [])
+        record_screen_action(conn, ACTION_REFRESH_LIVE, detail=f"Step 3 · {n} symbols updated")
         conn.commit()
         status = build_trading_day_status(conn)
     finally:

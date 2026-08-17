@@ -15,6 +15,7 @@ ACTION_DAILY_INGEST = "daily_ingest"
 ACTION_FULL_INGEST = "full_ingest"
 ACTION_PERIOD_SCREENER = "period_screener"
 ACTION_REFRESH_RANKED = "refresh_ranked"
+ACTION_REFRESH_LIVE = "refresh_live"
 
 PRESET_ACTIONS: dict[str, str] = {
     "sp100": ACTION_SP100,
@@ -30,6 +31,7 @@ SCREEN_ACTIONS: dict[str, str] = {
     ACTION_FULL_INGEST: "Full ingest",
     ACTION_PERIOD_SCREENER: "Run screener",
     ACTION_REFRESH_RANKED: "Refresh ranked",
+    ACTION_REFRESH_LIVE: "Refresh live (Step 3)",
 }
 
 _SETTING_PREFIX = "screen_action_"

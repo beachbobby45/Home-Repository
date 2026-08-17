@@ -12,12 +12,37 @@ import tkinter as tk
 import urllib.error
 import urllib.request
 import webbrowser
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
+
+from investment_agent.desktop_status import fetch_rhythm_status, format_last_run, now_pt_label
 
 DASHBOARD_URL = "http://127.0.0.1:8080"
 CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 EXPECTED_VERSION = "0.9.0"
+
+# task_key → (button label, script name, rhythm step id for last-run display)
+RHYTHM_TASKS: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "morning_prep",
+        "Morning Prep",
+        "run_morning_prep_mac.sh",
+        "pre_market",
+    ),
+    (
+        "refresh_live",
+        "Refresh Live — before buy/sell (Step 3)",
+        "run_refresh_live_mac.sh",
+        "before_buy",
+    ),
+    (
+        "end_of_day",
+        "End of Day",
+        "run_end_of_day_mac.sh",
+        "after_close",
+    ),
+)
 
 
 def _repo_from_argv() -> Path | None:
@@ -45,7 +70,6 @@ def discover_repo() -> Path | None:
     for candidate in (_repo_from_argv(), _repo_from_config()):
         if candidate:
             return candidate
-    # App bundle layout: repo/desktop/AI Investment Agent.app/Contents/MacOS/launcher
     here = Path(__file__).resolve().parent.parent
     if (here / "scripts" / "run_dashboard.py").is_file():
         return here
@@ -63,11 +87,18 @@ class DesktopHelperApp:
         self.repo = repo
         self.running = False
         self.current_task = ""
+        self.current_task_key = ""
+        self.task_started_pt = ""
+        self._clear_status_after_id: str | None = None
+        self.rhythm_last_labels: dict[str, ttk.Label] = {}
+        self.rhythm_buttons: dict[str, ttk.Button] = {}
+
         self.root.title("AI Investment Agent")
-        self.root.minsize(420, 520)
-        self.root.geometry("480x580")
+        self.root.minsize(460, 640)
+        self.root.geometry("500x700")
         self._build_ui()
         self.refresh_status()
+        self.refresh_rhythm_labels()
         self.log(f"Project folder: {self.repo}")
 
     def _build_ui(self) -> None:
@@ -93,13 +124,41 @@ class DesktopHelperApp:
 
         rhythm = ttk.LabelFrame(self.root, text="Daily rhythm (no Terminal)", padding=10)
         rhythm.pack(fill="x", **pad)
-        ttk.Button(rhythm, text="Morning Prep", command=self.morning_prep).pack(fill="x", pady=3)
-        ttk.Button(
+
+        self.task_banner = ttk.Label(
             rhythm,
-            text="Refresh Live — before buy/sell (Step 3)",
-            command=self.refresh_live,
-        ).pack(fill="x", pady=3)
-        ttk.Button(rhythm, text="End of Day", command=self.end_of_day).pack(fill="x", pady=3)
+            text="Ready — pick a step below",
+            font=("Helvetica", 11, "bold"),
+            wraplength=440,
+        )
+        self.task_banner.pack(fill="x", pady=(0, 6))
+
+        self.progress = ttk.Progressbar(rhythm, mode="indeterminate")
+        self.progress.pack(fill="x", pady=(0, 8))
+        self.progress.stop()
+        self.progress.pack_forget()
+
+        for task_key, label, script_name, step_id in RHYTHM_TASKS:
+            row = ttk.Frame(rhythm)
+            row.pack(fill="x", pady=(0, 6))
+            last_lbl = ttk.Label(row, text="Last run: loading…", font=("Helvetica", 9))
+            last_lbl.pack(anchor="w")
+            self.rhythm_last_labels[task_key] = last_lbl
+            btn = ttk.Button(
+                row,
+                text=label,
+                command=lambda k=task_key, s=script_name, t=label: self._start_rhythm_task(k, s, t),
+            )
+            btn.pack(fill="x", pady=(2, 0))
+            self.rhythm_buttons[task_key] = btn
+
+        hint = ttk.Label(
+            rhythm,
+            text="End of Day can take 15–30 min for a full watchlist. Watch the progress bar and Activity log.",
+            font=("Helvetica", 9),
+            wraplength=440,
+        )
+        hint.pack(anchor="w", pady=(4, 0))
 
         other = ttk.LabelFrame(self.root, text="Other", padding=10)
         other.pack(fill="x", **pad)
@@ -113,15 +172,49 @@ class DesktopHelperApp:
 
         log_frame = ttk.LabelFrame(self.root, text="Activity log", padding=8)
         log_frame.pack(fill="both", expand=True, **pad)
-        self.log_box = scrolledtext.ScrolledText(log_frame, height=10, font=("Menlo", 10))
+        self.log_box = scrolledtext.ScrolledText(log_frame, height=12, font=("Menlo", 10))
         self.log_box.pack(fill="both", expand=True)
         self.log_box.configure(state="disabled")
 
     def log(self, msg: str) -> None:
+        stamp = datetime.now(PT).strftime("%-I:%M:%S %p")
         self.log_box.configure(state="normal")
-        self.log_box.insert("end", msg.rstrip() + "\n")
+        self.log_box.insert("end", f"[{stamp}] {msg.rstrip()}\n")
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
+
+    def _set_task_banner(self, text: str, *, running: bool = False) -> None:
+        self.task_banner.configure(text=text)
+        if running:
+            if not self.progress.winfo_ismapped():
+                self.progress.pack(fill="x", pady=(0, 8), after=self.task_banner)
+            self.progress.start(12)
+        else:
+            self.progress.stop()
+            self.progress.pack_forget()
+
+    def _set_rhythm_buttons_enabled(self, enabled: bool) -> None:
+        state = "normal" if enabled else "disabled"
+        for btn in self.rhythm_buttons.values():
+            btn.configure(state=state)
+
+    def refresh_rhythm_labels(self) -> None:
+        def worker() -> None:
+            status = fetch_rhythm_status(self.repo)
+            step_times: dict[str, str | None] = {}
+            if status:
+                for step in status.get("steps") or []:
+                    step_times[step.get("id", "")] = step.get("last_at")
+
+            def apply() -> None:
+                for task_key, _, _, step_id in RHYTHM_TASKS:
+                    lbl = self.rhythm_last_labels.get(task_key)
+                    if lbl:
+                        lbl.configure(text=format_last_run(step_times.get(step_id)))
+
+            self.root.after(0, apply)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def refresh_status(self) -> None:
         def worker() -> None:
@@ -152,17 +245,42 @@ class DesktopHelperApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _run_script(self, title: str, script: Path, *, open_browser_after: bool = False) -> None:
-        if self.running:
-            messagebox.showinfo("Please wait", "Another task is still running.")
+    def _busy(self) -> bool:
+        return self.running
+
+    def _start_rhythm_task(self, task_key: str, script_name: str, title: str) -> None:
+        script = self.repo / "scripts" / script_name
+        self._run_script(title, script, task_key=task_key)
+
+    def _run_script(
+        self,
+        title: str,
+        script: Path,
+        *,
+        task_key: str = "",
+        open_browser_after: bool = False,
+    ) -> None:
+        if self._busy():
+            messagebox.showinfo(
+                "Please wait",
+                f"Still running: {self.current_task or 'background task'}\n\n"
+                "Watch the progress bar and Activity log at the bottom.",
+            )
             return
         if not script.is_file():
             messagebox.showerror("Missing script", f"Not found:\n{script}")
             return
+
         self.running = True
-        self.log(f"── {title} ──")
+        self.current_task = title
+        self.current_task_key = task_key
+        self.task_started_pt = now_pt_label()
+        self._set_rhythm_buttons_enabled(False)
+        self._set_task_banner(f"Running: {title} — started {self.task_started_pt}", running=True)
+        self.log(f"── {title} — started {self.task_started_pt} ──")
 
         def worker() -> None:
+            exit_code = 1
             try:
                 proc = subprocess.Popen(
                     ["/bin/bash", str(script)],
@@ -174,46 +292,113 @@ class DesktopHelperApp:
                 assert proc.stdout is not None
                 for line in proc.stdout:
                     self.root.after(0, lambda l=line: self.log(l.rstrip()))
-                code = proc.wait()
-                self.root.after(0, lambda: self.log(f"Finished (exit {code})"))
-                if open_browser_after and code == 0:
+                exit_code = proc.wait()
+                finished = now_pt_label()
+                if exit_code == 0:
+                    self.root.after(
+                        0,
+                        lambda: self.log(f"✓ {title} finished successfully at {finished}"),
+                    )
+                else:
+                    self.root.after(
+                        0,
+                        lambda: self.log(f"✗ {title} failed (exit {exit_code}) at {finished}"),
+                    )
+                if open_browser_after and exit_code == 0:
                     self.root.after(0, self.open_browser)
             except Exception as exc:
                 self.root.after(0, lambda: self.log(f"ERROR: {exc}"))
             finally:
-                self.running = False
-                self.root.after(0, self.refresh_status)
+                def finish_ui() -> None:
+                    self.running = False
+                    finished = now_pt_label()
+                    if exit_code == 0:
+                        banner = f"✓ {title} completed at {finished}"
+                        self._set_task_banner(banner, running=False)
+                        if task_key == "end_of_day":
+                            messagebox.showinfo(
+                                "End of Day complete",
+                                f"Finished at {finished}.\n\n"
+                                "Tomorrow: run Morning Prep before the open, "
+                                "then Refresh Live right before you buy.",
+                            )
+                        elif task_key:
+                            messagebox.showinfo(f"{title} complete", f"Finished at {finished}.")
+                    else:
+                        banner = f"✗ {title} failed — see Activity log ({finished})"
+                        self._set_task_banner(banner, running=False)
+                        messagebox.showerror(
+                            f"{title} failed",
+                            f"Exit code {exit_code}. Scroll the Activity log for details.",
+                        )
+                    self.current_task = ""
+                    self.current_task_key = ""
+                    self._set_rhythm_buttons_enabled(True)
+                    self.refresh_rhythm_labels()
+                    self.refresh_status()
+                    if self._clear_status_after_id:
+                        self.root.after_cancel(self._clear_status_after_id)
+                    self._clear_status_after_id = self.root.after(
+                        15000,
+                        lambda: self._set_task_banner("Ready — pick a step below", running=False),
+                    )
+
+                self.root.after(0, finish_ui)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def update_and_open(self) -> None:
-        git = subprocess.run(
-            ["git", "-C", str(self.repo), "pull", "--ff-only", "origin", "main"],
-            capture_output=True,
-            text=True,
-        )
-        if git.stdout.strip():
-            self.log(git.stdout.strip())
-        if git.returncode != 0 and git.stderr.strip():
-            self.log(git.stderr.strip())
-        self._run_script(
-            "Update & open dashboard",
-            self.repo / "scripts" / "hard_restart_dashboard_mac.sh",
-            open_browser_after=True,
-        )
+        if self._busy():
+            messagebox.showinfo(
+                "Please wait",
+                f"Still running: {self.current_task or 'Update & open dashboard'}\n\n"
+                "Wait for the progress bar to finish, or quit this app (Cmd+Q) and reopen.",
+            )
+            return
+        self.running = True
+        self.current_task = "Checking for updates"
+        self._set_rhythm_buttons_enabled(False)
+        self._set_task_banner("Updating from GitHub…", running=True)
+        self.log("── Update & open dashboard ──")
+
+        def worker() -> None:
+            try:
+                git = subprocess.run(
+                    ["git", "-C", str(self.repo), "pull", "--ff-only", "origin", "main"],
+                    capture_output=True,
+                    text=True,
+                )
+                if git.stdout.strip():
+                    self.root.after(0, lambda: self.log(git.stdout.strip()))
+                if git.returncode != 0 and git.stderr.strip():
+                    self.root.after(0, lambda: self.log(git.stderr.strip()))
+            finally:
+                self.running = False
+                self.current_task = ""
+
+            def start_restart() -> None:
+                self._run_script(
+                    "Restart dashboard",
+                    self.repo / "scripts" / "hard_restart_dashboard_mac.sh",
+                    open_browser_after=True,
+                )
+
+            self.root.after(0, start_restart)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def open_browser(self) -> None:
         webbrowser.open(DASHBOARD_URL)
         self.log(f"Opened {DASHBOARD_URL}")
 
     def morning_prep(self) -> None:
-        self._run_script("Morning prep", self.repo / "scripts" / "run_morning_prep_mac.sh")
+        self._start_rhythm_task("morning_prep", "run_morning_prep_mac.sh", "Morning prep")
 
     def refresh_live(self) -> None:
-        self._run_script("Refresh live", self.repo / "scripts" / "run_refresh_live_mac.sh")
+        self._start_rhythm_task("refresh_live", "run_refresh_live_mac.sh", "Refresh live")
 
     def end_of_day(self) -> None:
-        self._run_script("End of day", self.repo / "scripts" / "run_end_of_day_mac.sh")
+        self._start_rhythm_task("end_of_day", "run_end_of_day_mac.sh", "End of day")
 
     def stop_background(self) -> None:
         script = self.repo / "scripts" / "uninstall_dashboard_service_mac.sh"
@@ -234,6 +419,7 @@ class DesktopHelperApp:
         self.repo = path
         save_repo(path)
         self.log(f"Project folder set to: {path}")
+        self.refresh_rhythm_labels()
 
 
 def main() -> None:
