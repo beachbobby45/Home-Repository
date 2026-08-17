@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-PT = ZoneInfo("America/Los_Angeles")
+PT = ZoneInfo("America/Los_Angeles")  # kept for compatibility; log() inlines ZoneInfo
 
 try:
     import tkinter as tk
@@ -29,6 +29,7 @@ DASHBOARD_URL = "http://127.0.0.1:8080"
 CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 EXPECTED_VERSION = "0.9.0"
+DESKTOP_HELPER_BUILD = "20260818a"
 
 
 def _log_startup(msg: str) -> None:
@@ -187,6 +188,11 @@ class DesktopHelperApp:
         header = ttk.Frame(self.root)
         header.pack(fill="x", **pad)
         ttk.Label(header, text="AI Investment Agent", font=("Helvetica", 16, "bold")).pack(anchor="w")
+        ttk.Label(
+            header,
+            text=f"Desktop helper · build {DESKTOP_HELPER_BUILD}",
+            font=("Helvetica", 9),
+        ).pack(anchor="w")
         self.status_label = ttk.Label(header, text="Checking dashboard…", font=("Helvetica", 11))
         self.status_label.pack(anchor="w", pady=(4, 0))
         self.version_label = ttk.Label(header, text="", font=("Helvetica", 10))
@@ -258,7 +264,7 @@ class DesktopHelperApp:
         self.log_box.configure(state="disabled")
 
     def log(self, msg: str) -> None:
-        local = datetime.now(PT)
+        local = datetime.now(ZoneInfo("America/Los_Angeles"))
         hour = local.hour % 12 or 12
         stamp = f"{hour}:{local.strftime('%M:%S %p')}"
         self.log_box.configure(state="normal")
@@ -359,7 +365,7 @@ class DesktopHelperApp:
         self.running = True
         self.current_task = title
         self.current_task_key = task_key
-        self.task_started_pt = now_pt_label()
+        self.task_started_pt = now_pt_label() if now_pt_label else datetime.now().strftime("%H:%M")
         self._set_rhythm_buttons_enabled(False)
         self._set_task_banner(f"Running: {title} — started {self.task_started_pt}", running=True)
         self.log(f"── {title} — started {self.task_started_pt} ──")
@@ -378,7 +384,7 @@ class DesktopHelperApp:
                 for line in proc.stdout:
                     self.root.after(0, lambda l=line: self.log(l.rstrip()))
                 exit_code = proc.wait()
-                finished = now_pt_label()
+                finished = now_pt_label() if now_pt_label else datetime.now().strftime("%H:%M")
                 if exit_code == 0:
                     self.root.after(
                         0,
@@ -396,7 +402,7 @@ class DesktopHelperApp:
             finally:
                 def finish_ui() -> None:
                     self.running = False
-                    finished = now_pt_label()
+                    finished = now_pt_label() if now_pt_label else datetime.now().strftime("%H:%M")
                     if exit_code == 0:
                         banner = f"✓ {title} completed at {finished}"
                         self._set_task_banner(banner, running=False)
@@ -508,7 +514,9 @@ class DesktopHelperApp:
 
 
 def main() -> None:
-    _log_startup("Starting desktop helper")
+    helper_path = Path(__file__).resolve()
+    _log_startup(f"Starting desktop helper {DESKTOP_HELPER_BUILD}")
+    _log_startup(f"Script: {helper_path}")
     repo = discover_repo()
     if repo:
         _log_startup(f"Repo: {repo}")
