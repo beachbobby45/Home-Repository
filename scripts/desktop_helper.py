@@ -76,15 +76,29 @@ def _bootstrap_import_path() -> None:
 
 _bootstrap_import_path()
 
-try:
-    from investment_agent.desktop_status import fetch_rhythm_status, format_last_run, now_pt_label
-except ImportError as exc:
-    _fatal_startup(
-        "Could not load the project code (investment_agent).\n"
-        f"Import error: {exc}\n\n"
-        "Reinstall the app from Home-Repository:\n"
-        "scripts/Install Desktop App.command"
-    )
+# Populated in main() after Tk is ready (avoids silent import crash before UI).
+fetch_rhythm_status = None
+format_last_run = None
+now_pt_label = None
+
+
+def _load_desktop_status() -> None:
+    global fetch_rhythm_status, format_last_run, now_pt_label
+    try:
+        from investment_agent.desktop_status import (
+            fetch_rhythm_status as _fetch,
+            format_last_run as _fmt,
+            now_pt_label as _now,
+        )
+    except ImportError as exc:
+        _fatal_startup(
+            "Could not load the project code (investment_agent).\n"
+            f"Import error: {exc}\n\n"
+            "Reinstall: Home-Repository/scripts/Install Desktop App.command"
+        )
+    fetch_rhythm_status = _fetch
+    format_last_run = _fmt
+    now_pt_label = _now
 
 # task_key → (button label, script name, rhythm step id for last-run display)
 RHYTHM_TASKS: tuple[tuple[str, str, str, str], ...] = (
@@ -264,6 +278,8 @@ class DesktopHelperApp:
 
     def refresh_rhythm_labels(self) -> None:
         def worker() -> None:
+            if fetch_rhythm_status is None:
+                return
             status = fetch_rhythm_status(self.repo)
             step_times: dict[str, str | None] = {}
             if status:
@@ -519,6 +535,7 @@ def main() -> None:
             sys.exit(1)
         save_repo(repo)
 
+    _load_desktop_status()
     try:
         DesktopHelperApp(root, repo)
         root.mainloop()

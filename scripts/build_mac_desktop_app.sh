@@ -27,6 +27,17 @@ echo "  Building ${APP_NAME}.app"
 echo "  Repo: $ROOT"
 echo ""
 
+chmod +x "$ROOT/scripts/find_desktop_python.sh" 2>/dev/null || true
+PY="$("$ROOT/scripts/find_desktop_python.sh" 2>/dev/null || true)"
+if [[ -z "$PY" ]]; then
+  echo "WARN: No Python with tkinter found at build time."
+  echo "      Install: brew install python-tk@3.12"
+  echo "      The .app may flash and quit until Python+Tk is fixed."
+  PY="$(command -v python3 || echo python3)"
+else
+  echo "Using Python: $PY"
+fi
+
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 
 cat > "$BUNDLE/Contents/Info.plist" <<EOF
@@ -92,20 +103,39 @@ alert() {
 
   export INVESTMENT_AGENT_ROOT="$ROOT"
   export PYTHONPATH="$ROOT/src"
+  export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
   cd "$ROOT" || exit 1
 
   PY=""
-  for candidate in /usr/bin/pythonw /Library/Frameworks/Python.framework/Versions/3.12/bin/pythonw3 /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 pythonw3 pythonw python3; do
-    if [[ -x "$candidate" ]] || command -v "$candidate" >/dev/null 2>&1; then
-      cmd="$candidate"
-      [[ -x "$candidate" ]] || cmd="$(command -v "$candidate")"
-      if "$cmd" -c "import tkinter" 2>/dev/null; then
-        PY="$cmd"
-        echo "python: $PY"
-        break
-      fi
+  if [[ -f "$DIR/../Resources/python.path" ]]; then
+    PY="$(tr -d '\r\n' < "$DIR/../Resources/python.path")"
+    if [[ -n "$PY" && -x "$PY" ]] && "$PY" -c "import tkinter" 2>/dev/null; then
+      echo "python.path: $PY"
+    else
+      echo "WARN: pinned python.path invalid: $PY"
+      PY=""
     fi
-  done
+  fi
+  if [[ -z "$PY" ]]; then
+    for candidate in \
+      /opt/homebrew/bin/pythonw /opt/homebrew/bin/python3 \
+      /usr/local/bin/pythonw /usr/local/bin/python3 \
+      /usr/bin/pythonw \
+      /Library/Frameworks/Python.framework/Versions/3.12/bin/pythonw \
+      /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
+      pythonw3 pythonw python3
+    do
+      if [[ -x "$candidate" ]] || command -v "$candidate" >/dev/null 2>&1; then
+        cmd="$candidate"
+        [[ -x "$candidate" ]] || cmd="$(command -v "$candidate")"
+        if "$cmd" -c "import tkinter" 2>/dev/null; then
+          PY="$cmd"
+          echo "python (search): $PY"
+          break
+        fi
+      fi
+    done
+  fi
 
   if [[ -z "$PY" ]]; then
     echo "ERROR: no Python with tkinter"
@@ -125,8 +155,10 @@ LAUNCHER
 
 chmod +x "$BUNDLE/Contents/MacOS/launcher"
 echo "$ROOT" > "$BUNDLE/Contents/Resources/repo.path"
+echo "$PY" > "$BUNDLE/Contents/Resources/python.path"
 
 echo "Built in repo: $BUNDLE"
+echo "Python pinned: $PY"
 echo "(Finder: Home-Repository → desktop → AI Investment Agent)"
 echo ""
 
@@ -144,6 +176,8 @@ if [[ "$INSTALL_DESKTOP" -eq 1 ]]; then
     echo "ERROR: Copy to Desktop failed."
     exit 1
   fi
+  xattr -cr "$TARGET" 2>/dev/null || true
+  echo "Cleared quarantine flags (xattr) on Desktop copy."
   echo "════════════════════════════════════════════════════════"
   echo "  INSTALLED ON DESKTOP"
   echo "  $TARGET"
