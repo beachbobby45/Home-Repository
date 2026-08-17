@@ -60,17 +60,67 @@ EOF
 
 cat > "$BUNDLE/Contents/MacOS/launcher" <<'LAUNCHER'
 #!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-if [[ -f "$DIR/../Resources/repo.path" ]]; then
-  ROOT="$(cat "$DIR/../Resources/repo.path" | tr -d '\r\n')"
-else
-  ROOT="$(cd "$DIR/../../../.." && pwd)"
-fi
-export INVESTMENT_AGENT_ROOT="$ROOT"
-export PYTHONPATH="$ROOT/src"
-cd "$ROOT" || exit 1
-PY="$(command -v pythonw3 2>/dev/null || command -v python3)"
-exec "$PY" "$ROOT/scripts/desktop_helper.py" "$ROOT"
+LOG_DIR="$HOME/.investment_agent"
+LOG="$LOG_DIR/desktop-app.log"
+mkdir -p "$LOG_DIR"
+
+alert() {
+  /usr/bin/osascript -e "display alert \"AI Investment Agent\" message \"$1\" as critical" 2>/dev/null || true
+}
+
+{
+  echo ""
+  echo "=== launch $(date) ==="
+  DIR="$(cd "$(dirname "$0")" && pwd)"
+  ROOT=""
+
+  if [[ -f "$DIR/../Resources/repo.path" ]]; then
+    ROOT="$(tr -d '\r\n' < "$DIR/../Resources/repo.path")"
+    echo "repo.path: $ROOT"
+  fi
+  if [[ -z "$ROOT" || ! -f "$ROOT/scripts/run_dashboard.py" ]]; then
+    if [[ -f "$HOME/.investment_agent/repo.path" ]]; then
+      ROOT="$(tr -d '\r\n' < "$HOME/.investment_agent/repo.path")"
+      echo "config repo.path: $ROOT"
+    fi
+  fi
+  if [[ -z "$ROOT" || ! -f "$ROOT/scripts/run_dashboard.py" ]]; then
+    echo "ERROR: Home-Repository not found"
+    alert "Could not find Home-Repository. Reinstall from scripts/Install Desktop App.command"
+    exit 1
+  fi
+
+  export INVESTMENT_AGENT_ROOT="$ROOT"
+  export PYTHONPATH="$ROOT/src"
+  cd "$ROOT" || exit 1
+
+  PY=""
+  for candidate in /usr/bin/pythonw /Library/Frameworks/Python.framework/Versions/3.12/bin/pythonw3 /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 pythonw3 pythonw python3; do
+    if [[ -x "$candidate" ]] || command -v "$candidate" >/dev/null 2>&1; then
+      cmd="$candidate"
+      [[ -x "$candidate" ]] || cmd="$(command -v "$candidate")"
+      if "$cmd" -c "import tkinter" 2>/dev/null; then
+        PY="$cmd"
+        echo "python: $PY"
+        break
+      fi
+    fi
+  done
+
+  if [[ -z "$PY" ]]; then
+    echo "ERROR: no Python with tkinter"
+    alert "Python with Tkinter not found. In Terminal run: brew install python-tk@3.12"
+    exit 1
+  fi
+
+  "$PY" "$ROOT/scripts/desktop_helper.py" "$ROOT"
+  CODE=$?
+  echo "exit code: $CODE"
+  if [[ "$CODE" -ne 0 ]]; then
+    alert "App exited with an error. See ~/.investment_agent/desktop-app.log"
+  fi
+  exit "$CODE"
+} >> "$LOG" 2>&1
 LAUNCHER
 
 chmod +x "$BUNDLE/Contents/MacOS/launcher"

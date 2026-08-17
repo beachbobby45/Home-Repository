@@ -8,19 +8,83 @@ import os
 import subprocess
 import sys
 import threading
-import tkinter as tk
 import urllib.error
 import urllib.request
 import webbrowser
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox, scrolledtext, ttk
 
-from investment_agent.desktop_status import fetch_rhythm_status, format_last_run, now_pt_label
+try:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, scrolledtext, ttk
+except ImportError as exc:
+    print(f"ERROR: tkinter is required for the desktop app: {exc}", file=sys.stderr)
+    print("Mac fix: brew install python-tk@3.12  (or use python.org installer)", file=sys.stderr)
+    sys.exit(1)
 
 DASHBOARD_URL = "http://127.0.0.1:8080"
 CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
+LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 EXPECTED_VERSION = "0.9.0"
+
+
+def _log_startup(msg: str) -> None:
+    try:
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with LOG_PATH.open("a", encoding="utf-8") as fh:
+            fh.write(f"[{stamp}] {msg}\n")
+    except OSError:
+        pass
+
+
+def _fatal_startup(msg: str) -> None:
+    _log_startup(f"FATAL: {msg}")
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror(
+            "AI Investment Agent — could not start",
+            msg + f"\n\nDetails saved to:\n{LOG_PATH}",
+        )
+        root.destroy()
+    except Exception:
+        pass
+    sys.exit(1)
+
+
+def _bootstrap_import_path() -> None:
+    """Ensure src/ is on sys.path before investment_agent imports."""
+    for candidate in (
+        os.environ.get("INVESTMENT_AGENT_ROOT", "").strip(),
+        sys.argv[1].strip() if len(sys.argv) > 1 else "",
+    ):
+        if not candidate:
+            continue
+        src = Path(candidate).expanduser().resolve() / "src"
+        if src.is_dir():
+            src_str = str(src)
+            if src_str not in sys.path:
+                sys.path.insert(0, src_str)
+            return
+    here = Path(__file__).resolve().parent.parent / "src"
+    if here.is_dir():
+        here_str = str(here)
+        if here_str not in sys.path:
+            sys.path.insert(0, here_str)
+
+
+_bootstrap_import_path()
+
+try:
+    from investment_agent.desktop_status import fetch_rhythm_status, format_last_run, now_pt_label
+except ImportError as exc:
+    _fatal_startup(
+        "Could not load the project code (investment_agent).\n"
+        f"Import error: {exc}\n\n"
+        "Reinstall the app from Home-Repository:\n"
+        "scripts/Install Desktop App.command"
+    )
 
 # task_key → (button label, script name, rhythm step id for last-run display)
 RHYTHM_TASKS: tuple[tuple[str, str, str, str], ...] = (
@@ -423,8 +487,20 @@ class DesktopHelperApp:
 
 
 def main() -> None:
+    _log_startup("Starting desktop helper")
     repo = discover_repo()
-    root = tk.Tk()
+    if repo:
+        _log_startup(f"Repo: {repo}")
+    else:
+        _log_startup("Repo not found — will prompt")
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        _fatal_startup(
+            f"Could not open the app window (Tk error):\n{exc}\n\n"
+            "On Mac with Homebrew Python, install Tk support:\n"
+            "  brew install python-tk@3.12"
+        )
     try:
         root.tk.call("tk", "scaling", 2.0)
     except tk.TclError:
@@ -443,9 +519,17 @@ def main() -> None:
             sys.exit(1)
         save_repo(repo)
 
-    DesktopHelperApp(root, repo)
-    root.mainloop()
+    try:
+        DesktopHelperApp(root, repo)
+        root.mainloop()
+    except Exception as exc:
+        _fatal_startup(f"Unexpected error:\n{exc}")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as exc:
+        _fatal_startup(f"Startup crashed:\n{exc}")
