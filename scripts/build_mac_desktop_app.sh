@@ -6,7 +6,21 @@ cd "$(dirname "$0")/.." || exit 1
 ROOT="$(pwd)"
 APP_NAME="AI Investment Agent"
 BUNDLE="$ROOT/desktop/${APP_NAME}.app"
-DESKTOP="${1:-}"
+INSTALL_DESKTOP=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --desktop | desktop) INSTALL_DESKTOP=1 ;;
+    -h | --help)
+      echo "Usage:"
+      echo "  ./scripts/build_mac_desktop_app.sh --desktop   # build + copy to ~/Desktop"
+      echo "  ./scripts/build_mac_desktop_app.sh             # build only (repo/desktop/)"
+      echo ""
+      echo "Easier: double-click scripts/Install Desktop App.command in Finder."
+      exit 0
+      ;;
+  esac
+done
 
 echo ""
 echo "  Building ${APP_NAME}.app"
@@ -62,16 +76,51 @@ LAUNCHER
 chmod +x "$BUNDLE/Contents/MacOS/launcher"
 echo "$ROOT" > "$BUNDLE/Contents/Resources/repo.path"
 
-if [[ "$DESKTOP" == "--desktop" || "$DESKTOP" == "desktop" ]]; then
-  TARGET="$HOME/Desktop/${APP_NAME}.app"
+echo "Built in repo: $BUNDLE"
+echo "(Finder: Home-Repository → desktop → AI Investment Agent)"
+echo ""
+
+if [[ "$INSTALL_DESKTOP" -eq 1 ]]; then
+  DESKTOP_DIR="${HOME}/Desktop"
+  if [[ ! -d "$DESKTOP_DIR" ]]; then
+    echo "ERROR: Desktop folder not found at $DESKTOP_DIR"
+    echo "Drag this app manually: $BUNDLE"
+    exit 1
+  fi
+  TARGET="${DESKTOP_DIR}/${APP_NAME}.app"
   rm -rf "$TARGET"
   ditto "$BUNDLE" "$TARGET"
-  echo "Installed on Desktop: $TARGET"
-  echo "Double-click it to open — no Terminal needed."
+  if [[ ! -d "$TARGET" ]]; then
+    echo "ERROR: Copy to Desktop failed."
+    exit 1
+  fi
+  echo "════════════════════════════════════════════════════════"
+  echo "  INSTALLED ON DESKTOP"
+  echo "  $TARGET"
+  echo "════════════════════════════════════════════════════════"
+  echo ""
+  echo "In Finder it appears as: AI Investment Agent"
+  echo "(no .app suffix shown)"
+  echo ""
+  echo "First launch: if macOS blocks it, right-click → Open."
+  if command -v open >/dev/null 2>&1; then
+    open -R "$TARGET"
+    echo "Opened Finder and highlighted the app on your Desktop."
+  fi
 else
-  echo "Built: $BUNDLE"
-  echo "To copy to Desktop, run:"
+  echo "════════════════════════════════════════════════════════"
+  echo "  NOT copied to Desktop yet"
+  echo "════════════════════════════════════════════════════════"
+  echo ""
+  echo "The app is only inside your repo folder right now."
+  echo "To put it on your Desktop, run:"
+  echo ""
+  echo "  cd \"$ROOT\""
   echo "  ./scripts/build_mac_desktop_app.sh --desktop"
+  echo ""
+  echo "Or double-click in Finder:"
+  echo "  Home-Repository/scripts/Install Desktop App.command"
+  echo ""
 fi
 
 echo ""

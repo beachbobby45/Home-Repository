@@ -21,6 +21,10 @@ chmod +x "$ROOT/scripts/build_mac_desktop_app.sh" "$ROOT/scripts/desktop_helper.
 
 echo ""
 echo "Done. Look on your Desktop for: AI Investment Agent"
+echo "(Finder hides the .app — it is not a folder you open in Terminal.)"
 echo "Double-click it. First time: right-click → Open if macOS asks."
+echo ""
+echo "If you still do not see it, Finder should have opened and highlighted it."
+echo "Fallback: Home-Repository/desktop/AI Investment Agent.app — drag to Desktop."
 echo ""
 read -r -p "Press Enter to close…"
