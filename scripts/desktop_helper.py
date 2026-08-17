@@ -13,6 +13,9 @@ import urllib.request
 import webbrowser
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+PT = ZoneInfo("America/Los_Angeles")
 
 try:
     import tkinter as tk
@@ -255,7 +258,9 @@ class DesktopHelperApp:
         self.log_box.configure(state="disabled")
 
     def log(self, msg: str) -> None:
-        stamp = datetime.now(PT).strftime("%-I:%M:%S %p")
+        local = datetime.now(PT)
+        hour = local.hour % 12 or 12
+        stamp = f"{hour}:{local.strftime('%M:%S %p')}"
         self.log_box.configure(state="normal")
         self.log_box.insert("end", f"[{stamp}] {msg.rstrip()}\n")
         self.log_box.see("end")
