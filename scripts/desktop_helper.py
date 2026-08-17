@@ -29,7 +29,7 @@ DASHBOARD_URL = "http://127.0.0.1:8080"
 CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818a"
+DESKTOP_HELPER_BUILD = "20260818b"
 
 
 def _log_startup(msg: str) -> None:
@@ -430,6 +430,7 @@ class DesktopHelperApp:
                                 "\n\nEnd of Day stops at Step 1 if ingest fails. "
                                 "'Restarting dashboard' lines are normal — ingest pauses "
                                 "then restarts the dashboard.\n"
+                                "Run ./scripts/doctor_ingest_mac.sh in Terminal for a quick diagnosis."
                             )
                         messagebox.showerror(
                             f"{title} failed",

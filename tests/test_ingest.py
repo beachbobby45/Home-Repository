@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.config import Settings
 from investment_agent.db import init_db, insert_quote, insert_ticker_metrics
+from investment_agent.db_maintenance import acquire_ingest_lock, release_ingest_lock
 from investment_agent.ingest import (
     _needs_bars_refresh,
     _needs_quote_refresh,
@@ -235,3 +236,30 @@ def test_run_ingest_after_close_uses_shorter_quote_stale_window():
         assert summary["quote_stale_hours"] == 2.0
         assert summary["quotes_refreshed"] >= 1
         assert summary["bars_skipped"] >= 1
+
+
+def test_run_ingest_returns_error_when_lock_held():
+    import investment_agent.db_maintenance as dm
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "lock.db"
+        init_db(path)
+        lock = Path(tmp) / "ingest.lock"
+        dm.INGEST_LOCK_PATH = lock
+        acquire_ingest_lock(detail="other")
+
+        settings = Settings(
+            anthropic_api_key="sk-test",
+            fred_api_key="test-fred",
+            finnhub_api_key="test-finnhub",
+            massive_api_key=None,
+            verify_test_ticker="SPY",
+            app_api_key="",
+            alpaca_api_key=None,
+            alpaca_secret_key=None,
+        )
+        summary = run_ingest(settings, db_path=path)
+        assert summary["ok"] is False
+        assert summary["error_count"] == 1
+        assert "Ingest is running" in summary["errors"][0]
+        release_ingest_lock()

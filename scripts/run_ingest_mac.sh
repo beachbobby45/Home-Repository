@@ -24,6 +24,22 @@ if ! command -v python3 >/dev/null 2>&1; then
   echo "ERROR: python3 not found. Install Python 3 or run: xcode-select --install"
   exit 1
 fi
+
+# Clear stale lock from a prior crashed ingest (before preflight / dashboard pause).
+export PYTHONPATH="$ROOT/src"
+CLEARED=$(python3 -c "from investment_agent.db_maintenance import clear_stale_ingest_lock; print('yes' if clear_stale_ingest_lock() else 'no')")
+if [[ "$CLEARED" == "yes" ]]; then
+  echo "Cleared stale ingest lock from a prior crashed run."
+fi
+
+echo "Preflight (API keys + quick test)…"
+if ! python3 "$ROOT/scripts/preflight_ingest.py"; then
+  echo ""
+  echo "Preflight failed — fix the ERROR above, then retry End of Day."
+  exit 1
+fi
+echo ""
+
 PLIST_LABEL="com.investment-agent.dashboard"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 PAUSED=0
@@ -53,9 +69,6 @@ ulimit -n 10240 2>/dev/null || ulimit -n 4096 2>/dev/null || true
 export YFINANCE_CACHE_DIR="$ROOT/data/yfinance_cache"
 mkdir -p "$YFINANCE_CACHE_DIR"
 export YFINANCE_MIN_INTERVAL_SEC="${YFINANCE_MIN_INTERVAL_SEC:-0.2}"
-
-# Clear stale lock from a prior crashed ingest.
-rm -f "$ROOT/data/ingest.lock"
 
 if launchctl print "gui/$(id -u)/$PLIST_LABEL" &>/dev/null; then
   echo "Pausing background dashboard (database unlock for ingest)…"
