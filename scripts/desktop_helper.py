@@ -30,7 +30,7 @@ CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818h"
+DESKTOP_HELPER_BUILD = "20260818i"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
@@ -72,7 +72,12 @@ def _failure_lines_for_task(
     *,
     task_key: str,
 ) -> list[str]:
-    disk = _ingest_errors_from_disk(repo) if task_key in ("end_of_day", "ingest") else []
+    disk = _ingest_errors_from_disk(repo) if task_key in (
+        "end_of_day",
+        "ingest",
+        "morning_prep",
+        "refresh_live",
+    ) else []
     if disk:
         return disk
     parsed = _extract_failure_lines(all_lines)
@@ -610,10 +615,10 @@ class DesktopHelperApp:
                             "In the app: Activity log → Open last run log (TextEdit).\n"
                             "Or: Activity log → Copy activity log."
                         )
-                        if task_key == "end_of_day":
+                        if task_key in ("end_of_day", "morning_prep", "refresh_live"):
                             extra += (
-                                "\n\nIf you see 'No Python found with working pandas/numpy', "
-                                "run once: Home-Repository/scripts/Fix Ingest Python.command "
+                                "\n\nIf you see Python/NumPy or 'No Python found', run once: "
+                                "Home-Repository/scripts/Fix Ingest Python.command "
                                 "(creates .venv), then retry."
                             )
                         messagebox.showerror(

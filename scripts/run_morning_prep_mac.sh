@@ -11,6 +11,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$PWD"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/_resolve_python_env.sh"
+
 WITH_INGEST=0
 for arg in "$@"; do
   case "$arg" in
@@ -21,9 +24,8 @@ done
 echo ""
 echo "  AI Investment Agent — morning prep"
 echo "  Folder: $ROOT"
+echo "  Python: $PY ($("$PY" --version 2>&1))"
 echo ""
-
-export PYTHONPATH="$ROOT/src"
 
 if [[ "$WITH_INGEST" -eq 1 ]]; then
   echo "── Incremental ingest ──"
@@ -33,7 +35,7 @@ if [[ "$WITH_INGEST" -eq 1 ]]; then
 fi
 
 echo "── Prepare today's trades (screener + candidates) ──"
-python3 - <<'PY'
+"$PY" - <<'PY'
 import json, sys
 from pathlib import Path
 sys.path.insert(0, str(Path("src").resolve()))

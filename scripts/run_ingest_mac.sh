@@ -9,8 +9,8 @@ cd "$(dirname "$0")/.." || {
   exit 1
 }
 ROOT="$PWD"
-chmod +x "$ROOT/scripts/resolve_python.sh" 2>/dev/null || true
-PY="$("$ROOT/scripts/resolve_python.sh")" || exit 1
+# shellcheck disable=SC1091
+source "$ROOT/scripts/_resolve_python_env.sh"
 
 echo ""
 echo "  AI Investment Agent — ingest"
@@ -24,7 +24,6 @@ if [[ ! -f "$ROOT/scripts/run_ingest.py" ]]; then
 fi
 
 # Clear stale lock from a prior crashed ingest (before preflight / dashboard pause).
-export PYTHONPATH="$ROOT/src"
 CLEARED=$("$PY" -c "from investment_agent.db_maintenance import clear_stale_ingest_lock; print('yes' if clear_stale_ingest_lock() else 'no')")
 if [[ "$CLEARED" == "yes" ]]; then
   echo "Cleared stale ingest lock from a prior crashed run."
@@ -108,7 +107,6 @@ if [[ -f "$PIDFILE" ]]; then
 fi
 
 echo "Starting ingest…"
-export PYTHONPATH="$ROOT/src"
 "$PY" "$ROOT/scripts/run_ingest.py" "$@"
 
 echo ""

@@ -7,11 +7,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$PWD"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/_resolve_python_env.sh"
 
 echo ""
 echo "  AI Investment Agent — refresh live (Step 3)"
 echo "  Folder: $ROOT"
+echo "  Python: $PY ($("$PY" --version 2>&1))"
 echo ""
 
-export PYTHONPATH="$ROOT/src"
-python3 "$ROOT/scripts/run_refresh_live.py"
+"$PY" "$ROOT/scripts/run_refresh_live.py"

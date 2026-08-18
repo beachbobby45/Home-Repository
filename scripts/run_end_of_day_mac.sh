@@ -11,18 +11,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$PWD"
-chmod +x "$ROOT/scripts/resolve_python.sh" "$ROOT/scripts/fix_ingest_python_mac.sh" 2>/dev/null || true
-
-if ! PY="$("$ROOT/scripts/resolve_python.sh")"; then
-  echo ""
-  echo "ERROR: Could not set up ingest Python."
-  echo "In Terminal run:"
-  echo "  cd \"$ROOT\" && git pull origin main && ./scripts/fix_ingest_python_mac.sh"
-  exit 1
-fi
-echo "Python: $PY ($("$PY" --version 2>&1))"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/_resolve_python_env.sh"
 SKIP_REPORT=0
-export PYTHONPATH="$ROOT/src"
 for arg in "$@"; do
   case "$arg" in
     --skip-report) SKIP_REPORT=1 ;;
@@ -32,6 +23,7 @@ done
 echo ""
 echo "  AI Investment Agent — end of day"
 echo "  Folder: $ROOT"
+echo "  Python: $PY ($("$PY" --version 2>&1))"
 echo "  Steps: after-close ingest → screener → daily close report"
 echo ""
 
