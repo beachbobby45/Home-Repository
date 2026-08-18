@@ -30,7 +30,7 @@ CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818f"
+DESKTOP_HELPER_BUILD = "20260818g"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
@@ -612,8 +612,9 @@ class DesktopHelperApp:
                         )
                         if task_key == "end_of_day":
                             extra += (
-                                "\n\nIf the log mentions NumPy or 'incompatible architecture', "
-                                "run once: Home-Repository/scripts/Fix Ingest Python.command"
+                                "\n\nIf you see 'No Python found with working pandas/numpy', "
+                                "run once: Home-Repository/scripts/Fix Ingest Python.command "
+                                "(creates .venv), then retry."
                             )
                         messagebox.showerror(
                             f"{title} failed",
