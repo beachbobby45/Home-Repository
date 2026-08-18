@@ -3,6 +3,7 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$PWD"
+chmod +x "$ROOT/scripts/resolve_python.sh" "$ROOT/scripts/fix_ingest_python_mac.sh" 2>/dev/null || true
 
 echo "=== Ingest doctor ==="
 echo "Repo: $ROOT"
@@ -12,6 +13,12 @@ fail=0
 ok() { echo "OK:   $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
 warn() { echo "WARN: $*"; }
+
+if ! PY="$("$ROOT/scripts/resolve_python.sh")"; then
+  bad "No working ingest Python — run: ./scripts/fix_ingest_python_mac.sh"
+  exit 1
+fi
+ok "Ingest Python: $PY ($("$PY" --version 2>&1))"
 
 if [[ ! -f "$ROOT/.env" ]]; then
   bad ".env missing — copy from .env.example and add FRED_API_KEY + FINNHUB_API_KEY"
@@ -30,14 +37,12 @@ else
 fi
 
 export PYTHONPATH="$ROOT/src"
-if python3 -c "from investment_agent.db_maintenance import clear_stale_ingest_lock; clear_stale_ingest_lock()" 2>/dev/null; then
-  :
-fi
+"$PY" -c "from investment_agent.db_maintenance import clear_stale_ingest_lock; clear_stale_ingest_lock()" 2>/dev/null || true
 
 echo ""
 echo "Running preflight (FRED + Finnhub live check, ~5 sec)…"
 echo ""
-if python3 "$ROOT/scripts/preflight_ingest.py"; then
+if "$PY" "$ROOT/scripts/preflight_ingest.py"; then
   ok "Preflight passed"
 else
   bad "Preflight failed — see ERROR lines above"

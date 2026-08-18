@@ -30,7 +30,7 @@ CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818e"
+DESKTOP_HELPER_BUILD = "20260818f"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
@@ -117,8 +117,10 @@ def _extract_failure_lines(lines: list[str]) -> list[str]:
             capture = True
         elif (text.startswith("•") or raw.lstrip().startswith("•")) and hits:
             hits.append(text)
-        elif "traceback" in lower:
-            hits.append(text)
+        elif "incompatible architecture" in lower or "unable to import required dependency numpy" in lower:
+            hits.append("ERROR: Python/NumPy architecture mismatch (see log above)")
+            hits.append("Fix: double-click scripts/Fix Ingest Python.command")
+            capture = True
     if hits:
         return hits[-12:]
     # Fallback: last non-boilerplate lines
@@ -610,8 +612,8 @@ class DesktopHelperApp:
                         )
                         if task_key == "end_of_day":
                             extra += (
-                                "\n\nEnd of Day stops at Step 1 if ingest fails. "
-                                "'Restarting dashboard' is normal cleanup."
+                                "\n\nIf the log mentions NumPy or 'incompatible architecture', "
+                                "run once: Home-Repository/scripts/Fix Ingest Python.command"
                             )
                         messagebox.showerror(
                             f"{title} failed",

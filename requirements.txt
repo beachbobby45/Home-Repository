@@ -5,6 +5,8 @@ pydantic>=2.0.0
 
 # Market data (Phase 1 — free daily bars; Finnhub candles are paid-only)
 yfinance>=0.2.40
+pandas>=2.0
+numpy>=1.26
 
 # Dashboard (Phase 3)
 fastapi>=0.115.0

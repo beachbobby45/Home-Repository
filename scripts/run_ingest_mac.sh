@@ -9,10 +9,13 @@ cd "$(dirname "$0")/.." || {
   exit 1
 }
 ROOT="$PWD"
+chmod +x "$ROOT/scripts/resolve_python.sh" 2>/dev/null || true
+PY="$("$ROOT/scripts/resolve_python.sh")" || exit 1
 
 echo ""
 echo "  AI Investment Agent — ingest"
 echo "  Folder: $ROOT"
+echo "  Python: $PY ($("$PY" --version 2>&1))"
 echo ""
 
 if [[ ! -f "$ROOT/scripts/run_ingest.py" ]]; then
@@ -20,20 +23,15 @@ if [[ ! -f "$ROOT/scripts/run_ingest.py" ]]; then
   exit 1
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "ERROR: python3 not found. Install Python 3 or run: xcode-select --install"
-  exit 1
-fi
-
 # Clear stale lock from a prior crashed ingest (before preflight / dashboard pause).
 export PYTHONPATH="$ROOT/src"
-CLEARED=$(python3 -c "from investment_agent.db_maintenance import clear_stale_ingest_lock; print('yes' if clear_stale_ingest_lock() else 'no')")
+CLEARED=$("$PY" -c "from investment_agent.db_maintenance import clear_stale_ingest_lock; print('yes' if clear_stale_ingest_lock() else 'no')")
 if [[ "$CLEARED" == "yes" ]]; then
   echo "Cleared stale ingest lock from a prior crashed run."
 fi
 
 echo "Preflight (API keys + quick test)…"
-if ! python3 "$ROOT/scripts/preflight_ingest.py"; then
+if ! "$PY" "$ROOT/scripts/preflight_ingest.py"; then
   echo ""
   echo "Preflight failed — fix the ERROR above, then retry End of Day."
   exit 1
@@ -58,7 +56,7 @@ cleanup() {
     if [[ -f "$ROOT/data/ingest_last_error.txt" ]]; then
       cat "$ROOT/data/ingest_last_error.txt"
     elif [[ -f "$ROOT/data/ingest_last_run.json" ]]; then
-      python3 - "$ROOT/data/ingest_last_run.json" <<'PY'
+      "$PY" - "$ROOT/data/ingest_last_run.json" <<'PY'
 import json, sys
 from pathlib import Path
 p = Path(sys.argv[1])
@@ -69,12 +67,13 @@ if not data.get("ok") and data.get("errors"):
         print(f"  • {err}")
 PY
     else
-      echo "ERROR: Ingest failed with no error log — run: ./scripts/doctor_ingest_mac.sh"
+      echo "ERROR: Ingest failed — run: ./scripts/fix_ingest_python_mac.sh"
+      echo "       or: ./scripts/doctor_ingest_mac.sh"
     fi
     echo ""
     echo "Ingest failed (exit $code)."
     echo "Dashboard was restarted anyway so the browser works again."
-    echo "Tip: ./scripts/doctor_ingest_mac.sh"
+    echo "Tip: ./scripts/fix_ingest_python_mac.sh"
   fi
   exit "$code"
 }
@@ -110,8 +109,8 @@ fi
 
 echo "Starting ingest…"
 export PYTHONPATH="$ROOT/src"
-python3 "$ROOT/scripts/run_ingest.py" "$@"
+"$PY" "$ROOT/scripts/run_ingest.py" "$@"
 
 echo ""
 echo "Stats:"
-python3 "$ROOT/scripts/manage_watchlist.py" stats
+"$PY" "$ROOT/scripts/manage_watchlist.py" stats

@@ -19,7 +19,35 @@ from investment_agent.providers.finnhub import FinnhubClient  # noqa: E402
 from investment_agent.providers.fred import fetch_vix  # noqa: E402
 
 
+def _check_pandas_numpy() -> int | None:
+    import platform
+
+    label = f"{platform.python_version()} · {platform.executable}"
+    try:
+        import numpy  # noqa: F401
+        import pandas  # noqa: F401
+    except ImportError as exc:
+        msg = str(exc)
+        print(f"ERROR: pandas/numpy not usable with this Python ({label})")
+        if "incompatible architecture" in msg or "mach-o" in msg.lower():
+            print(
+                "  Cause: NumPy was built for a different CPU (arm64 vs x86_64). "
+                "Common when /usr/local/bin/python3 is used on Apple Silicon."
+            )
+        else:
+            print(f"  {msg}")
+        print("Fix: run once in Terminal: ./scripts/fix_ingest_python_mac.sh")
+        return 5
+    print(f"Checking pandas/numpy ({platform.machine()})…")
+    print("  OK — imports work")
+    return None
+
+
 def main() -> int:
+    code = _check_pandas_numpy()
+    if code is not None:
+        return code
+
     clear_stale_ingest_lock()
     if ingest_lock_active():
         print(f"ERROR: {ingest_lock_message()}")
