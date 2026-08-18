@@ -55,8 +55,26 @@ cleanup() {
   fi
   if [[ "$code" -ne 0 ]]; then
     echo ""
-    echo "Ingest failed (exit $code). Scroll up in the Activity log for INGEST FAILED lines."
+    if [[ -f "$ROOT/data/ingest_last_run.json" ]]; then
+      PYTHONPATH="$ROOT/src" python3 - <<'PY' 2>/dev/null || true
+import json
+from pathlib import Path
+p = Path("data/ingest_last_run.json")
+if p.is_file():
+    data = json.loads(p.read_text(encoding="utf-8"))
+    errs = data.get("errors") or []
+    if errs:
+        print("── Ingest errors ──")
+        for err in errs[:8]:
+            print(f"  • {err}")
+        if len(errs) > 8:
+            print(f"  … and {len(errs) - 8} more")
+PY
+    fi
+    echo ""
+    echo "Ingest failed (exit $code). See ── Failure reason ── or ── Ingest errors ── above."
     echo "Dashboard was restarted anyway so the browser works again."
+    echo "Tip: ./scripts/doctor_ingest_mac.sh"
   fi
   exit "$code"
 }

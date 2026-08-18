@@ -29,7 +29,56 @@ DASHBOARD_URL = "http://127.0.0.1:8080"
 CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818b"
+DESKTOP_HELPER_BUILD = "20260818c"
+
+
+def _extract_failure_lines(lines: list[str]) -> list[str]:
+    """Pull ERROR / ingest failure lines out of script output (skip cleanup boilerplate)."""
+    if not lines:
+        return []
+    skip_sub = (
+        "Restarting dashboard",
+        "Dashboard back at",
+        "Dashboard was restarted",
+        "Scroll up in the Activity log",
+        "Ingest failed (exit",
+        "── Ingest errors ──",
+    )
+    hits: list[str] = []
+    capture = False
+    for raw in lines:
+        text = raw.strip()
+        if not text:
+            continue
+        if capture:
+            if (
+                text.startswith("Fix:")
+                or text.startswith("•")
+                or raw.lstrip().startswith("•")
+                or text.startswith("…")
+            ):
+                hits.append(text)
+                continue
+            capture = False
+        lower = text.lower()
+        if text.startswith("ERROR:") or "preflight failed" in lower:
+            hits.append(text)
+        elif "INGEST FAILED" in text or text == "── Ingest errors ──":
+            hits.append(text)
+            capture = True
+        elif (text.startswith("•") or raw.lstrip().startswith("•")) and hits:
+            hits.append(text)
+        elif "traceback" in lower:
+            hits.append(text)
+    if hits:
+        return hits[-12:]
+    # Fallback: last non-boilerplate lines
+    fallback = [
+        ln.strip()
+        for ln in lines
+        if ln.strip() and not any(s in ln for s in skip_sub)
+    ]
+    return fallback[-8:]
 
 
 def _log_startup(msg: str) -> None:
@@ -372,7 +421,7 @@ class DesktopHelperApp:
 
         def worker() -> None:
             exit_code = 1
-            tail_lines: list[str] = []
+            all_lines: list[str] = []
             try:
                 proc = subprocess.Popen(
                     ["/bin/bash", str(script)],
@@ -384,9 +433,7 @@ class DesktopHelperApp:
                 assert proc.stdout is not None
                 for line in proc.stdout:
                     text = line.rstrip()
-                    tail_lines.append(text)
-                    if len(tail_lines) > 30:
-                        tail_lines.pop(0)
+                    all_lines.append(text)
                     self.root.after(0, lambda l=text: self.log(l))
                 exit_code = proc.wait()
                 finished = now_pt_label() if now_pt_label else datetime.now().strftime("%H:%M")
@@ -396,6 +443,13 @@ class DesktopHelperApp:
                         lambda: self.log(f"✓ {title} finished successfully at {finished}"),
                     )
                 else:
+                    failure_lines = _extract_failure_lines(all_lines)
+                    if failure_lines:
+                        def log_summary(fl: list[str] = failure_lines) -> None:
+                            self.log("── Failure reason ──")
+                            for ln in fl:
+                                self.log(ln)
+                        self.root.after(0, log_summary)
                     self.root.after(
                         0,
                         lambda: self.log(f"✗ {title} failed (exit {exit_code}) at {finished}"),
@@ -423,7 +477,12 @@ class DesktopHelperApp:
                     else:
                         banner = f"✗ {title} failed — see Activity log ({finished})"
                         self._set_task_banner(banner, running=False)
-                        hint = "\n".join(tail_lines[-10:]) if tail_lines else "(no output captured)"
+                        failure_lines = _extract_failure_lines(all_lines)
+                        hint = (
+                            "\n".join(failure_lines)
+                            if failure_lines
+                            else "(no error detail captured — scroll up in Activity log)"
+                        )
                         extra = ""
                         if task_key == "end_of_day":
                             extra = (
