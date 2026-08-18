@@ -22,7 +22,7 @@ from investment_agent.providers.fred import fetch_vix  # noqa: E402
 def _check_pandas_numpy() -> int | None:
     import platform
 
-    label = f"{platform.python_version()} · {platform.executable}"
+    label = f"{platform.python_version()} · {sys.executable}"
     try:
         import numpy  # noqa: F401
         import pandas  # noqa: F401
