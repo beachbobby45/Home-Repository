@@ -28,8 +28,25 @@ except ImportError as exc:
 DASHBOARD_URL = "http://127.0.0.1:8080"
 CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
+LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818d"
+DESKTOP_HELPER_BUILD = "20260818e"
+
+
+def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
+    """Write full script output so Tony can open it in TextEdit (Activity log is hard to copy)."""
+    LAST_RUN_LOG.parent.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    header = f"=== {title} · exit {exit_code} · {stamp} ===\n\n"
+    LAST_RUN_LOG.write_text(header + "\n".join(lines) + "\n", encoding="utf-8")
+    return LAST_RUN_LOG
+
+
+def _open_path_in_editor(path: Path) -> None:
+    if sys.platform == "darwin":
+        subprocess.run(["open", "-a", "TextEdit", str(path)], check=False)
+    else:
+        subprocess.run(["xdg-open", str(path)], check=False)
 
 
 def _ingest_errors_from_disk(repo: Path) -> list[str]:
@@ -322,7 +339,10 @@ class DesktopHelperApp:
 
         hint = ttk.Label(
             rhythm,
-            text="End of Day can take 15–30 min for a full watchlist. Watch the progress bar and Activity log.",
+            text=(
+                "End of Day can take 15–30 min. If something fails, use Activity log → "
+                "Open last run log (full output in TextEdit)."
+            ),
             font=("Helvetica", 9),
             wraplength=440,
         )
@@ -340,18 +360,75 @@ class DesktopHelperApp:
 
         log_frame = ttk.LabelFrame(self.root, text="Activity log", padding=8)
         log_frame.pack(fill="both", expand=True, **pad)
+        log_tools = ttk.Frame(log_frame)
+        log_tools.pack(fill="x", pady=(0, 6))
+        ttk.Button(log_tools, text="Copy activity log", command=self.copy_activity_log).pack(
+            side="left", padx=(0, 6)
+        )
+        ttk.Button(log_tools, text="Open last run log", command=self.open_last_run_log).pack(
+            side="left", padx=(0, 6)
+        )
+        ttk.Button(log_tools, text="Open ingest error", command=self.open_ingest_error).pack(
+            side="left"
+        )
+        ttk.Label(
+            log_tools,
+            text="Tip: last run log opens in TextEdit — select all (Cmd+A) and copy.",
+            font=("Helvetica", 9),
+        ).pack(side="left", padx=(8, 0))
         self.log_box = scrolledtext.ScrolledText(log_frame, height=12, font=("Menlo", 10))
         self.log_box.pack(fill="both", expand=True)
-        self.log_box.configure(state="disabled")
+        # Read-only but selectable (disabled Text blocks copy on some Mac builds).
+        self.log_box.bind("<Key>", self._log_box_key)
+
+    def _log_box_key(self, event: tk.Event) -> str | None:
+        """Allow Cmd/Ctrl+C and Cmd/Ctrl+A; block edits."""
+        if event.state & 0x4 and event.keysym.lower() in ("c", "a", "copy"):
+            return None
+        if event.keysym in ("Up", "Down", "Left", "Right", "Prior", "Next", "Home", "End"):
+            return None
+        return "break"
 
     def log(self, msg: str) -> None:
         local = datetime.now(ZoneInfo("America/Los_Angeles"))
         hour = local.hour % 12 or 12
         stamp = f"{hour}:{local.strftime('%M:%S %p')}"
-        self.log_box.configure(state="normal")
         self.log_box.insert("end", f"[{stamp}] {msg.rstrip()}\n")
         self.log_box.see("end")
-        self.log_box.configure(state="disabled")
+
+    def copy_activity_log(self) -> None:
+        text = self.log_box.get("1.0", "end-1c")
+        if not text.strip():
+            messagebox.showinfo("Activity log", "Log is empty.")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.root.update_idletasks()
+        self.log("Copied Activity log to clipboard — paste with Cmd+V.")
+
+    def open_last_run_log(self) -> None:
+        if not LAST_RUN_LOG.is_file():
+            messagebox.showinfo(
+                "Last run log",
+                f"No run log yet.\n\nAfter Morning Prep, Refresh Live, or End of Day,\n"
+                f"output is saved to:\n{LAST_RUN_LOG}",
+            )
+            return
+        _open_path_in_editor(LAST_RUN_LOG)
+        self.log(f"Opened {LAST_RUN_LOG}")
+
+    def open_ingest_error(self) -> None:
+        path = self.repo / "data" / "ingest_last_error.txt"
+        if not path.is_file():
+            messagebox.showinfo(
+                "Ingest error",
+                "No ingest error file yet.\n\n"
+                f"Expected after a failed End of Day:\n{path}\n\n"
+                "Or run: ./scripts/doctor_ingest_mac.sh",
+            )
+            return
+        _open_path_in_editor(path)
+        self.log(f"Opened {path}")
 
     def _set_task_banner(self, text: str, *, running: bool = False) -> None:
         self.task_banner.configure(text=text)
@@ -493,6 +570,13 @@ class DesktopHelperApp:
             except Exception as exc:
                 self.root.after(0, lambda: self.log(f"ERROR: {exc}"))
             finally:
+                if all_lines:
+                    saved = _save_last_run_log(title, all_lines, exit_code)
+                    self.root.after(
+                        0,
+                        lambda p=saved: self.log(f"Full output saved: {p}"),
+                    )
+
                 def finish_ui() -> None:
                     self.running = False
                     finished = now_pt_label() if now_pt_label else datetime.now().strftime("%H:%M")
@@ -519,13 +603,15 @@ class DesktopHelperApp:
                             if failure_lines
                             else "(no error detail captured — scroll up in Activity log)"
                         )
-                        extra = ""
+                        extra = (
+                            f"\n\nFull log saved to:\n{LAST_RUN_LOG}\n"
+                            "In the app: Activity log → Open last run log (TextEdit).\n"
+                            "Or: Activity log → Copy activity log."
+                        )
                         if task_key == "end_of_day":
-                            extra = (
+                            extra += (
                                 "\n\nEnd of Day stops at Step 1 if ingest fails. "
-                                "'Restarting dashboard' lines are normal — ingest pauses "
-                                "then restarts the dashboard.\n"
-                                "Run ./scripts/doctor_ingest_mac.sh in Terminal for a quick diagnosis."
+                                "'Restarting dashboard' is normal cleanup."
                             )
                         messagebox.showerror(
                             f"{title} failed",
