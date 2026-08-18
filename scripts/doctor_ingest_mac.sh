@@ -48,5 +48,10 @@ if [[ "$fail" -eq 0 ]]; then
   echo "All checks passed. End of Day Step 1 should start (15–25 min for S&P 500)."
 else
   echo "Fix the FAIL items above, then retry End of Day in the Desktop app."
+  if [[ -f "$ROOT/data/ingest_last_error.txt" ]]; then
+    echo ""
+    echo "Last ingest error on disk:"
+    cat "$ROOT/data/ingest_last_error.txt"
+  fi
 fi
 exit "$fail"

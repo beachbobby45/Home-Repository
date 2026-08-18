@@ -29,7 +29,39 @@ DASHBOARD_URL = "http://127.0.0.1:8080"
 CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818c"
+DESKTOP_HELPER_BUILD = "20260818d"
+
+
+def _ingest_errors_from_disk(repo: Path) -> list[str]:
+    """Read the last ingest failure written by run_ingest.py (survives scroll/buffer issues)."""
+    err_file = repo / "data" / "ingest_last_error.txt"
+    if err_file.is_file():
+        lines = [ln.strip() for ln in err_file.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        return [ln for ln in lines if not ln.startswith("Fix:")][:14]
+    last_run = repo / "data" / "ingest_last_run.json"
+    if last_run.is_file():
+        try:
+            data = json.loads(last_run.read_text(encoding="utf-8"))
+            if not data.get("ok") and data.get("errors"):
+                return [f"• {err}" for err in data["errors"][:12]]
+        except (json.JSONDecodeError, OSError):
+            pass
+    return []
+
+
+def _failure_lines_for_task(
+    all_lines: list[str],
+    repo: Path,
+    *,
+    task_key: str,
+) -> list[str]:
+    disk = _ingest_errors_from_disk(repo) if task_key in ("end_of_day", "ingest") else []
+    if disk:
+        return disk
+    parsed = _extract_failure_lines(all_lines)
+    if parsed:
+        return parsed
+    return disk
 
 
 def _extract_failure_lines(lines: list[str]) -> list[str]:
@@ -443,7 +475,9 @@ class DesktopHelperApp:
                         lambda: self.log(f"✓ {title} finished successfully at {finished}"),
                     )
                 else:
-                    failure_lines = _extract_failure_lines(all_lines)
+                    failure_lines = _failure_lines_for_task(
+                        all_lines, self.repo, task_key=task_key
+                    )
                     if failure_lines:
                         def log_summary(fl: list[str] = failure_lines) -> None:
                             self.log("── Failure reason ──")
@@ -477,7 +511,9 @@ class DesktopHelperApp:
                     else:
                         banner = f"✗ {title} failed — see Activity log ({finished})"
                         self._set_task_banner(banner, running=False)
-                        failure_lines = _extract_failure_lines(all_lines)
+                        failure_lines = _failure_lines_for_task(
+                            all_lines, self.repo, task_key=task_key
+                        )
                         hint = (
                             "\n".join(failure_lines)
                             if failure_lines
