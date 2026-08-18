@@ -30,7 +30,7 @@ CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818g"
+DESKTOP_HELPER_BUILD = "20260818h"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:

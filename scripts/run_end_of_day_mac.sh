@@ -11,10 +11,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$PWD"
-chmod +x "$ROOT/scripts/resolve_python.sh" 2>/dev/null || true
-PY="$("$ROOT/scripts/resolve_python.sh")" || exit 1
-export PYTHONPATH="$ROOT/src"
+chmod +x "$ROOT/scripts/resolve_python.sh" "$ROOT/scripts/fix_ingest_python_mac.sh" 2>/dev/null || true
+
+if ! PY="$("$ROOT/scripts/resolve_python.sh")"; then
+  echo ""
+  echo "ERROR: Could not set up ingest Python."
+  echo "In Terminal run:"
+  echo "  cd \"$ROOT\" && git pull origin main && ./scripts/fix_ingest_python_mac.sh"
+  exit 1
+fi
+echo "Python: $PY ($("$PY" --version 2>&1))"
 SKIP_REPORT=0
+export PYTHONPATH="$ROOT/src"
 for arg in "$@"; do
   case "$arg" in
     --skip-report) SKIP_REPORT=1 ;;
