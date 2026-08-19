@@ -33,6 +33,7 @@
   <div id="trading-mode-banner" class="banner paper app-banner-compact">Loading trading mode…</div>
   <div id="exit-alert-banner" class="banner exit-alert app-banner-compact" hidden></div>
   <div id="no-trade-banner" class="banner no-trade app-banner-compact" hidden></div>
+  <div id="caution-banner" class="banner caution-day app-banner-compact" hidden></div>
   <div id="exceptional-banner" class="banner exceptional app-banner-compact" hidden></div>
   <div id="regime-banner" class="banner ok app-banner-compact">Loading regime…</div>
 
@@ -1054,6 +1055,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       if (td && verdictEl) {
         verdictEl.textContent = (td.verdict || "—").replace("_", " ");
         document.getElementById("status-verdict-chip")?.classList.toggle("status-go", td.verdict === "GO");
+        document.getElementById("status-verdict-chip")?.classList.toggle("status-caution", td.verdict === "CAUTION");
         document.getElementById("status-verdict-chip")?.classList.toggle("status-nogo", td.verdict === "NO_GO");
       }
       const weeklyEl = document.getElementById("status-weekly-text");
@@ -1123,6 +1125,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const p1b = td?.phase1b || {};
       const exitEl = document.getElementById("exit-alert-banner");
       const noTradeEl = document.getElementById("no-trade-banner");
+      const cautionEl = document.getElementById("caution-banner");
       const exceptionalEl = document.getElementById("exceptional-banner");
       if (exitEl) {
         if (p1b.show_exit_alert) {
@@ -1158,12 +1161,24 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           noTradeEl.textContent = "";
         }
       }
+      if (cautionEl) {
+        const showCaution = p1b.market_activity_caution && !p1b.show_no_trade_banner && td.verdict === "CAUTION";
+        if (showCaution) {
+          cautionEl.hidden = false;
+          cautionEl.className = "banner caution-day app-banner-compact";
+          cautionEl.textContent =
+            `${p1b.caution_headline || "CAUTION — average market day"} — ${td.detail || ""}`;
+        } else {
+          cautionEl.hidden = true;
+          cautionEl.textContent = "";
+        }
+      }
       const genBtn = document.getElementById("generate-proposals");
       if (genBtn) {
         const blocked = !!p1b.block_new_proposals;
         genBtn.disabled = blocked;
         genBtn.title = blocked
-          ? "Blocked — Market Activity is NO TRADE today"
+          ? "Blocked — Market Activity below 60 or bull gate off"
           : "Step 2b — generate up to 5 scored proposals";
       }
     }
@@ -1220,8 +1235,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (el) el.innerHTML = "";
         return;
       }
-      const cls = ma.allow_trade ? "trade-ok" : "no-trade";
+      const score = ma.score ?? 0;
+      const cls = !ma.allow_trade ? "no-trade" : score >= 70 ? "trade-ok" : "trade-caution";
       const band = ma.band_label || ma.band || "—";
+      const gateNote = ma.allow_trade
+        ? (score >= 70 ? " · GO day (≥70)" : " · CAUTION day (60–69, confirm ≥70)")
+        : " · NO TRADE (<60 or bull gate off)";
       const bull = ma.bull_gate_ok === false
         ? `<span class="ma-bull off">Bull gate off${ma.spy_20d_return_pct != null ? ` (SPY 20d ${Number(ma.spy_20d_return_pct).toFixed(2)}%)` : ""}</span>`
         : "";
@@ -1231,7 +1250,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       el.innerHTML = `
         <div class="market-activity-head">
           <span class="market-activity-title">Market Activity</span>
-          <span class="market-activity-score ${cls}">${ma.score ?? "—"}/100 · ${band}</span>
+          <span class="market-activity-score ${cls}">${score}/100 · ${band}${gateNote}</span>
           ${bull}${exit}
         </div>
         <div class="brief ma-summary">${ma.summary || ""}</div>`;

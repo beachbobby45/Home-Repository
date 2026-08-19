@@ -15,7 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.confirmation import (
+    CONFIRMATION_PASS_CAUTION_MIN,
     CONFIRMATION_PASS_MIN,
+    confirmation_pass_threshold,
     evaluate_ticker_confirmation,
     rank_eligible,
     save_confirmation_evaluation,
@@ -78,6 +80,40 @@ def test_rank_eligible_rules():
     assert rank_eligible(1, "above_average") is False
     assert rank_eligible(2, "exceptional") is True
     assert rank_eligible(3, "exceptional") is False
+
+
+def test_confirmation_pass_threshold_by_day():
+    assert confirmation_pass_threshold({"band": "average", "score": 65}) == CONFIRMATION_PASS_CAUTION_MIN
+    assert confirmation_pass_threshold({"band": "above_average", "score": 72}) == CONFIRMATION_PASS_MIN
+    assert confirmation_pass_threshold({"band": "exceptional", "score": 85}) == CONFIRMATION_PASS_MIN
+
+
+def test_confirmation_passes_on_average_day_at_70():
+    conn = _conn()
+    try:
+        _seed_bars(conn, "AAPL", closes=[100 + i for i in range(25)])
+        _seed_bars(conn, "SPY", closes=[400 + i for i in range(25)])
+        _seed_quotes(conn, "AAPL", price=101.5, open_px=100.0)
+        _seed_quotes(conn, "SPY", price=401.0, open_px=400.0)
+        market_activity = {"allow_trade": True, "band": "average", "score": 65, "band_label": "Average"}
+        with patch(
+            "investment_agent.confirmation.score_volume",
+            return_value=72.0,
+        ), patch(
+            "investment_agent.confirmation.score_news_significance",
+            return_value=72.0,
+        ):
+            result = evaluate_ticker_confirmation(
+                conn,
+                "AAPL",
+                market_activity=market_activity,
+                candidate_row={"live_pass_today": True, "avg_range_pct": 1.5},
+            )
+        assert result["pass_threshold"] == CONFIRMATION_PASS_CAUTION_MIN
+        assert result["score"] >= CONFIRMATION_PASS_CAUTION_MIN
+        assert result["passes"] is True
+    finally:
+        conn.close()
 
 
 def test_confirmation_blocked_when_day_no_trade():

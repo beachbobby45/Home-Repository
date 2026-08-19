@@ -930,11 +930,17 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     quotes = _latest_quote_rows(conn, watch)
 
     from investment_agent.confirmation import (
+        CONFIRMATION_PASS_CAUTION_MIN,
         _rank_eligible,
         confirmations_to_dict,
+        confirmation_pass_threshold,
         evaluate_session_confirmations,
     )
-    from investment_agent.market_activity import evaluate_market_activity, market_activity_to_dict
+    from investment_agent.market_activity import (
+        GO_SESSION_MIN,
+        evaluate_market_activity,
+        market_activity_to_dict,
+    )
 
     market_activity = market_activity_to_dict(evaluate_market_activity(conn, when=now, persist=False))
     confirmations = confirmations_to_dict(
@@ -1072,11 +1078,12 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         add_check("Regime", True, regime_msg)
 
     ma_summary = market_activity.get("summary") or "Market Activity pending"
+    ma_score = int(market_activity.get("score") or 0)
     if not market_activity.get("allow_trade"):
         add_check(
             "Market Activity",
             False,
-            f"{market_activity.get('score', 0)}/100 — {market_activity.get('band_label', 'blocked')} · NO TRADE",
+            f"{ma_score}/100 — {market_activity.get('band_label', 'blocked')} · NO TRADE",
             blocking=phase == "trade_window",
         )
         if phase == "trade_window" and verdict in ("GO", "CAUTION"):
@@ -1086,11 +1093,17 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         elif phase in ("opening_wait", "pre_market"):
             detail = f"{detail} · Preliminary: {ma_summary}"
     else:
-        add_check(
-            "Market Activity",
-            True,
-            f"{market_activity.get('score', 0)}/100 — {market_activity.get('band_label', 'ok')} · entries allowed",
-        )
+        ma_ok_msg = f"{ma_score}/100 — {market_activity.get('band_label', 'ok')} · entries allowed"
+        if ma_score < GO_SESSION_MIN:
+            ma_ok_msg += f" · CAUTION band (confirm ≥{CONFIRMATION_PASS_CAUTION_MIN})"
+        add_check("Market Activity", True, ma_ok_msg)
+        if phase == "trade_window" and ma_score < GO_SESSION_MIN and verdict == "GO":
+            verdict = "CAUTION"
+            headline = "Caution — average market day"
+            detail = (
+                f"Market Activity {ma_score}/100 — trade only if #1 confirms "
+                f"(≥{CONFIRMATION_PASS_CAUTION_MIN})"
+            )
 
     if market_activity.get("allow_trade") and phase == "trade_window":
         confirmed = [c for c in confirmations if c.get("passes") and c.get("eligible")]
@@ -1116,7 +1129,10 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
                 if verdict in ("GO", "CAUTION"):
                     verdict = "NO_GO"
                 headline = "No confirming setup"
-                detail = top.get("summary") or f"Ranked #{top.get('rank')} below {75} confirmation threshold"
+                detail = top.get("summary") or (
+                    f"Ranked #{top.get('rank')} below "
+                    f"{confirmation_pass_threshold(market_activity)} confirmation threshold"
+                )
                 add_check(
                     "Confirmation",
                     False,
@@ -1518,6 +1534,16 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         },
         "market_activity_components": market_activity.get("components") or {},
         "block_new_proposals": phase == "trade_window" and not market_activity.get("allow_trade"),
+        "market_activity_caution": bool(
+            market_activity.get("allow_trade")
+            and int(market_activity.get("score") or 0) < GO_SESSION_MIN
+        ),
+        "caution_headline": (
+            "CAUTION — average market day"
+            if market_activity.get("allow_trade")
+            and int(market_activity.get("score") or 0) < GO_SESSION_MIN
+            else None
+        ),
         "exceptional_trade": exceptional,
         "show_exceptional_banner": bool(exceptional.get("active")),
         "exceptional_headline": (
@@ -1541,7 +1567,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "daily_target_met": target_met,
         "stopped_out_today": stopped,
         "can_enter_new": (
-            verdict == "GO"
+            verdict in ("GO", "CAUTION")
             and len(open_positions) < 2
             and (not target_met or exceptional.get("active"))
             and (not weekly_target_met or exceptional.get("active"))
