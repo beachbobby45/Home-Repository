@@ -1,36 +1,40 @@
 #!/bin/bash
-# Fix ingest End-of-Day failures from wrong Python / NumPy architecture (Mac).
-# Creates Home-Repository/.venv so Terminal and Desktop app use the same Python.
+# Fix NumPy architecture errors — rebuilds Home-Repository/.venv from scratch.
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$PWD"
+PINNED="$HOME/.investment_agent/ingest-python.path"
+mkdir -p "$(dirname "$PINNED")"
+export PYTHONNOUSERSITE=1
 chmod +x "$ROOT/scripts/resolve_python.sh" 2>/dev/null || true
 
-echo "=== Fix ingest Python (Mac) ==="
+echo "=== Fix Python (.venv) ==="
 echo "Repo: $ROOT"
 echo ""
+echo "Removing old .venv and rebuilding (ignores ~/Library/Python packages)…"
+rm -rf "$ROOT/.venv"
 
-# resolve_python.sh creates/repairs .venv when needed.
 PY="$("$ROOT/scripts/resolve_python.sh")" || {
   echo ""
-  echo "Setup failed. On Apple Silicon without Homebrew Python, run:"
-  echo "  brew install python@3.12"
+  echo "Setup failed. Try: brew install python@3.12"
   echo "Then run this script again."
   exit 1
 }
 
-echo "Ingest Python: $PY ($("$PY" --version 2>&1))"
 echo ""
-PYTHONPATH="$ROOT/src" "$PY" -c "
+echo "Ingest Python: $PY ($("$PY" --version 2>&1))"
+PYTHONNOUSERSITE=1 PYTHONPATH="$ROOT/src" "$PY" -c "
 import pandas as pd
 import numpy as np
-print('pandas', pd.__version__, '· numpy', np.__version__)
+from investment_agent.providers import yfinance_bars
+print('pandas', pd.__version__, '· numpy', np.__version__, '· yfinance OK')
 "
+echo "$PY" > "$PINNED"
 echo ""
-echo "Done. Quit and reopen the Desktop app, then retry End of Day."
+echo "Done. Quit the Desktop app (Cmd+Q), reopen it, then retry Morning Prep."
 echo "Test: ./scripts/doctor_ingest_mac.sh"
 if [[ -f "$HOME/Library/LaunchAgents/com.investment-agent.dashboard.plist" ]]; then
   echo ""
-  echo "Updating background dashboard to use .venv Python…"
+  echo "Updating background dashboard…"
   "$ROOT/scripts/install_dashboard_service_mac.sh" || true
 fi

@@ -30,7 +30,7 @@ CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260819a"
+DESKTOP_HELPER_BUILD = "20260819b"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
@@ -634,9 +634,9 @@ class DesktopHelperApp:
                         )
                         if task_key in ("end_of_day", "morning_prep", "refresh_live"):
                             extra += (
-                                "\n\nIf browser says 'not connected' after End of Day, "
-                                "click Update & Open Dashboard.\n"
-                                "If you see Python/NumPy errors, run Fix Ingest Python.command once."
+                                "\n\nNumPy architecture error? Double-click:\n"
+                                "  Home-Repository/scripts/Repair Dashboard.command\n"
+                                "Then quit (Cmd+Q) and reopen this app."
                             )
                         messagebox.showerror(
                             f"{title} failed",
