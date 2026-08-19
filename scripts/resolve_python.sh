@@ -1,14 +1,16 @@
 #!/bin/bash
 # Pick ingest/dashboard Python — ONLY Home-Repository/.venv (never system python3).
-# Creates/repairs .venv automatically. Ignores ~/Library/Python user packages.
+# Requires Python 3.9+ (numpy 1.26). Skips macOS /usr/bin/python3 stub (often 3.8).
 set -u
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="/opt/homebrew/bin:/opt/homebrew/opt/python@3.12/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 export PYTHONNOUSERSITE=1
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="$ROOT/.venv"
 VENV_PY="$VENV/bin/python3"
 PINNED="$HOME/.investment_agent/ingest-python.path"
+MIN_PYTHON_MAJOR=3
+MIN_PYTHON_MINOR=9
 
 _python_ok() {
   local py="$1"
@@ -30,6 +32,15 @@ _arch_label() {
   PYTHONNOUSERSITE=1 "$py" -c "import platform, struct; print(f'{platform.python_version()} {platform.machine()} ({struct.calcsize(\"P\")*8}-bit)')" 2>/dev/null || echo "unknown"
 }
 
+_python_new_enough() {
+  local py="$1"
+  [[ -n "$py" && -x "$py" ]] || return 1
+  PYTHONNOUSERSITE=1 "$py" -c "
+import sys
+sys.exit(0 if sys.version_info >= ($MIN_PYTHON_MAJOR, $MIN_PYTHON_MINOR) else 1)
+" 2>/dev/null
+}
+
 _pin() {
   mkdir -p "$(dirname "$PINNED")"
   echo "$VENV_PY" > "$PINNED"
@@ -39,26 +50,23 @@ _pin() {
 
 _pick_base_python() {
   local c
-  if [[ "$(uname -m)" == "arm64" ]]; then
-    for c in \
-      /opt/homebrew/bin/python3 \
-      /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 \
-      /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
-      /usr/bin/python3 \
-      /usr/local/bin/python3
-    do
-      [[ -x "$c" ]] || continue
+  # Prefer Homebrew / python.org /usr/local — NOT macOS stub /usr/bin/python3 (usually 3.8).
+  for c in \
+    /opt/homebrew/bin/python3 \
+    /opt/homebrew/opt/python@3.12/bin/python3 \
+    /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 \
+    /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
+    /usr/local/bin/python3 \
+    /usr/bin/python3
+  do
+    [[ -x "$c" ]] || continue
+    if _python_new_enough "$c"; then
       echo "$c"
       return 0
-    done
-  else
-    for c in /usr/local/bin/python3 /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 /usr/bin/python3; do
-      [[ -x "$c" ]] || continue
-      echo "$c"
-      return 0
-    done
-  fi
-  command -v python3 2>/dev/null || true
+    fi
+    echo "  Skip $c ($(_arch_label "$c")) — need Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+" >&2
+  done
+  return 1
 }
 
 _pip_install_venv() {
@@ -69,6 +77,10 @@ _pip_install_venv() {
 _bootstrap_venv() {
   local base="$1"
   [[ -n "$base" && -x "$base" ]] || return 1
+  if ! _python_new_enough "$base"; then
+    echo "  ERROR: $base is too old ($(_arch_label "$base"))" >&2
+    return 1
+  fi
   local base_arch host_arch
   host_arch="$(uname -m)"
   base_arch="$(PYTHONNOUSERSITE=1 "$base" -c "import platform; print(platform.machine())" 2>/dev/null || echo unknown)"
@@ -80,7 +92,7 @@ _bootstrap_venv() {
 
   rm -rf "$VENV"
   if [[ "$host_arch" == "arm64" && "$base_arch" == "x86_64" ]]; then
-    echo "  Using Rosetta (x86_64) venv — normal on some Mac setups." >&2
+    echo "  Using Rosetta (x86_64) venv — OK for /usr/local Python on Apple Silicon." >&2
     arch -x86_64 "$base" -m venv "$VENV" >&2 || return 1
   else
     "$base" -m venv "$VENV" >&2 || return 1
@@ -96,15 +108,21 @@ if [[ -x "$VENV_PY" ]] && _python_ok "$VENV_PY"; then
 fi
 
 # Repair broken .venv (or create new).
-BASE="$(_pick_base_python)"
+BASE="$(_pick_base_python || true)"
 if [[ -n "$BASE" ]] && _bootstrap_venv "$BASE"; then
   echo "  .venv ready: $VENV_PY ($(_arch_label "$VENV_PY"))" >&2
   _pin
 fi
 
-echo "ERROR: Could not create a working .venv for ingest/dashboard." >&2
-echo "  Run: cd \"$ROOT\" && ./scripts/fix_ingest_python_mac.sh" >&2
-echo "  Or:  brew install python@3.12  then run fix again." >&2
+echo "ERROR: Could not create a working .venv (need Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+)." >&2
+echo "" >&2
+echo "  Your Mac has /usr/bin/python3 3.8 — too old for this project." >&2
+echo "  Install a newer Python, then run fix again:" >&2
+echo "" >&2
+echo "    brew install python@3.12" >&2
+echo "    ./scripts/fix_ingest_python_mac.sh" >&2
+echo "" >&2
+echo "  Or download: https://www.python.org/downloads/macos/" >&2
 if [[ -x "$VENV_PY" ]]; then
   echo "  .venv broken: $(_python_err "$VENV_PY")" >&2
 fi
