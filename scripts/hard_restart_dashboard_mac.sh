@@ -56,13 +56,15 @@ if [[ ! -f "$ROOT/.env" ]]; then
 fi
 
 if ! "$PY" -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
-  echo "Installing dependencies (this may take a minute)…"
-  "$PY" -m pip install -r "$ROOT/requirements.txt"
+  echo "Installing dashboard dependencies (one time)…"
 fi
+"$PY" -m pip install -r "$ROOT/requirements.txt" "pandas>=2.0" "numpy>=1.26"
 
-if ! PYTHONPATH="$ROOT/src" "$PY" -c "from investment_agent.dashboard.app import app" 2>/dev/null; then
+echo "Checking dashboard loads…"
+if ! PYTHONPATH="$ROOT/src" "$PY" -c "from investment_agent.dashboard.app import app" 2>&1; then
   echo ""
-  echo "ERROR: Dashboard failed to load. Run ./scripts/doctor_dashboard_mac.sh for details."
+  echo "ERROR: Dashboard code failed to import (see traceback above)."
+  echo "Run: ./scripts/fix_ingest_python_mac.sh"
   exit 1
 fi
 
