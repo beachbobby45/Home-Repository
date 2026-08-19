@@ -30,7 +30,7 @@ CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260818i"
+DESKTOP_HELPER_BUILD = "20260819a"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
@@ -277,6 +277,7 @@ class DesktopHelperApp:
         self.current_task_key = ""
         self.task_started_pt = ""
         self._clear_status_after_id: str | None = None
+        self.dashboard_pause_expected = False
         self.rhythm_last_labels: dict[str, ttk.Label] = {}
         self.rhythm_buttons: dict[str, ttk.Button] = {}
 
@@ -474,6 +475,16 @@ class DesktopHelperApp:
 
     def refresh_status(self) -> None:
         def worker() -> None:
+            if self.dashboard_pause_expected or (
+                self.running and self.current_task_key == "end_of_day"
+            ):
+                self.root.after(
+                    0,
+                    lambda: self.status_label.configure(
+                        text="Dashboard paused for End of Day ingest (normal — ~15–25 min)"
+                    ),
+                )
+                return
             try:
                 with urllib.request.urlopen(f"{DASHBOARD_URL}/api/version", timeout=2) as resp:
                     data = json.loads(resp.read().decode())
@@ -505,6 +516,11 @@ class DesktopHelperApp:
         return self.running
 
     def _start_rhythm_task(self, task_key: str, script_name: str, title: str) -> None:
+        if task_key == "end_of_day":
+            self.dashboard_pause_expected = True
+            self.status_label.configure(
+                text="Dashboard will pause during ingest (browser may say not connected)"
+            )
         script = self.repo / "scripts" / script_name
         self._run_script(title, script, task_key=task_key)
 
@@ -594,6 +610,7 @@ class DesktopHelperApp:
                             messagebox.showinfo(
                                 "End of Day complete",
                                 f"Finished at {finished}.\n\n"
+                                "Dashboard is restarting at http://127.0.0.1:8080\n\n"
                                 "Tomorrow: run Morning Prep before the open, "
                                 "then Refresh Live right before you buy.",
                             )
@@ -617,9 +634,9 @@ class DesktopHelperApp:
                         )
                         if task_key in ("end_of_day", "morning_prep", "refresh_live"):
                             extra += (
-                                "\n\nIf you see Python/NumPy or 'No Python found', run once: "
-                                "Home-Repository/scripts/Fix Ingest Python.command "
-                                "(creates .venv), then retry."
+                                "\n\nIf browser says 'not connected' after End of Day, "
+                                "click Update & Open Dashboard.\n"
+                                "If you see Python/NumPy errors, run Fix Ingest Python.command once."
                             )
                         messagebox.showerror(
                             f"{title} failed",
@@ -627,9 +644,29 @@ class DesktopHelperApp:
                         )
                     self.current_task = ""
                     self.current_task_key = ""
+                    if task_key == "end_of_day":
+                        self.dashboard_pause_expected = False
+
+                        def restart_dashboard() -> None:
+                            script = self.repo / "scripts" / "ensure_dashboard_mac.sh"
+                            if script.is_file():
+                                proc = subprocess.run(
+                                    ["/bin/bash", str(script)],
+                                    cwd=self.repo,
+                                    capture_output=True,
+                                    text=True,
+                                )
+                                out = (proc.stdout or "") + (proc.stderr or "")
+                                if out.strip():
+                                    for line in out.strip().splitlines():
+                                        self.root.after(0, lambda l=line: self.log(l))
+                            self.root.after(0, self.refresh_status)
+
+                        threading.Thread(target=restart_dashboard, daemon=True).start()
                     self._set_rhythm_buttons_enabled(True)
                     self.refresh_rhythm_labels()
-                    self.refresh_status()
+                    if task_key != "end_of_day":
+                        self.refresh_status()
                     if self._clear_status_after_id:
                         self.root.after_cancel(self._clear_status_after_id)
                     self._clear_status_after_id = self.root.after(

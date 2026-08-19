@@ -29,3 +29,8 @@ print('pandas', pd.__version__, '· numpy', np.__version__)
 echo ""
 echo "Done. Quit and reopen the Desktop app, then retry End of Day."
 echo "Test: ./scripts/doctor_ingest_mac.sh"
+if [[ -f "$HOME/Library/LaunchAgents/com.investment-agent.dashboard.plist" ]]; then
+  echo ""
+  echo "Updating background dashboard to use .venv Python…"
+  "$ROOT/scripts/install_dashboard_service_mac.sh" || true
+fi

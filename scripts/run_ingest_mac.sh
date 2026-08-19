@@ -43,12 +43,25 @@ PAUSED=0
 
 cleanup() {
   local code=$?
-  if [[ "$PAUSED" -eq 1 && -f "$PLIST_PATH" ]]; then
+  if [[ "$PAUSED" -eq 1 ]]; then
     echo ""
     echo "Restarting dashboard service…"
-    launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
-    launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
-    echo "Dashboard back at http://127.0.0.1:8080"
+    if [[ -f "$PLIST_PATH" ]]; then
+      launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
+      launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
+    fi
+    if ! curl -sf --connect-timeout 3 "http://127.0.0.1:8080/api/version" >/dev/null 2>&1; then
+      echo "LaunchAgent did not respond — starting dashboard with .venv Python…"
+      chmod +x "$ROOT/scripts/ensure_dashboard_mac.sh" 2>/dev/null || true
+      "$ROOT/scripts/ensure_dashboard_mac.sh" 2>&1 || true
+    fi
+    if curl -sf --connect-timeout 3 "http://127.0.0.1:8080/api/version" >/dev/null 2>&1; then
+      echo "Dashboard back at http://127.0.0.1:8080"
+    else
+      echo "WARN: Dashboard not responding yet."
+      echo "      Click Update & Open Dashboard in the Desktop app, or run:"
+      echo "      ./scripts/ensure_dashboard_mac.sh"
+    fi
   fi
   if [[ "$code" -ne 0 ]]; then
     echo ""
@@ -88,6 +101,7 @@ export YFINANCE_MIN_INTERVAL_SEC="${YFINANCE_MIN_INTERVAL_SEC:-0.2}"
 
 if launchctl print "gui/$(id -u)/$PLIST_LABEL" &>/dev/null; then
   echo "Pausing background dashboard (database unlock for ingest)…"
+  echo "  Note: browser dashboard will show 'not connected' until ingest finishes — normal."
   launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
   sleep 2
   PAUSED=1

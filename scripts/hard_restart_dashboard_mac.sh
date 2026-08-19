@@ -9,8 +9,12 @@ LOG="$ROOT/data/dashboard.log"
 PIDFILE="$ROOT/data/dashboard.pid"
 URL="http://127.0.0.1:8080"
 
+# shellcheck disable=SC1091
+source "$ROOT/scripts/_resolve_python_env.sh"
+
 echo "=== Hard restart AI Investment Agent Dashboard ==="
 echo "Repo: $ROOT"
+echo "Python: $PY ($("$PY" --version 2>&1))"
 echo ""
 
 if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -51,12 +55,12 @@ if [[ ! -f "$ROOT/.env" ]]; then
   cp "$ROOT/.env.example" "$ROOT/.env"
 fi
 
-if ! python3 -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
+if ! "$PY" -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
   echo "Installing dependencies (this may take a minute)…"
-  python3 -m pip install -r "$ROOT/requirements.txt" || pip3 install -r "$ROOT/requirements.txt"
+  "$PY" -m pip install -r "$ROOT/requirements.txt"
 fi
 
-if ! PYTHONPATH="$ROOT/src" python3 -c "from investment_agent.dashboard.app import app" 2>/dev/null; then
+if ! PYTHONPATH="$ROOT/src" "$PY" -c "from investment_agent.dashboard.app import app" 2>/dev/null; then
   echo ""
   echo "ERROR: Dashboard failed to load. Run ./scripts/doctor_dashboard_mac.sh for details."
   exit 1
@@ -64,7 +68,7 @@ fi
 
 if [[ ! -f "$ROOT/data/agent.db" ]]; then
   echo "Initializing database…"
-  PYTHONPATH="$ROOT/src" python3 -c "from investment_agent.demo_seed import seed_demo_db; seed_demo_db()"
+  PYTHONPATH="$ROOT/src" "$PY" -c "from investment_agent.demo_seed import seed_demo_db; seed_demo_db()"
 fi
 
 export PYTHONPATH="$ROOT/src"
@@ -72,7 +76,7 @@ export PYTHONPATH="$ROOT/src"
 echo "[$(date)] Starting run_dashboard.py on 127.0.0.1:8080" >> "$LOG"
 
 # Start server (background)
-nohup python3 "$ROOT/scripts/run_dashboard.py" --host 127.0.0.1 --port 8080 >> "$LOG" 2>&1 &
+nohup "$PY" "$ROOT/scripts/run_dashboard.py" --host 127.0.0.1 --port 8080 >> "$LOG" 2>&1 &
 echo $! > "$PIDFILE"
 PID=$(cat "$PIDFILE")
 echo "Starting dashboard (PID $PID)…"
@@ -110,7 +114,7 @@ fi
 echo "Dashboard UP: $URL"
 VER=$(curl -s --connect-timeout 2 "$URL/api/version" 2>/dev/null || echo "")
 if [[ -n "$VER" ]]; then
-  echo "Version: $(echo "$VER" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('label','?'))" 2>/dev/null || echo "$VER")"
+  echo "Version: $(echo "$VER" | "$PY" -c "import sys,json; d=json.load(sys.stdin); print(d.get('label','?'))" 2>/dev/null || echo "$VER")"
 else
   echo "Version: (could not read /api/version)"
 fi
