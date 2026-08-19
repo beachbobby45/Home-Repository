@@ -115,18 +115,59 @@ def _mock_ranked():
     }
 
 
+from contextlib import contextmanager
+
+
+@contextmanager
+def _bypass_market_activity_gate():
+    """Proposal unit tests focus on ranking/risk — not live market-activity gate."""
+    with patch("investment_agent.trading_day.session_phase", return_value="pre_market"):
+        yield
+
+
 def test_rejection_reasons_enum():
     assert "NO_CONVICTION" in REJECTION_REASONS
     assert "OTHER" in REJECTION_REASONS
+
+
+def test_generate_blocked_when_market_activity_no_trade():
+    conn, path = _conn()
+    try:
+        _seed_ranked_env(conn)
+        ma_blocked = {
+            "session_date_et": "2026-08-03",
+            "captured_at": "2026-08-03T14:00:00+00:00",
+            "score": 52,
+            "band": "below_average",
+            "band_label": "Below average",
+            "allow_trade": False,
+            "bull_gate_ok": False,
+            "exit_alert": False,
+            "summary": "NO TRADE",
+            "index_changes": {},
+            "components": {},
+        }
+        with patch("investment_agent.trading_day.session_phase", return_value="trade_window"):
+            with patch(
+                "investment_agent.market_activity.evaluate_market_activity",
+                return_value=ma_blocked,
+            ):
+                result = generate_proposals(conn, max_proposals=1)
+        assert result["ok"] is False
+        assert "DO NOT TRADE" in result["error"]
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
 
 
 def test_generate_proposals_max_five_sorted():
     conn, path = _conn()
     try:
         _seed_ranked_env(conn)
-        with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}, "NVDA": {"open": 100, "price": 100}}):
-                result = generate_proposals(conn, max_proposals=5)
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
+                with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}, "NVDA": {"open": 100, "price": 100}}):
+                    result = generate_proposals(conn, max_proposals=5)
         assert result["ok"] is True
         assert result["generated"] <= 5
         proposals = list_proposals_for_session(conn, result["session_date_et"])
@@ -143,13 +184,14 @@ def test_generate_skips_risk_rejected():
     try:
         _seed_ranked_env(conn)
         ranked = _mock_ranked()
-        with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=ranked):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
-                with patch(
-                    "investment_agent.trade_proposal._evaluate_candidate_risk",
-                    return_value={"verdict": "rejected", "headline": "Blocked", "blockers": ["Kill switch"], "checks": []},
-                ):
-                    result = generate_proposals(conn, max_proposals=1)
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=ranked):
+                with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
+                    with patch(
+                        "investment_agent.trade_proposal._evaluate_candidate_risk",
+                        return_value={"verdict": "rejected", "headline": "Blocked", "blockers": ["Kill switch"], "checks": []},
+                    ):
+                        result = generate_proposals(conn, max_proposals=1)
         proposals = list_proposals_for_session(conn, result["session_date_et"])
         assert proposals[0]["status"] == STATUS_RISK_REJECTED
         assert result["actionable_count"] == 0
@@ -162,9 +204,10 @@ def test_reject_proposal_persists_reason():
     conn, path = _conn()
     try:
         _seed_ranked_env(conn)
-        with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
-                generate_proposals(conn, max_proposals=1)
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
+                with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
+                    generate_proposals(conn, max_proposals=1)
         pid = list_proposals_for_session(conn)[0]["id"]
         result = reject_proposal(conn, pid, reason_code="NO_CONVICTION")
         assert result["ok"] is True
@@ -179,9 +222,10 @@ def test_reject_other_requires_text():
     conn, path = _conn()
     try:
         _seed_ranked_env(conn)
-        with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
-                generate_proposals(conn, max_proposals=1)
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
+                with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
+                    generate_proposals(conn, max_proposals=1)
         pid = list_proposals_for_session(conn)[0]["id"]
         result = reject_proposal(conn, pid, reason_code="OTHER", reason_text=None)
         assert result["ok"] is False
@@ -194,9 +238,10 @@ def test_approve_reruns_risk_on_live_refresh():
     conn, path = _conn()
     try:
         _seed_ranked_env(conn)
-        with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
-                generate_proposals(conn, max_proposals=1)
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
+                with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
+                    generate_proposals(conn, max_proposals=1)
         pid = list_proposals_for_session(conn)[0]["id"]
         settings = Settings(
             anthropic_api_key="",
@@ -226,9 +271,10 @@ def test_approve_blocked_when_risk_fails_refresh():
     conn, path = _conn()
     try:
         _seed_ranked_env(conn)
-        with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
-                generate_proposals(conn, max_proposals=1)
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
+                with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
+                    generate_proposals(conn, max_proposals=1)
         pid = list_proposals_for_session(conn)[0]["id"]
         with patch(
             "investment_agent.trade_proposal.refresh_proposal_risk",
@@ -246,9 +292,10 @@ def test_journal_buy_links_proposal():
     conn, path = _conn()
     try:
         _seed_ranked_env(conn)
-        with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
-                generate_proposals(conn, max_proposals=1)
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
+                with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
+                    generate_proposals(conn, max_proposals=1)
         proposal = list_proposals_for_session(conn)[0]
         conn.execute(
             "UPDATE trade_proposals SET status = ?, human_verdict = 'approved' WHERE id = ?",
@@ -281,9 +328,10 @@ def test_validate_journal_buy_requires_approved():
     conn, path = _conn()
     try:
         _seed_ranked_env(conn)
-        with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
-                generate_proposals(conn, max_proposals=1)
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
+                with patch("investment_agent.trade_proposal.get_latest_quotes", return_value={"AAPL": {"open": 100, "price": 100}}):
+                    generate_proposals(conn, max_proposals=1)
         pid = list_proposals_for_session(conn)[0]["id"]
         check = validate_journal_buy_proposal(conn, proposal_id=pid, ticker="AAPL", side="BUY")
         assert check["ok"] is False

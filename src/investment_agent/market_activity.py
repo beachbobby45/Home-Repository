@@ -50,10 +50,14 @@ V0_ACTIVE_WEIGHTS = {
     k: v for k, v in MARKET_ACTIVITY_WEIGHTS.items() if k not in ("market_breadth", "vwap_trend")
 }
 
-ABOVE_AVERAGE_MIN = 75
-EXCEPTIONAL_MIN = 90
-AVERAGE_MIN = 60
+# Day gate bands (calibrated Aug 2026 — 75 blocked all 158 YTD sessions).
+TRADE_MIN = 60  # Minimum score to allow new entries (Average band)
+GO_SESSION_MIN = 70  # Session chip GO vs CAUTION
+ABOVE_AVERAGE_MIN = GO_SESSION_MIN
+EXCEPTIONAL_MIN = 80
+AVERAGE_MIN = TRADE_MIN
 BELOW_AVERAGE_MIN = 40
+FLIP_EXIT_MIN = 55  # Two consecutive reads below → exit alert
 
 MACRO_POSITIVE = re.compile(
     r"\b(rate cut|cuts rates|dovish|soft landing|beat estimates|gdp growth)\b",
@@ -81,7 +85,7 @@ class MarketActivityBand:
 BANDS: tuple[MarketActivityBand, ...] = (
     MarketActivityBand("exceptional", "Exceptional", EXCEPTIONAL_MIN, True),
     MarketActivityBand("above_average", "Above average", ABOVE_AVERAGE_MIN, True),
-    MarketActivityBand("average", "Average", AVERAGE_MIN, False),
+    MarketActivityBand("average", "Average", AVERAGE_MIN, True),
     MarketActivityBand("below_average", "Below average", BELOW_AVERAGE_MIN, False),
     MarketActivityBand("negative", "Negative", 0, False),
 )
@@ -372,11 +376,13 @@ def evaluate_market_activity(
     if score < BELOW_AVERAGE_MIN:
         exit_alert = True
         flip_reason = "Market Activity in Negative band — exit at market if holding"
-    elif score < ABOVE_AVERAGE_MIN:
+    elif score < FLIP_EXIT_MIN:
         recent = list_recent_evaluations(conn, session_date, limit=1)
-        if recent and recent[0]["score"] < ABOVE_AVERAGE_MIN:
+        if recent and recent[0]["score"] < FLIP_EXIT_MIN:
             exit_alert = True
-            flip_reason = "Two consecutive reads below Above Average — exit at market if holding"
+            flip_reason = (
+                f"Two consecutive reads below {FLIP_EXIT_MIN} — exit at market if holding"
+            )
 
     if persist:
         save_market_activity_evaluation(
@@ -437,6 +443,8 @@ def _build_summary(
         parts.append(f"Bull gate off (SPY 20d {ret}) — NO TRADE")
     elif not band.allow_trade:
         parts.append("NO TRADE today")
+    elif score < GO_SESSION_MIN:
+        parts.append("CAUTION — trade only if #1 confirms (≥70)")
     return " · ".join(parts)
 
 

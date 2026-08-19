@@ -118,10 +118,11 @@ def build_pdf(path: Path) -> Path:
     pdf.set_font("Helvetica", "", 7.5)
     pdf.set_text_color(25, 25, 25)
     gates = [
-        ("Exceptional (90+)", "Yes - ranked #1-#3 if each confirms"),
-        ("Above average (75+)", "Yes - #1 primary"),
-        ("Average & below (<75)", "NO TRADE - ranked list visible, no new entries"),
-        ("Not bull (SPY 20d + weak session)", "NO TRADE regardless of score"),
+        ("Exceptional (80+)", "Yes - ranked #1-#3 if each confirms"),
+        ("Above average (70+)", "Yes - #1 primary (confirm >=75)"),
+        ("Average (60-69)", "CAUTION - #1 only if confirm >=70"),
+        ("Below average (<60)", "NO TRADE - ranked list visible, no new entries"),
+        ("Not bull (SPY 20d <= 0)", "NO TRADE regardless of score"),
     ]
     c0, c1 = w * 0.32, w * 0.68
     pdf.set_font("Helvetica", "B", 7.2)

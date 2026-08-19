@@ -60,10 +60,11 @@ Formula: `$150 + ($lot − $10,000) / $5,000 × $50`
 
 | Market Activity band | New entries |
 |---------------------|-------------|
-| Exceptional (≥90) | Yes — #1–#3 if each confirms |
-| Above average (≥75) | Yes — #1 primary |
-| Average and below (<75) | **NO TRADE** |
-| Not bull (SPY 20d ≤ 0 + weak session) | **NO TRADE** |
+| Exceptional (≥80) | Yes — #1–#3 if each confirms |
+| Above average (≥70) | Yes — #1 primary (confirm ≥75) |
+| Average (60–69) | Yes — #1 only, Session **CAUTION** (confirm ≥70) |
+| Below average (&lt;60) | **NO TRADE** |
+| Not bull (SPY 20d ≤ 0) | **NO TRADE** |
 
 Ranked list **always visible**; red **DO NOT TRADE TODAY** banner when blocked.
 
