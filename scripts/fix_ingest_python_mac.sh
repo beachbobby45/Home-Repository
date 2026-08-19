@@ -16,8 +16,17 @@ rm -rf "$ROOT/.venv"
 
 PY="$("$ROOT/scripts/resolve_python.sh")" || {
   echo ""
-  echo "Setup failed. Try: brew install python@3.12"
-  echo "Then run this script again."
+  echo "Setup failed — need Python 3.9 or newer."
+  echo ""
+  echo "Your Mac's /usr/bin/python3 is 3.8 (too old for numpy 1.26)."
+  echo ""
+  echo "Option A — double-click: scripts/Install Python.command"
+  echo "Option B — Terminal:"
+  echo "  brew install python@3.12"
+  echo "  ./scripts/fix_ingest_python_mac.sh"
+  echo ""
+  echo "Option C — if you already have /usr/local/bin/python3 3.14, just re-run:"
+  echo "  ./scripts/fix_ingest_python_mac.sh"
   exit 1
 }
 
