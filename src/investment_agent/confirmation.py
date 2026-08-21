@@ -1,7 +1,8 @@
 """Candidate Confirmation Engine — per-stock AM confirmation (Phase 1B Inc 13).
 
 Scores ranked #1–#3 against intraday proxies. Confirmation never overrides a
-NO TRADE day from Market Activity. Pass threshold: score ≥ 75 when day allows trade.
+NO TRADE day from Market Activity. Pass threshold: ≥75 on strong days (MA ≥70),
+≥70 on average days (MA 60–69).
 
 See docs/PHASE1B_MARKET_ACTIVITY.md §3.
 """
@@ -15,6 +16,7 @@ from statistics import mean
 from zoneinfo import ZoneInfo
 
 from investment_agent.market_activity import (
+    GO_SESSION_MIN,
     SPY_BENCHMARK,
     _score_from_relative,
     today_et_str,
@@ -32,7 +34,18 @@ from investment_agent.regime import intraday_change_pct
 ET = ZoneInfo("America/New_York")
 
 CONFIRMATION_PASS_MIN = 75
+CONFIRMATION_PASS_CAUTION_MIN = 70
 RANKED_CONFIRMATION_LIMIT = 3
+
+
+def confirmation_pass_threshold(market_activity: dict) -> int:
+    """Minimum confirmation score to PASS — lower bar on average market days."""
+    score = market_activity.get("score")
+    if market_activity.get("band") == "average":
+        return CONFIRMATION_PASS_CAUTION_MIN
+    if score is not None and int(score) < GO_SESSION_MIN:
+        return CONFIRMATION_PASS_CAUTION_MIN
+    return CONFIRMATION_PASS_MIN
 
 CONFIRMATION_WEIGHTS: dict[str, float] = {
     "relative_volume": 20.0,
@@ -266,19 +279,21 @@ def evaluate_ticker_confirmation(
     }
     score, used_weights = composite_opportunity_score(factor_scores, weights=V0_ACTIVE_WEIGHTS)
     day_allows = bool(market_activity.get("allow_trade"))
-    passes = day_allows and score >= CONFIRMATION_PASS_MIN
+    pass_min = confirmation_pass_threshold(market_activity)
+    passes = day_allows and score >= pass_min
 
     return {
         "ticker": sym,
         "score": score,
         "passes": passes,
+        "pass_threshold": pass_min,
         "blocked_by_day": not day_allows,
         "opportunity_score": row.get("score") or row.get("rank_score"),
         "components": {
             name: round(val, 1) if val is not None else None for name, val in factor_scores.items()
         },
         "weights_used": used_weights,
-        "summary": _build_summary(sym, score, passes, day_allows, market_activity),
+        "summary": _build_summary(sym, score, passes, day_allows, market_activity, pass_min),
     }
 
 
@@ -288,12 +303,13 @@ def _build_summary(
     passes: bool,
     day_allows: bool,
     market_activity: dict,
+    pass_min: int,
 ) -> str:
     if not day_allows:
         return f"{ticker} {score}/100 — day NO TRADE (confirmation pending)"
     if passes:
         return f"{ticker} {score}/100 — PASS (confirms today)"
-    return f"{ticker} {score}/100 — FAIL (below {CONFIRMATION_PASS_MIN} threshold)"
+    return f"{ticker} {score}/100 — FAIL (below {pass_min} threshold)"
 
 
 def get_ranked_confirmation_targets(
@@ -446,6 +462,7 @@ def confirmations_to_dict(results: list[dict]) -> list[dict]:
             "ticker": item.get("ticker"),
             "score": item.get("score"),
             "passes": item.get("passes"),
+            "pass_threshold": item.get("pass_threshold"),
             "eligible": item.get("eligible"),
             "blocked_by_day": item.get("blocked_by_day"),
             "opportunity_score": item.get("opportunity_score"),

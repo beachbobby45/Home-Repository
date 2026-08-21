@@ -1,6 +1,6 @@
 ---
 name: confirmation-engine
-description: Phase 1B Candidate Confirmation Score — does #1/#2/#3 confirm this morning? Planned Inc 13. Requires Market Activity ≥ Above Average first.
+description: Phase 1B Candidate Confirmation Score — does #1/#2/#3 confirm this morning? Requires Market Activity ≥60 first.
 ---
 
 # Confirmation Engine (Phase 1B — Planned)
@@ -24,7 +24,8 @@ description: Phase 1B Candidate Confirmation Score — does #1/#2/#3 confirm thi
 
 1. **Day authorizes first** (Market Activity) — confirmation never overrides NO TRADE.
 2. High EOD opportunity score **does not** auto-trade without confirmation.
-3. Exceptional day: multiple names may confirm; Above Average: #1 primary.
+3. Exceptional day: multiple names may confirm; Above Average: #1 primary; Average (60–69): #1 with confirm ≥70.
+4. **Pass threshold:** ≥75 when Market Activity ≥70; **≥70** when Market Activity 60–69.
 
 ## Weight table v0 (hypothesis)
 

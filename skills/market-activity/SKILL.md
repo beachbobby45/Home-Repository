@@ -29,14 +29,16 @@ description: Phase 1B Market Activity Engine — 0–100 day score, TRADE/NO TRA
 
 ## Business rules (approved direction)
 
-| Band | Score (hypothesis) | New entries |
-|------|-------------------|-------------|
-| Exceptional | 90+ | Yes; #1–#3 if confirm |
-| Above average | 75–89 | Yes; #1 primary |
-| Average and below | <75 | **NO TRADE** |
-| Not bull | SPY 20d ≤ 0 + weak today | **NO TRADE** |
+| Band | Score | New entries |
+|------|-------|-------------|
+| Exceptional | 80+ | Yes; #1–#3 if confirm |
+| Above average | 70–79 | Yes; #1 primary (confirm ≥75) |
+| Average | 60–69 | **TRADE** — Session CAUTION; #1 only (confirm ≥70) |
+| Below average | 40–59 | **NO TRADE** |
+| Negative | <40 | **NO TRADE** |
+| Not bull | SPY 20d ≤ 0 | **NO TRADE** |
 
-**Average = NO TRADE** (strict gate).
+**Flip exit:** two consecutive reads below **55**.
 
 ## Weight table v0 (renormalize when n/a)
 

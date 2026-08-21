@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from investment_agent.db import init_db, insert_macro, insert_ohlcv_rows, insert_regime_snapshot
 from investment_agent.market_activity import (
     ABOVE_AVERAGE_MIN,
+    FLIP_EXIT_MIN,
     band_for_score,
     evaluate_market_activity,
     list_recent_evaluations,
@@ -81,11 +82,37 @@ def _seed_index_snapshots(conn: sqlite3.Connection, *, spy_change: float = 0.4):
 
 def test_band_for_score_thresholds():
     assert band_for_score(95).key == "exceptional"
-    assert band_for_score(80).key == "above_average"
+    assert band_for_score(85).key == "exceptional"
+    assert band_for_score(80).key == "exceptional"
+    assert band_for_score(75).key == "above_average"
+    assert band_for_score(70).key == "above_average"
     assert band_for_score(65).key == "average"
     assert band_for_score(45).key == "below_average"
     assert band_for_score(30).key == "negative"
 
+
+def test_average_band_allows_trade():
+    conn = _conn()
+    try:
+        _seed_spy_bars(conn, uptrend=True)
+        _seed_index_snapshots(conn, spy_change=0.3)
+        insert_macro(conn, "VIXCLS", "2026-08-03", 16.0, "2026-08-03T12:00:00+00:00")
+        when = datetime(2026, 8, 3, 10, 0, tzinfo=ET)
+        with patch(
+            "investment_agent.market_activity.score_sector_participation",
+            return_value=55.0,
+        ), patch(
+            "investment_agent.market_activity.score_market_volume",
+            return_value=52.0,
+        ):
+            result = evaluate_market_activity(conn, when=when, persist=False)
+        assert result["band"] == "average"
+        assert result["score"] >= 60
+        assert result["score"] < ABOVE_AVERAGE_MIN
+        assert result["allow_trade"] is True
+        assert result["bull_gate_ok"] is True
+    finally:
+        conn.close()
 
 def test_score_market_direction_positive():
     score = score_market_direction({"SPY": 0.5, "DIA": 0.3, "QQQ": 0.4})
@@ -138,8 +165,8 @@ def test_flip_detection_two_consecutive_low_scores():
             session_date_et="2026-08-03",
             captured_at="2026-08-03T15:00:00+00:00",
             slot="plus_15m",
-            score=70,
-            band="average",
+            score=52,
+            band="below_average",
             allow_trade=False,
             bull_gate_ok=True,
             exit_alert=False,
@@ -149,16 +176,16 @@ def test_flip_detection_two_consecutive_low_scores():
         conn.commit()
         with patch(
             "investment_agent.market_activity.score_market_direction",
-            return_value=55.0,
+            return_value=45.0,
         ), patch(
             "investment_agent.market_activity.score_index_momentum",
-            return_value=50.0,
+            return_value=45.0,
         ), patch(
             "investment_agent.market_activity.score_sector_participation",
-            return_value=50.0,
+            return_value=45.0,
         ):
             result = evaluate_market_activity(conn, when=when, persist=False)
-        assert result["score"] < ABOVE_AVERAGE_MIN
+        assert result["score"] < FLIP_EXIT_MIN
         assert result["exit_alert"] is True
     finally:
         conn.close()
