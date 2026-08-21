@@ -86,6 +86,50 @@ def get_latest_quotes(conn: sqlite3.Connection) -> dict[str, float]:
     return {row["ticker"]: float(row["price"]) for row in rows}
 
 
+def get_latest_quote_rows(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> dict[str, dict]:
+    """Latest quote row per ticker (price, open, high, low, prev_close) for tradability/plans."""
+    if tickers:
+        placeholders = ",".join("?" for _ in tickers)
+        rows = conn.execute(
+            f"""
+            SELECT q.ticker, q.price, q.open, q.high, q.low, q.prev_close, q.captured_at
+            FROM quotes q
+            INNER JOIN (
+              SELECT ticker, MAX(captured_at) AS max_at
+              FROM quotes
+              WHERE ticker IN ({placeholders})
+              GROUP BY ticker
+            ) latest ON q.ticker = latest.ticker AND q.captured_at = latest.max_at
+            """,
+            tickers,
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT q.ticker, q.price, q.open, q.high, q.low, q.prev_close, q.captured_at
+            FROM quotes q
+            INNER JOIN (
+              SELECT ticker, MAX(captured_at) AS max_at
+              FROM quotes GROUP BY ticker
+            ) latest ON q.ticker = latest.ticker AND q.captured_at = latest.max_at
+            """
+        ).fetchall()
+    return {
+        row["ticker"]: {
+            "price": float(row["price"]),
+            "open": float(row["open"]) if row["open"] is not None else None,
+            "high": float(row["high"]) if row["high"] is not None else None,
+            "low": float(row["low"]) if row["low"] is not None else None,
+            "prev_close": float(row["prev_close"]) if row["prev_close"] is not None else None,
+            "captured_at": row["captured_at"],
+        }
+        for row in rows
+    }
+
+
 def _classify_price_alert(
     *,
     state: str,
