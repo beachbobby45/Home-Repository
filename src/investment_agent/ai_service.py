@@ -103,6 +103,15 @@ def compute_rule_based_news_sentiment(
     return round(score, 1), detail
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def build_rule_based_explanation(
     *,
     ticker: str,
@@ -112,23 +121,26 @@ def build_rule_based_explanation(
     news_sentiment: float,
     news_sentiment_detail: str,
 ) -> tuple[str, str]:
-    score = row.get("opportunity_score", 0)
-    hit = row.get("dollar_hit_rate_pct", 0)
-    floor = row.get("opportunity_floor", OPPORTUNITY_SCORE_FLOOR)
-    entry = plan.get("limit_buy_price") or plan.get("entry_price")
-    target = plan.get("limit_sell_price") or plan.get("target_price")
-    net = plan.get("net_at_target", 0)
+    score = row.get("opportunity_score")
+    if score is None:
+        score = row.get("score", 0)
+    score = _safe_float(score, 0.0)
+    hit = _safe_float(row.get("dollar_hit_rate_pct"), 0.0)
+    floor = _safe_float(row.get("opportunity_floor"), OPPORTUNITY_SCORE_FLOOR)
+    entry = _safe_float(plan.get("limit_buy_price") or plan.get("entry_price"), 0.0)
+    target = _safe_float(plan.get("limit_sell_price") or plan.get("target_price"), 0.0)
+    net = _safe_float(plan.get("net_at_target"), 0.0)
 
     short = (
-        f"{ticker} — score {score} · sentiment {news_sentiment:.0f} · "
-        f"limit ${float(entry):.2f}"
+        f"{ticker} — score {score:.0f} · sentiment {news_sentiment:.0f} · "
+        f"limit ${entry:.2f}"
     )
     detail = (
-        f"Opportunity score {score}/100 (floor {floor}). "
+        f"Opportunity score {score:.0f}/100 (floor {floor:.0f}). "
         f"${hit:.0f}% historical $ hit rate. "
         f"News sentiment {news_sentiment:.0f}/100 — {news_sentiment_detail}. "
-        f"Limit buy ${float(entry):.2f} → sell ${float(target):.2f} "
-        f"(~${float(net):.0f} net). "
+        f"Limit buy ${entry:.2f} → sell ${target:.2f} "
+        f"(~${net:.0f} net). "
         f"Risk: {risk_headline}. "
         f"(Rule-based explanation — add ANTHROPIC_API_KEY for Claude narratives.)"
     )
