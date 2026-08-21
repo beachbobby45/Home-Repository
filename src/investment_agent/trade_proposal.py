@@ -12,7 +12,7 @@ from investment_agent.account import build_dashboard_summary
 from investment_agent.ai_service import enrich_proposal
 from investment_agent.config import Settings
 from investment_agent.finance import ORIGINAL_BASIS, target_move_pct
-from investment_agent.monitor import get_latest_quotes
+from investment_agent.monitor import get_latest_quote_rows
 from investment_agent.opportunity_score import (
     OPPORTUNITY_FLOOR,
     composite_opportunity_score,
@@ -66,9 +66,12 @@ def _valid_until_iso(session_date_et: str) -> str:
     return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _session_open_from_quote(quote: dict | None, fallback: float | None = None) -> float | None:
-    if not quote:
+def _session_open_from_quote(quote: dict | float | None, fallback: float | None = None) -> float | None:
+    if quote is None:
         return fallback
+    if isinstance(quote, (int, float)):
+        px = float(quote)
+        return px if px > 0 else fallback
     open_px = quote.get("open") or quote.get("price")
     if open_px and float(open_px) > 0:
         return float(open_px)
@@ -272,7 +275,8 @@ def generate_proposals(
         require_opportunity_floor=True,
     )["ranked"]
 
-    quotes = get_latest_quotes(conn)
+    tickers = [row["ticker"].upper() for row in ranked]
+    quotes = get_latest_quote_rows(conn, tickers)
     regime_summary = summary.regime["summary"] if summary.regime else None
     block_new_longs = bool(summary.block_new_longs)
 
