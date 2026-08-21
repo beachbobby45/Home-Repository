@@ -36,13 +36,15 @@ Human                          → execute E*TRADE + journal
 
 | Score | Label | Action |
 |------:|-------|--------|
-| ≥90 | Exceptional | Trade; multiple names if confirm |
-| 75–89 | Above average | Trade; #1 primary |
-| 60–74 | Average | **NO TRADE** |
+| ≥80 | Exceptional | Trade; multiple names if confirm |
+| 70–79 | Above average | Trade; #1 primary (confirm ≥75) |
+| 60–69 | Average | **TRADE** — Session CAUTION; #1 only (confirm ≥70) |
 | 40–59 | Below average | **NO TRADE** |
 | <40 | Negative | **NO TRADE**; exit if holding |
 
 **Bull gate:** SPY 20-day return > 0 required for any TRADE band.
+
+**Intraday flip:** Two consecutive reads **below 55** → NO TRADE + exit alert if holding.
 
 ---
 
@@ -63,13 +65,13 @@ Per ranked ticker at same timestamps as market activity.
 
 **Rule:** Confirmation never overrides NO TRADE day.
 
-**Pass threshold (hypothesis):** ≥75 with day ≥ Above average.
+**Pass threshold:** ≥75 when day score ≥70; **≥70** when day score 60–69 (Average / CAUTION).
 
 ---
 
 ## 4. Intraday flip
 
-Two consecutive refreshes below Above Average **or** single refresh in Negative → **NO TRADE** + **EXIT MARKET** if position open.
+Two consecutive refreshes **below 55** **or** single refresh in Negative → **NO TRADE** + **EXIT MARKET** if position open.
 
 ---
 

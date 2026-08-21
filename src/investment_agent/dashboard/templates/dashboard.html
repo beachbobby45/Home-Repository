@@ -33,6 +33,7 @@
   <div id="trading-mode-banner" class="banner paper app-banner-compact">Loading trading mode…</div>
   <div id="exit-alert-banner" class="banner exit-alert app-banner-compact" hidden></div>
   <div id="no-trade-banner" class="banner no-trade app-banner-compact" hidden></div>
+  <div id="caution-banner" class="banner caution-day app-banner-compact" hidden></div>
   <div id="exceptional-banner" class="banner exceptional app-banner-compact" hidden></div>
   <div id="regime-banner" class="banner ok app-banner-compact">Loading regime…</div>
 
@@ -108,6 +109,7 @@
         </div>
         <div class="quote-snapshot-row" id="quote-snapshot-row"></div>
         <div class="market-activity-row" id="market-activity-row"></div>
+        <div class="opening-drive-row" id="opening-drive-row"></div>
         <div class="confirmation-row" id="confirmation-row"></div>
         <details class="market-activity-breakdown" id="market-activity-breakdown">
           <summary>Market Activity breakdown</summary>
@@ -881,6 +883,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
       initJournalForm();
       refreshAll().catch((e) => toast(e.message || "Refresh failed", 6000));
+      scheduleDashboardPoll();
     }
 
     function formatWhyOnly(thesis) {
@@ -1054,6 +1057,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       if (td && verdictEl) {
         verdictEl.textContent = (td.verdict || "—").replace("_", " ");
         document.getElementById("status-verdict-chip")?.classList.toggle("status-go", td.verdict === "GO");
+        document.getElementById("status-verdict-chip")?.classList.toggle("status-caution", td.verdict === "CAUTION");
         document.getElementById("status-verdict-chip")?.classList.toggle("status-nogo", td.verdict === "NO_GO");
       }
       const weeklyEl = document.getElementById("status-weekly-text");
@@ -1123,6 +1127,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const p1b = td?.phase1b || {};
       const exitEl = document.getElementById("exit-alert-banner");
       const noTradeEl = document.getElementById("no-trade-banner");
+      const cautionEl = document.getElementById("caution-banner");
       const exceptionalEl = document.getElementById("exceptional-banner");
       if (exitEl) {
         if (p1b.show_exit_alert) {
@@ -1158,14 +1163,61 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           noTradeEl.textContent = "";
         }
       }
+      if (cautionEl) {
+        const showCaution = p1b.market_activity_caution && !p1b.show_no_trade_banner && td.verdict === "CAUTION";
+        if (showCaution) {
+          cautionEl.hidden = false;
+          cautionEl.className = "banner caution-day app-banner-compact";
+          cautionEl.textContent =
+            `${p1b.caution_headline || "CAUTION — average market day"} — ${td.detail || ""}`;
+        } else {
+          cautionEl.hidden = true;
+          cautionEl.textContent = "";
+        }
+      }
       const genBtn = document.getElementById("generate-proposals");
       if (genBtn) {
         const blocked = !!p1b.block_new_proposals;
         genBtn.disabled = blocked;
         genBtn.title = blocked
-          ? "Blocked — Market Activity is NO TRADE today"
+          ? "Blocked — Market Activity below 60 or bull gate off"
           : "Step 2b — generate up to 5 scored proposals";
       }
+    }
+
+    function renderOpeningDrive(od, td) {
+      const el = document.getElementById("opening-drive-row");
+      if (!el) return;
+      if (!od || !od.ticker) {
+        el.innerHTML = "";
+        return;
+      }
+      const verdictCls = {
+        pass: "od-pass",
+        watch: "od-watch",
+        fade: "od-fade",
+        blocked: "od-blocked",
+        inactive: "od-inactive",
+        pending: "od-pending",
+      }[od.verdict] || "od-inactive";
+      const label = od.verdict_label || od.verdict || "—";
+      const early = od.eligible_early_entry
+        ? `<span class="od-early">Early entry eligible (before 10:00 ET)</span>`
+        : "";
+      const comps = od.components || {};
+      const compHtml = Object.keys(comps).length
+        ? `<div class="od-components">${Object.entries(comps).map(([k, v]) =>
+            `<span class="od-comp" title="${k}">${k.replace(/_/g, " ")}: ${v ?? "n/a"}</span>`
+          ).join("")}</div>`
+        : "";
+      el.innerHTML = `
+        <div class="opening-drive-head">
+          <span class="opening-drive-title">Opening Drive · ${od.ticker}</span>
+          <span class="opening-drive-score ${verdictCls}">${od.score ?? "—"}/100 · ${label}</span>
+          ${early}
+        </div>
+        <div class="brief od-summary">${od.summary || ""}</div>
+        ${compHtml}`;
     }
 
     function renderMarketActivityBreakdown(ma, p1b) {
@@ -1220,8 +1272,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (el) el.innerHTML = "";
         return;
       }
-      const cls = ma.allow_trade ? "trade-ok" : "no-trade";
+      const score = ma.score ?? 0;
+      const cls = !ma.allow_trade ? "no-trade" : score >= 70 ? "trade-ok" : "trade-caution";
       const band = ma.band_label || ma.band || "—";
+      const gateNote = ma.allow_trade
+        ? (score >= 70 ? " · GO day (≥70)" : " · CAUTION day (60–69, confirm ≥70)")
+        : " · NO TRADE (<60 or bull gate off)";
       const bull = ma.bull_gate_ok === false
         ? `<span class="ma-bull off">Bull gate off${ma.spy_20d_return_pct != null ? ` (SPY 20d ${Number(ma.spy_20d_return_pct).toFixed(2)}%)` : ""}</span>`
         : "";
@@ -1231,7 +1287,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       el.innerHTML = `
         <div class="market-activity-head">
           <span class="market-activity-title">Market Activity</span>
-          <span class="market-activity-score ${cls}">${ma.score ?? "—"}/100 · ${band}</span>
+          <span class="market-activity-score ${cls}">${score}/100 · ${band}${gateNote}</span>
           ${bull}${exit}
         </div>
         <div class="brief ma-summary">${ma.summary || ""}</div>`;
@@ -1284,6 +1340,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         `Session: ${fmtSessionPhase(td.session_phase)} · ${fmtDateTimePT(td.as_of_et)}`;
       renderQuoteSnapshots(td.quote_snapshots);
       renderMarketActivity(td.market_activity);
+      renderOpeningDrive(td.opening_drive || td.phase1b?.opening_drive, td);
       renderConfirmations(td.confirmations, td.market_activity);
       renderPhase1bBanners(td);
       renderMarketActivityBreakdown(td.market_activity, td.phase1b);
@@ -2688,6 +2745,62 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadJournal(),
       ]);
     }
+
+    function nowEtParts() {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        weekday: "short",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      }).formatToParts(new Date());
+      const get = (type) => parts.find((p) => p.type === type)?.value || "";
+      const wd = get("weekday");
+      const hour = Number(get("hour"));
+      const minute = Number(get("minute"));
+      const isWeekend = wd === "Sat" || wd === "Sun";
+      return { hour, minute, isWeekend, minutesSinceMidnight: hour * 60 + minute };
+    }
+
+    function dashboardPollIntervalMs() {
+      const { hour, minute, isWeekend, minutesSinceMidnight } = nowEtParts();
+      if (isWeekend) return 300_000;
+      const open = 9 * 60 + 30;
+      const openingEnd = 10 * 60;
+      const cutoff = 14 * 60 + 30;
+      const close = 16 * 60;
+      if (minutesSinceMidnight < open - 30 || minutesSinceMidnight >= close) return 300_000;
+      if (minutesSinceMidnight >= open && minutesSinceMidnight < openingEnd) return 30_000;
+      if (minutesSinceMidnight >= openingEnd && minutesSinceMidnight < cutoff) return 60_000;
+      return 120_000;
+    }
+
+    let dashboardPollTimer = null;
+
+    function scheduleDashboardPoll() {
+      if (dashboardPollTimer) clearTimeout(dashboardPollTimer);
+      if (document.hidden) return;
+      const ms = dashboardPollIntervalMs();
+      dashboardPollTimer = setTimeout(async () => {
+        try {
+          await loadTradingDay();
+          await loadSummary();
+        } catch (_e) {
+          /* keep polling on transient errors */
+        }
+        scheduleDashboardPoll();
+      }, ms);
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (dashboardPollTimer) clearTimeout(dashboardPollTimer);
+        dashboardPollTimer = null;
+      } else {
+        loadTradingDay().catch(() => {});
+        scheduleDashboardPoll();
+      }
+    });
 
     initAppNav();
 

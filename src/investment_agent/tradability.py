@@ -22,6 +22,7 @@ from investment_agent.strategy import STOP_PCT
 MAX_GAP_UP_PCT = 1.0
 MAX_GAP_DOWN_PCT = 1.5
 MAX_CHASE_ABOVE_OPEN_PCT = 0.50
+OPENING_DRIVE_MAX_CHASE_ABOVE_OPEN_PCT = 0.85
 MIN_SESSION_RANGE_PCT = 0.40
 MIN_NET_AT_DAY_HIGH_RATIO = 0.95
 TARGET_RETRACE_TOLERANCE = 0.998
@@ -127,6 +128,7 @@ def assess_entry_tradability(
     conn: sqlite3.Connection | None = None,
     ticker: str | None = None,
     block_new_longs: bool = False,
+    max_chase_above_open_pct: float | None = None,
 ) -> dict:
     """Return tradability verdict for entering at ``entry_price`` right now."""
     goal = net_target if net_target is not None else daily_profit_target(deploy_dollar)
@@ -167,11 +169,19 @@ def assess_entry_tradability(
         else:
             add("Gap at open", True, f"{gap_pct:+.2f}% vs prior close")
 
+    chase_limit = (
+        max_chase_above_open_pct
+        if max_chase_above_open_pct is not None
+        else MAX_CHASE_ABOVE_OPEN_PCT
+    )
     if open_px and open_px > 0 and entry_price > open_px:
         chase = _pct(open_px, entry_price)
-        if chase > MAX_CHASE_ABOVE_OPEN_PCT:
-            blockers.append(f"Entry {chase:.2f}% above open — need extra upside for ${goal:.0f}")
-            add("Chase above open", False, f"+{chase:.2f}% above today's open")
+        if chase > chase_limit:
+            blockers.append(
+                f"Entry {chase:.2f}% above open — need extra upside for ${goal:.0f} "
+                f"(max {chase_limit:.2f}%)"
+            )
+            add("Chase above open", False, f"+{chase:.2f}% above today's open (max {chase_limit:.2f}%)")
         elif chase > 0.15:
             cautions.append(f"Buying {chase:.2f}% above open")
             add("Chase above open", None, f"+{chase:.2f}% above open")
