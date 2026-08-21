@@ -766,12 +766,18 @@ def api_proposals_generate(
         raise HTTPException(status_code=503, detail=ingest_lock_message())
     opts = body or ProposalGenerateBody()
     settings = Settings.from_env()
-    result = generate_proposals(
-        conn,
-        max_proposals=opts.max_proposals,
-        replace_existing=opts.replace_existing,
-        settings=settings,
-    )
+    try:
+        result = generate_proposals(
+            conn,
+            max_proposals=opts.max_proposals,
+            replace_existing=opts.replace_existing,
+            settings=settings,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Proposal generate failed: {exc}",
+        ) from exc
     if not result.get("ok", True):
         raise HTTPException(status_code=409, detail=result.get("error") or "Proposal generate blocked")
     conn.commit()

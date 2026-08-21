@@ -179,6 +179,26 @@ def test_generate_proposals_max_five_sorted():
         path.unlink(missing_ok=True)
 
 
+def test_generate_proposals_with_null_dollar_hit_rate():
+    conn, path = _conn()
+    try:
+        _seed_ranked_env(conn)
+        ranked = _mock_ranked()
+        ranked["ranked"][0]["dollar_hit_rate_pct"] = None
+        ranked["ranked"][0]["ticker"] = "GEN"
+        with _bypass_market_activity_gate():
+            with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=ranked):
+                with patch(
+                    "investment_agent.trade_proposal.get_latest_quotes",
+                    return_value={"GEN": {"open": 100, "price": 100}},
+                ):
+                    result = generate_proposals(conn, max_proposals=1)
+        assert result["ok"] is True
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
 def test_generate_skips_risk_rejected():
     conn, path = _conn()
     try:
