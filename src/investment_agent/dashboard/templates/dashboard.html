@@ -50,6 +50,7 @@
     <button type="button" class="app-nav-btn" data-view="screen"><span class="nav-icon">▦</span> Screen</button>
     <button type="button" class="app-nav-btn" data-view="review"><span class="nav-icon">▤</span> Review</button>
     <button type="button" class="app-nav-btn" data-view="account"><span class="nav-icon">◫</span> Account</button>
+    <button type="button" class="app-nav-btn" data-view="plan"><span class="nav-icon">📈</span> Plan</button>
     <button type="button" class="app-nav-btn" data-view="setup"><span class="nav-icon">⚙</span> Setup</button>
   </nav>
 
@@ -518,7 +519,7 @@
           <div class="metric small">Tax <span id="tax-jar">—</span></div></div>
         <div class="card"><h2>Operating rules</h2><div class="strategy-rules brief" id="strategy-rules">Loading…</div></div>
       </div>
-      <section class="view-section">
+      <section class="view-section" id="growth-plan-section">
         <header class="view-head"><h2>Growth plan tiers</h2></header>
         <div class="card">
           <div id="growth-tier-summary" class="brief">Loading…</div>
@@ -564,7 +565,7 @@
           <th>Date</th><th>Time</th><th>Ticker</th><th>Side</th><th>Shares</th><th>Price</th><th>Fee</th><th>Notes</th>
         </tr></thead><tbody id="journal-body"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody></table></div>
       </section>
-      <section class="view-section">
+      <section class="view-section" id="sweep-section">
         <header class="view-head"><h2>Period-end sweep</h2></header>
         <div class="card">
           <div id="sweep-preview">Loading…</div>
@@ -574,6 +575,63 @@
             <button class="btn btn-sm" id="apply-sweep">Apply sweep</button>
           </div>
         </div>
+      </section>
+    </div>
+
+    <!-- ═══ PLAN — 10-year growth projection ═══ -->
+    <div id="view-plan" class="app-view">
+      <section class="view-section">
+        <header class="view-head">
+          <h2>10-year growth plan</h2>
+          <p class="brief">Planning view — $15K start, annual 35% sweep, +$10K capital at ~month 6 (Year 1).</p>
+        </header>
+        <div class="plan-quick-links card">
+          <span class="brief">Related:</span>
+          <button type="button" class="btn secondary btn-sm plan-link-btn" data-goto="capital-builder-panel">Capital Builder (live progress)</button>
+          <button type="button" class="btn secondary btn-sm plan-link-btn" data-goto="growth-plan-section">Tier ladder (deploy / trade)</button>
+          <button type="button" class="btn secondary btn-sm plan-link-btn" data-goto="scenario-panel">$5M scenario chart</button>
+          <button type="button" class="btn secondary btn-sm plan-link-btn" data-goto="sweep-section">Period-end sweep</button>
+        </div>
+        <div class="grid grid-4 plan-kpi-grid" id="plan-kpi-grid">
+          <div class="card kpi-card"><h2>Base → $5M</h2><div class="metric small" id="plan-months-base">—</div></div>
+          <div class="card kpi-card"><h2>+$10K → $5M</h2><div class="metric small" id="plan-months-inj">—</div></div>
+          <div class="card kpi-card"><h2>Year 10 (base)</h2><div class="metric small" id="plan-y10-base">—</div></div>
+          <div class="card kpi-card"><h2>Year 10 (+$10K)</h2><div class="metric small" id="plan-y10-inj">—</div></div>
+        </div>
+        <div class="card" id="plan-assumptions">Loading assumptions…</div>
+        <div class="card table-card">
+          <p class="brief" id="plan-summary"></p>
+          <div class="table-wrap plan-table-wrap">
+            <table class="plan-table growth-table">
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th colspan="4" class="plan-col-group">Base ($15K start)</th>
+                  <th colspan="4" class="plan-col-group plan-col-injection">With +$10K @ mo ~6</th>
+                  <th colspan="2">Compare</th>
+                </tr>
+                <tr>
+                  <th></th>
+                  <th>End balance</th>
+                  <th>Goal %</th>
+                  <th>Gross prod.</th>
+                  <th>Annual sweep</th>
+                  <th>End balance</th>
+                  <th>Goal %</th>
+                  <th>Deploy · net/trade</th>
+                  <th>Injection</th>
+                  <th>Δ balance</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="plan-table-body"><tr><td colspan="11" class="empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="brief plan-disclaimer">
+          Model only — 60.6% dollar hit rate, 2.9 tradeable days/week, tier-scaled net/trade, one #1 pick per day
+          (2nd trade exceptional days). Not a guarantee; journal actuals live under Account.
+        </p>
       </section>
     </div>
 
@@ -1083,6 +1141,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       });
       document.querySelectorAll(".app-view").forEach((v) => {
         v.classList.toggle("active", v.id === "view-" + view);
+      });
+    }
+
+    function initPlanLinks() {
+      document.querySelectorAll(".plan-link-btn").forEach((btn) => {
+        btn.addEventListener("click", () => goToAccountSection(btn.dataset.goto));
       });
     }
 
@@ -2500,6 +2564,63 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }).join("");
     }
 
+    function goToAccountSection(elementId) {
+      switchDashboardView("account");
+      setTimeout(() => {
+        const el = document.getElementById(elementId);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    }
+
+    async function loadTenYearPlan() {
+      const data = await api("/api/growth-plan/ten-year");
+      const a = data.assumptions || {};
+      document.getElementById("plan-assumptions").innerHTML = [
+        `<strong>Assumptions</strong> (planning model — see Plan tab disclaimer)`,
+        `$${fmt(data.starting_basis)} start · ${a.hit_rate_pct}% hit · ${a.tradeable_days_per_week} tradeable days/wk`,
+        `Annual ${a.sweep_rate_pct}% sweep · ${a.capital_injection || "—"} ($${fmt(a.injection_amount || 0)} at week ${a.injection_week || "—"})`,
+        `${a.one_trade_per_day ? "One #1 pick/day" : ""} · ${a.second_trade || ""}`,
+      ].join("<br>");
+      document.getElementById("plan-summary").textContent = data.summary || "";
+      const mtg = data.months_to_goal || {};
+      document.getElementById("plan-months-base").textContent =
+        mtg.base != null ? `${(mtg.base / 12).toFixed(1)} yr (${mtg.base} mo)` : ">10 yr";
+      document.getElementById("plan-months-inj").textContent =
+        mtg.injection != null ? `${(mtg.injection / 12).toFixed(1)} yr (${mtg.injection} mo)` : ">10 yr";
+      const years = data.years || [];
+      const y10 = years.find((r) => r.year === 10) || years[years.length - 1];
+      if (y10) {
+        document.getElementById("plan-y10-base").textContent = "$" + fmt(y10.base?.end_balance);
+        document.getElementById("plan-y10-inj").textContent = "$" + fmt(y10.injection?.end_balance);
+      }
+      const tbody = document.getElementById("plan-table-body");
+      if (!years.length) {
+        tbody.innerHTML = '<tr><td colspan="11" class="empty">No projection data</td></tr>';
+        return;
+      }
+      tbody.innerHTML = years.map((row) => {
+        const b = row.base || {};
+        const inj = row.injection || {};
+        const goalMilestone = (inj.goal_pct || 0) >= 100 ? " plan-row-goal" : "";
+        const injCell = inj.capital_injection > 0
+          ? `$${fmt(inj.capital_injection)}`
+          : "—";
+        return `<tr class="${goalMilestone}">
+          <td><strong>Year ${row.year}</strong></td>
+          <td>$${fmt(b.end_balance)}</td>
+          <td>${fmtPct(b.goal_pct)}</td>
+          <td>$${fmt(b.gross_production)}</td>
+          <td>$${fmt(b.annual_sweep)}</td>
+          <td class="plan-inj-cell">$${fmt(inj.end_balance)}</td>
+          <td>${fmtPct(inj.goal_pct)}</td>
+          <td>${inj.trade_deploy_label || "—"} · $${fmt(inj.trade_net_target)}/tr</td>
+          <td>${injCell}</td>
+          <td class="plan-advantage">+$${fmt(row.advantage_end_balance)}</td>
+          <td class="brief">${inj.notes || b.notes || "—"}</td>
+        </tr>`;
+      }).join("");
+    }
+
     async function loadScenario() {
       const s = await api("/api/scenario/visualizer?projection_months=120");
       document.getElementById("scenario-summary").textContent = s.summary || "";
@@ -2744,6 +2865,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadSummary(),
         loadCapitalBuilder(),
         loadScenario(),
+        loadTenYearPlan(),
         loadCio(),
         loadDailyRhythm(),
         loadProposals(),
@@ -2816,6 +2938,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     });
 
     initAppNav();
+    initPlanLinks();
 
     function on(id, event, handler) {
       const el = document.getElementById(id);

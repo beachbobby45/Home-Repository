@@ -73,6 +73,7 @@ from investment_agent.journal import (
     resolve_executed_at,
     trade_to_dict,
 )
+from investment_agent.growth_projection import build_ten_year_growth_plan
 from investment_agent.scenario import build_scenario_visualizer
 from investment_agent.watchlist import (
     add_special_watch_ticker,
@@ -351,6 +352,12 @@ def api_scenario_visualizer(
     projection_months: int = 120,
 ) -> dict[str, Any]:
     return build_scenario_visualizer(conn, projection_horizon=projection_months)
+
+
+@app.get("/api/growth-plan/ten-year")
+def api_growth_plan_ten_year() -> dict[str, Any]:
+    """Year 1–10 projection: $15K base vs +$10K injection at ~month 6."""
+    return build_ten_year_growth_plan()
 
 
 @app.get("/api/cio/summary")
