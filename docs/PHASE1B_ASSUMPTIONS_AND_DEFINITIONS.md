@@ -40,19 +40,30 @@ Formula: `$150 + ($lot − $10,000) / $5,000 × $50`
 |---------:|-----------|------------:|------------:|
 | $10,000 | 1× $10K | $150 | $450 |
 | $15,000 | 1× $15K | $200 | $600 |
-| $20,000 | $10K + $10K | $300 | $900 |
-| $25,000 | $10K + $15K | $350 | $1,050 |
-| $30,000 | $15K + $15K | $400 | $1,200 |
-| $35,000 | $15K + $20K | $450 | $1,350 |
-| $40,000 | $20K + $20K | $500 | $1,500 |
-| $45,000 | $20K + $25K | $550 | $1,650 |
-| $50,000 | $25K + $25K | $600 | $1,800 |
-| $55,000 | $25K + $30K | $650 | $1,950 |
-| $60,000 | $30K + $30K | $700 | $2,100 |
+| $20,000 | 1× $20K | $300 | $900 |
+| $25,000 | 1× $25K | $350 | $1,050 |
+| $30,000 | 1× $30K | $400 | $1,200 |
+| $35,000 | 1× $35K | $450 | $1,350 |
+| $40,000 | 1× $40K | $500 | $1,500 |
+| $45,000 | 1× $45K | $550 | $1,650 |
+| $50,000 | 1× $50K | $600 | $1,800 |
+| $55,000 | 1× $55K | $650 | $1,950 |
+| $60,000 | 1× $60K | $700 | $2,100 |
 
 **Tier selection:** highest threshold ≤ current equity (step function — no interpolation).
 
-**Phase 1 sizing:** one trade targets **full daily total** for the tier (not separate E*TRADE orders per lot).
+**Phase 1 sizing:** **one trade** deploys the **full tier balance** (e.g. $20K → one $20K position targeting $300 net/trade). Virtual lot splits below are **accounting math only** — not two separate picks.
+
+<details>
+<summary>Virtual lot accounting (internal target math)</summary>
+
+| Equity ≥ | Virtual lots | Net/trade total |
+|---------:|--------------|----------------:|
+| $20,000 | $10K + $10K | $300 |
+| $25,000 | $10K + $15K | $350 |
+| $30,000 | $15K + $15K | $400 |
+
+</details>
 
 ---
 

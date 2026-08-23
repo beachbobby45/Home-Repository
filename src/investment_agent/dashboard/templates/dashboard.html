@@ -504,7 +504,7 @@
         <div class="card kpi-card"><h2>$5M goal</h2><div class="metric" id="goal-pct">—</div>
           <div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" id="goal-bar"></div></div>
           <div class="progress-label" id="goal-label">—</div></div></div>
-        <div class="card kpi-card card-daily-target"><h2>Daily target</h2><div class="metric" id="daily-target">—</div>
+        <div class="card kpi-card card-daily-target"><h2>Trade target</h2><div class="metric" id="daily-target">—</div>
           <div class="progress-wrap"><div class="progress-bar"><div class="progress-fill daily-fill" id="daily-bar"></div></div>
           <div class="progress-label" id="daily-progress-label">—</div></div>
           <div class="progress-label brief" id="next-tier-label">—</div></div>
@@ -522,7 +522,7 @@
         <header class="view-head"><h2>Growth plan tiers</h2></header>
         <div class="card">
           <div id="growth-tier-summary" class="brief">Loading…</div>
-          <table class="growth-table"><thead><tr><th>Balance</th><th>Structure</th><th>Daily</th><th>Weekly (3×)</th><th>Status</th></tr></thead>
+          <table class="growth-table"><thead><tr><th>Balance</th><th>Deploy (1 trade)</th><th>Per trade</th><th>Weekly (3×)</th><th>Status</th></tr></thead>
           <tbody id="growth-plan-body"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table>
         </div>
       </section>
@@ -1476,7 +1476,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       if (tierEl) tierEl.textContent = cb.structure_label || "—";
       if (dailyTierEl) {
         dailyTierEl.textContent = cb.daily_production_target != null
-          ? `$${fmt(cb.daily_production_target)}/day · ${cb.weekly_opportunities || 3}× → $${fmt(cb.weekly_production_target)}/wk`
+          ? `$${fmt(cb.daily_production_target)}/trade · ${cb.weekly_opportunities || 3}× wins/wk → $${fmt(cb.weekly_production_target)}/wk`
           : "—";
       }
       const wSign = (cb.weekly_realized_net ?? 0) >= 0 ? "+" : "";
@@ -1557,7 +1557,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         document.getElementById("original-basis").textContent = "$" + fmt(s.original_basis);
 
         const dailyTarget = s.daily_target ?? 200;
-        document.getElementById("daily-target").textContent = "$" + fmt(dailyTarget) + "/day";
+        document.getElementById("daily-target").textContent = "$" + fmt(dailyTarget) + "/trade";
         const todayNet = s.today_realized_net ?? 0;
         const dailyPct = Math.min(100, Math.max(0, s.today_target_progress_pct ?? 0));
         document.getElementById("daily-bar").style.width = dailyPct + "%";
@@ -1568,14 +1568,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         const tier = s.growth_tier || {};
         const nextAmt = tier.amount_to_next_tier ?? 0;
         document.getElementById("next-tier-label").textContent = nextAmt > 0
-          ? `$${fmt(nextAmt)} to $${fmt(tier.next_balance)} → $${fmt(tier.next_daily_target)}/day`
+          ? `$${fmt(nextAmt)} to $${fmt(tier.next_balance)} → $${fmt(tier.next_daily_target)}/trade`
           : "At top growth tier shown";
 
         const st = s.strategy || {};
         const dailyNet = st.daily_net_target ?? s.daily_target ?? 200;
         document.getElementById("strategy-rules").innerHTML = [
-          `Sell for <strong>$${fmt(dailyNet)} net/day</strong> (split-lot tier — 3× weekly at current balance)`,
-          `Stop <strong>−${st.stop_pct ?? 0.75}%</strong> · Max <strong>${st.max_trades_per_day ?? 2}</strong> trades/day`,
+        `Sell for <strong>$${fmt(dailyNet)} net/trade</strong> (#1 pick — one deploy at tier; 2nd trade exceptional days only)`,
+        `Stop <strong>−${st.stop_pct ?? 0.75}%</strong> · Max <strong>${st.max_trades_per_day ?? 2}</strong> trades/day (2nd after #1 win + GO market)`,
           `<strong>${st.entry_delay_minutes ?? 30}m</strong> entry delay · Window <strong>${st.entry_window_et ?? "10:00–14:30"}</strong> ET`,
           `Stop day after stop-out · Trade #2 only after a win on #1`,
         ].join("<br>");
@@ -1584,8 +1584,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         const balance = s.tradable_cash ?? 0;
         const weeklyTier = tier.current_weekly_target ?? (dailyTarget * 3);
         document.getElementById("growth-tier-summary").textContent =
-          `Current balance $${fmt(balance)} → ${tier.current_tier_label || "tier"} · `
-          + `$${fmt(dailyTarget)}/day · $${fmt(weeklyTier)}/week (3 opportunities). `
+        `Current balance $${fmt(balance)} → ${tier.current_tier_label || "tier"} · `
+        + `$${fmt(dailyTarget)}/trade · $${fmt(weeklyTier)}/week (3 winning trades). `
           + (tier.next_balance && tier.amount_to_next_tier > 0
             ? `$${fmt(tier.amount_to_next_tier)} to $${fmt(tier.next_balance)} tier.`
             : "");
@@ -1597,7 +1597,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
               const status = active ? "Current tier" : reached ? "Reached" : "Upcoming";
               return `<tr class="${active ? "growth-active" : ""}"><td>$${fmt(row.balance_at_least)}</td>`
                 + `<td>${row.structure_label || "—"}</td>`
-                + `<td>$${fmt(row.daily_target)}/day</td>`
+                + `<td>$${fmt(row.daily_target)}/trade</td>`
                 + `<td>$${fmt(row.weekly_target ?? row.daily_target * 3)}/wk</td>`
                 + `<td>${status}</td></tr>`;
             }).join("")

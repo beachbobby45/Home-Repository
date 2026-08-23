@@ -199,14 +199,18 @@ def capital_tier_detail(
     ]
     daily = round(sum(row["daily_rate"] for row in lot_rows), 2)
     weekly = round(daily * WEEKLY_PRODUCTION_OPPORTUNITIES, 2)
+    threshold = tier_threshold_for_equity(equity, basis=basis)
     return {
-        "tier_threshold": tier_threshold_for_equity(equity, basis=basis),
+        "tier_threshold": threshold,
         "lot_structure": list(lots),
         "lots": lot_rows,
         "daily_production_target": daily,
+        "trade_net_target": daily,
         "weekly_production_target": weekly,
         "weekly_opportunities": WEEKLY_PRODUCTION_OPPORTUNITIES,
-        "structure_label": " + ".join(_format_lot_label(lot) for lot in lots),
+        # One E*TRADE order at full tier deploy (virtual lots are accounting only).
+        "structure_label": _format_lot_label(threshold),
+        "virtual_lot_label": " + ".join(_format_lot_label(lot) for lot in lots),
         "per_opportunity_target": daily,
     }
 
@@ -254,9 +258,11 @@ def growth_plan_milestones(
             {
                 "balance_at_least": float(threshold),
                 "daily_target": detail["daily_production_target"],
+                "trade_net_target": detail["trade_net_target"],
                 "weekly_target": detail["weekly_production_target"],
                 "lot_structure": detail["lot_structure"],
                 "structure_label": detail["structure_label"],
+                "virtual_lot_label": detail["virtual_lot_label"],
             }
         )
     return rows

@@ -35,9 +35,18 @@ def test_weekly_production_target_three_times_daily():
 
 def test_capital_tier_detail_structure():
     detail = capital_tier_detail(25_000)
-    assert detail["structure_label"] == "$10K + $15K"
+    assert detail["structure_label"] == "$25K"
+    assert detail["virtual_lot_label"] == "$10K + $15K"
     assert detail["daily_production_target"] == 350
+    assert detail["trade_net_target"] == 350
     assert detail["weekly_production_target"] == 1050
+
+
+def test_capital_tier_single_trade_deploy_at_20k():
+    detail = capital_tier_detail(20_000)
+    assert detail["structure_label"] == "$20K"
+    assert detail["virtual_lot_label"] == "$10K + $10K"
+    assert detail["trade_net_target"] == 300
 
 
 def test_growth_plan_milestones():
@@ -47,7 +56,8 @@ def test_growth_plan_milestones():
     assert rows[0]["weekly_target"] == 600.0
     row_20k = next(r for r in rows if r["balance_at_least"] == 20_000.0)
     assert row_20k["daily_target"] == 300.0
-    assert row_20k["structure_label"] == "$10K + $10K"
+    assert row_20k["structure_label"] == "$20K"
+    assert row_20k["virtual_lot_label"] == "$10K + $10K"
 
 
 def test_next_growth_tier():
