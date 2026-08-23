@@ -334,6 +334,23 @@ def compute_monthly_realized_net(conn: sqlite3.Connection, month_key: str) -> fl
     return realized
 
 
+def compute_ytd_realized_net(conn: sqlite3.Connection, year_key: str | None = None) -> float:
+    """FIFO matched round-trip P&L for closed trades in calendar year YYYY."""
+    from datetime import datetime, timezone
+
+    year = year_key or datetime.now(timezone.utc).strftime("%Y")
+    rows = conn.execute(
+        """
+        SELECT DISTINCT strftime('%Y-%m', executed_at) AS mk
+        FROM trade_journal
+        WHERE strftime('%Y', executed_at) = ?
+        ORDER BY mk ASC
+        """,
+        (year,),
+    ).fetchall()
+    return round(sum(compute_monthly_realized_net(conn, row["mk"]) for row in rows), 2)
+
+
 def trade_to_dict(entry: JournalEntry) -> dict:
     notional = entry.shares * entry.price
     return {

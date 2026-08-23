@@ -1752,6 +1752,8 @@ textarea {
 .swatch.actual { background: #22c55e; }
 .swatch.pace { background: #3b82f6; }
 .swatch.strategy { background: #f59e0b; }
+.swatch.growth { background: #f59e0b; }
+.swatch.injection { background: #a855f7; }
 
 .scenario-stats .metric {
   font-size: 1rem;

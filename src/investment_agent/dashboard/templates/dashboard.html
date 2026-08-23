@@ -465,7 +465,7 @@
         <div class="card capital-builder-panel" id="capital-builder-panel">
           <div class="cb-milestone">
             <div class="cb-milestone-head">
-              <span class="cb-milestone-label" id="cb-phase-label">Phase 1: $10,000 → $30,000</span>
+              <span class="cb-milestone-label" id="cb-phase-label">Phase 1: $15,000 → $30,000</span>
               <span class="cb-milestone-badge brief" id="cb-milestone-badge"></span>
             </div>
             <div class="metric" id="cb-current-equity">—</div>
@@ -565,7 +565,7 @@
         </tr></thead><tbody id="journal-body"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody></table></div>
       </section>
       <section class="view-section">
-        <header class="view-head"><h2>Month-end sweep</h2></header>
+        <header class="view-head"><h2>Period-end sweep</h2></header>
         <div class="card">
           <div id="sweep-preview">Loading…</div>
           <div class="actions" style="margin-top:0.75rem">
@@ -1556,7 +1556,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         document.getElementById("tradable-cash").textContent = "$" + fmt(s.tradable_cash);
         document.getElementById("original-basis").textContent = "$" + fmt(s.original_basis);
 
-        const dailyTarget = s.daily_target ?? 150;
+        const dailyTarget = s.daily_target ?? 200;
         document.getElementById("daily-target").textContent = "$" + fmt(dailyTarget) + "/day";
         const todayNet = s.today_realized_net ?? 0;
         const dailyPct = Math.min(100, Math.max(0, s.today_target_progress_pct ?? 0));
@@ -1614,13 +1614,19 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         document.getElementById("market-brief").textContent = s.market_brief;
         document.getElementById("tax-rate").value = Math.round(s.tax_rate * 100);
 
-        const sp = s.sweep_preview;
-        let sweepHtml = sp.applies
-          ? `Realized net $${fmt(sp.monthly_realized_net)} → sweep $${fmt(sp.total_sweep)} `
-            + `(mgmt $${fmt(sp.management_sweep)} + tax $${fmt(sp.tax_sweep)})`
-          : `No sweep this month (realized net $${fmt(sp.monthly_realized_net)} ≤ 0)`;
-        if (s.sweep_already_applied) sweepHtml += " · <strong>Already applied</strong>";
-        document.getElementById("sweep-preview").innerHTML = sweepHtml;
+      const sp = s.sweep_preview || {};
+      const periodLabel = sp.period_label || (s.sweep_schedule === "annual" ? "YTD" : "month");
+      const periodNet = sp.period_realized_net ?? sp.monthly_realized_net ?? s.period_realized_net ?? s.monthly_realized_net ?? 0;
+      let sweepHtml = sp.applies
+        ? `${periodLabel} realized net $${fmt(periodNet)} → sweep $${fmt(sp.total_sweep)} `
+          + `(mgmt $${fmt(sp.management_sweep)} + tax $${fmt(sp.tax_sweep)})`
+        : `No sweep this ${periodLabel.toLowerCase()} (realized net $${fmt(periodNet)} ≤ 0)`;
+      const scheduleNote = s.sweep_schedule === "annual"
+        ? " · <strong>Annual 35% sweep</strong> (default)"
+        : " · Monthly sweep";
+      sweepHtml += scheduleNote;
+      if (s.sweep_already_applied) sweepHtml += " · <strong>Already applied</strong>";
+      document.getElementById("sweep-preview").innerHTML = sweepHtml;
         updateStatusBar(null, s);
       } catch (err) {
         const tm = document.getElementById("trading-mode-banner");
@@ -2501,8 +2507,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       stats.innerHTML = `
         <div class="card"><h2>Current</h2><div class="metric small">$${fmt(s.current_balance)}</div></div>
         <div class="card"><h2>Goal %</h2><div class="metric small">${fmtPct(s.current_goal_pct)}</div></div>
-        <div class="card"><h2>Journal pace</h2><div class="metric small">${s.scenarios?.journal_pace?.months_to_goal != null ? s.scenarios.journal_pace.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
-        <div class="card"><h2>10yr required</h2><div class="metric small">${s.scenarios?.required_10yr?.monthly_return_pct?.toFixed(2) || "—"}%/mo</div></div>
+        <div class="card"><h2>Growth plan</h2><div class="metric small">${s.scenarios?.growth_plan_annual?.months_to_goal != null ? s.scenarios.growth_plan_annual.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
+        <div class="card"><h2>+$10K @ 6 mo</h2><div class="metric small">${s.scenarios?.growth_plan_injection?.months_to_goal != null ? s.scenarios.growth_plan_injection.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
       `;
       renderScenarioChart(s);
       const tbody = document.getElementById("scenario-table");
@@ -2519,7 +2525,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       leg.innerHTML = `
         <span class="legend-item"><span class="swatch actual"></span> Actual (journal)</span>
         <span class="legend-item"><span class="swatch pace"></span> Journal pace</span>
-        <span class="legend-item"><span class="swatch strategy"></span> Strategy reference</span>
+        <span class="legend-item"><span class="swatch growth"></span> Growth plan (annual)</span>
+        <span class="legend-item"><span class="swatch injection"></span> +$10K @ 6 mo</span>
       `;
     }
 
@@ -2528,16 +2535,20 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const W = 800, H = 220, pad = { l: 55, r: 20, t: 20, b: 35 };
       const actual = s.actual_timeline || [];
       const pace = s.scenarios?.journal_pace?.points || [];
+      const growth = s.scenarios?.growth_plan_annual?.points || [];
+      const injection = s.scenarios?.growth_plan_injection?.points || [];
       const allY = [
         ...actual.map((p) => p.tradable_balance),
         ...pace.map((p) => p.balance),
+        ...growth.map((p) => p.balance),
+        ...injection.map((p) => p.balance),
         s.goal,
       ].filter((v) => v != null && v > 0);
       const minY = Math.min(...allY, s.original_basis) * 0.95;
       const maxY = Math.max(...allY) * 1.05;
       const xScale = (i, n) => pad.l + (i / Math.max(n - 1, 1)) * (W - pad.l - pad.r);
       const yScale = (v) => pad.t + (1 - (v - minY) / (maxY - minY)) * (H - pad.t - pad.b);
-      const line = (pts, key) => {
+      const line = (pts) => {
         if (!pts.length) return "";
         return pts.map((p, i) => {
           const x = xScale(i, pts.length);
@@ -2549,8 +2560,10 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       svg.innerHTML = `
         <line x1="${pad.l}" y1="${goalY}" x2="${W - pad.r}" y2="${goalY}" stroke="#6366f1" stroke-dasharray="4 4" opacity="0.5"/>
         <text x="${W - pad.r}" y="${goalY - 4}" fill="#8b9cb3" font-size="10" text-anchor="end">$5M goal</text>
-        <path d="${line(actual.map((p) => ({ balance: p.tradable_balance })), "balance")}" fill="none" stroke="#22c55e" stroke-width="2.5"/>
-        <path d="${line(pace, "balance")}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6 4" opacity="0.85"/>
+        <path d="${line(actual.map((p) => ({ balance: p.tradable_balance })))}" fill="none" stroke="#22c55e" stroke-width="2.5"/>
+        <path d="${line(pace)}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6 4" opacity="0.85"/>
+        <path d="${line(growth)}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="3 3" opacity="0.9"/>
+        <path d="${line(injection)}" fill="none" stroke="#a855f7" stroke-width="2" stroke-dasharray="8 4" opacity="0.85"/>
         <text x="${pad.l}" y="${H - 8}" fill="#8b9cb3" font-size="10">Months →</text>
         <text x="8" y="${pad.t + 10}" fill="#8b9cb3" font-size="10" transform="rotate(-90 8,${pad.t + 10})">Balance</text>
       `;
@@ -3140,7 +3153,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     });
     on("clear-journal", "click", async () => {
       const ok = window.confirm(
-        "Clear ALL journal entries? This resets cash/P&L to the $10K basis and cannot be undone."
+        "Clear ALL journal entries? This resets cash/P&L to the $15K basis and cannot be undone."
       );
       if (!ok) return;
       try {

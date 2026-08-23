@@ -7,14 +7,16 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from investment_agent.account import get_tax_rate
+from investment_agent.account import get_sweep_schedule, get_tax_rate
 from investment_agent.finance import (
     GOAL_ACCOUNT_VALUE,
     ORIGINAL_BASIS,
-    compute_month_end_sweep,
+    SWEEP_SCHEDULE_ANNUAL,
+    compute_period_end_sweep,
     goal_progress_pct,
 )
-from investment_agent.journal import compute_monthly_realized_net
+from investment_agent.growth_projection import default_growth_scenarios
+from investment_agent.journal import compute_monthly_realized_net, compute_ytd_realized_net
 
 MAX_PROJECTION_MONTHS = 360
 DEFAULT_PROJECTION_HORIZON = 120
@@ -79,21 +81,41 @@ def _cumulative_sweeps_through(
     through_month: str,
     tax_rate: float,
     months: list[str],
+    *,
+    sweep_schedule: str,
 ) -> float:
     total = 0.0
+    if sweep_schedule == SWEEP_SCHEDULE_ANNUAL:
+        years_done: set[str] = set()
+        for mk in months:
+            if mk > through_month:
+                break
+            year = mk[:4]
+            last_in_year = max(m for m in months if m.startswith(year))
+            if mk != last_in_year or year in years_done:
+                continue
+            if through_month >= last_in_year:
+                ytd = compute_ytd_realized_net(conn, year)
+                sweep = compute_period_end_sweep(ytd, tax_rate=tax_rate)
+                total += sweep.total_sweep
+                years_done.add(year)
+        return total
+
     for mk in months:
         if mk > through_month:
             break
         realized = compute_monthly_realized_net(conn, mk)
-        sweep = compute_month_end_sweep(realized, tax_rate=tax_rate)
+        sweep = compute_period_end_sweep(realized, tax_rate=tax_rate)
         total += sweep.total_sweep
     return total
 
 
 def replay_actual_timeline(conn: sqlite3.Connection) -> list[TimelinePoint]:
-    """Month-by-month tradable balance from journal + computed month-end sweeps."""
+    """Month-by-month tradable balance from journal + computed period-end sweeps."""
     tax_rate = get_tax_rate(conn)
+    sweep_schedule = get_sweep_schedule(conn)
     months = _month_keys_from_journal(conn)
+    basis_label = f"${ORIGINAL_BASIS:,.0f}".replace(".00", "")
     points: list[TimelinePoint] = [
         TimelinePoint(
             month_key="start",
@@ -102,16 +124,29 @@ def replay_actual_timeline(conn: sqlite3.Connection) -> list[TimelinePoint]:
             monthly_realized_net=0.0,
             sweep_total=0.0,
             fees_in_month=0.0,
-            label="Start ($10K basis)",
+            label=f"Start ({basis_label} basis)",
         )
     ]
 
     for mk in months:
         cash = _journal_cash_through(conn, mk)
-        sweeps = _cumulative_sweeps_through(conn, mk, tax_rate, months)
+        sweeps = _cumulative_sweeps_through(
+            conn, mk, tax_rate, months, sweep_schedule=sweep_schedule
+        )
         tradable = cash - sweeps
         realized = compute_monthly_realized_net(conn, mk)
-        sweep = compute_month_end_sweep(realized, tax_rate=tax_rate)
+        if sweep_schedule == SWEEP_SCHEDULE_ANNUAL:
+            year = mk[:4]
+            last_in_year = max(m for m in months if m.startswith(year))
+            is_year_end = mk == last_in_year
+            ytd = compute_ytd_realized_net(conn, year) if is_year_end else 0.0
+            sweep = (
+                compute_period_end_sweep(ytd, tax_rate=tax_rate)
+                if is_year_end
+                else compute_period_end_sweep(0.0)
+            )
+        else:
+            sweep = compute_period_end_sweep(realized, tax_rate=tax_rate)
         points.append(
             TimelinePoint(
                 month_key=mk,
@@ -131,9 +166,13 @@ def _tradable_at_month_end(
     month_key: str,
     months: list[str],
     tax_rate: float,
+    *,
+    sweep_schedule: str,
 ) -> float:
     cash = _journal_cash_through(conn, month_key)
-    sweeps = _cumulative_sweeps_through(conn, month_key, tax_rate, months)
+    sweeps = _cumulative_sweeps_through(
+        conn, month_key, tax_rate, months, sweep_schedule=sweep_schedule
+    )
     return cash - sweeps
 
 
@@ -148,13 +187,16 @@ def _journal_pace_monthly_return(
     """
     if not months:
         return None
+    sweep_schedule = get_sweep_schedule(conn)
     returns: list[float] = []
     prior_tradable = ORIGINAL_BASIS
     for mk in months:
         realized = compute_monthly_realized_net(conn, mk)
         if prior_tradable > 0:
             returns.append(realized / prior_tradable)
-        prior_tradable = _tradable_at_month_end(conn, mk, months, tax_rate)
+        prior_tradable = _tradable_at_month_end(
+            conn, mk, months, tax_rate, sweep_schedule=sweep_schedule
+        )
     if not returns:
         return None
     if all(r <= 0 for r in returns):
@@ -293,6 +335,9 @@ def build_scenario_visualizer(
         "points": _project_balance(account_value, required_10y or 0, 120) if required_10y else [],
     }
 
+    growth = default_growth_scenarios(months=horizon)
+    scenarios.update(growth)
+
     total_realized = sum(p.monthly_realized_net for p in journal_months)
     total_fees = sum(p.fees_in_month for p in journal_months)
     total_sweeps = sum(p.sweep_total for p in journal_months)
@@ -311,6 +356,16 @@ def build_scenario_visualizer(
         )
     else:
         summary_parts.append("Journal pace cannot reach $5M — improve edge or cadence.")
+    gp = scenarios.get("growth_plan_annual", {})
+    if gp.get("months_to_goal"):
+        summary_parts.append(
+            f"Growth plan (annual sweep): ~{gp['months_to_goal']:.0f} months to $5M."
+        )
+    inj = scenarios.get("growth_plan_injection", {})
+    if inj.get("months_to_goal"):
+        summary_parts.append(
+            f"With +$10K at 6 mo: ~{inj['months_to_goal']:.0f} months to $5M."
+        )
 
     return {
         "goal": GOAL_ACCOUNT_VALUE,

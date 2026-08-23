@@ -76,5 +76,5 @@ def test_api_summary_empty_db():
                 resp = client.get("/api/summary")
                 assert resp.status_code == 200
                 data = resp.json()
-                assert data["tradable_cash"] == 10000.0
+                assert data["tradable_cash"] == 15000.0
                 assert "goal_pct" in data

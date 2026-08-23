@@ -33,7 +33,7 @@ def test_replay_timeline_includes_start_and_months():
         conn.close()
 
 
-def test_june_sweep_applied_in_timeline():
+def test_june_realized_in_timeline_annual_sweep_at_year_end():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "sc.db"
         seed_demo_db(path)
@@ -43,7 +43,9 @@ def test_june_sweep_applied_in_timeline():
         timeline = replay_actual_timeline(conn)
         jun = next(p for p in timeline if p.month_key == "2026-06")
         assert abs(jun.monthly_realized_net - expected["jun_realized_net"]) < 0.02
-        assert jun.sweep_total > 0
+        assert jun.sweep_total == 0.0
+        aug = next(p for p in timeline if p.month_key == expected["month_key"])
+        assert aug.sweep_total > 0
         conn.close()
 
 
@@ -59,6 +61,8 @@ def test_scenario_visualizer_structure():
         assert len(viz["actual_timeline"]) >= 3
         assert "journal_pace" in viz["scenarios"]
         assert "required_10yr" in viz["scenarios"]
+        assert "growth_plan_annual" in viz["scenarios"]
+        assert "growth_plan_injection" in viz["scenarios"]
         assert viz["summary"]
         assert viz["scenarios"]["journal_pace"]["months_to_goal"] is not None
         assert viz["account_value"] > ORIGINAL_BASIS

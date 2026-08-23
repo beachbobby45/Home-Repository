@@ -22,7 +22,7 @@ SOFT_TARGET_NOTE = (
 
 
 def phase1_journey_progress_pct(current_equity: float) -> float:
-    """Percent complete along the $10K→$30K path (0–100)."""
+    """Percent complete along the $15K→$30K path (0–100)."""
     span = PHASE1_TARGET - PHASE1_START
     if span <= 0:
         return 0.0

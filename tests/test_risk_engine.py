@@ -221,7 +221,7 @@ def test_portfolio_allows_new_entries_when_flat():
 def test_build_portfolio_snapshot_tracks_high_water():
     conn, path = _conn()
     try:
-        set_setting(conn, PHASE1_HIGH_WATER_KEY, "10500")
+        set_setting(conn, PHASE1_HIGH_WATER_KEY, "20000")
         insert_trade(
             conn,
             ticker="AAPL",
@@ -233,7 +233,8 @@ def test_build_portfolio_snapshot_tracks_high_water():
         )
         conn.commit()
         snap = build_portfolio_snapshot(conn, date_key="2026-08-14")
-        assert snap.high_water_mark == 10_500.0
+        assert snap.high_water_mark == 20_000.0
+        assert snap.current_equity < snap.high_water_mark
         assert snap.tradable_cash < ORIGINAL_BASIS
         assert len(snap.open_positions) == 1
     finally:
@@ -355,7 +356,7 @@ def test_api_risk_status():
                 resp = client.get("/api/risk/status")
                 assert resp.status_code == 200
                 data = resp.json()
-                assert data["tradable_cash"] == 10_000.0
+                assert data["tradable_cash"] == 15_000.0
                 assert data["limits"]["max_trades_per_day"] == 2
 
 

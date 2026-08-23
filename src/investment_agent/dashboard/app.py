@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from investment_agent.account import (
-    apply_month_end_sweep,
+    apply_period_sweep,
     build_dashboard_summary,
     format_journal_notes,
     get_tax_rate,
@@ -1007,7 +1007,7 @@ def api_apply_sweep(
     conn=Depends(_db),
     _: None = Depends(_require_api_key),
 ) -> dict:
-    result = apply_month_end_sweep(conn)
+    result = apply_period_sweep(conn)
     if result.get("ok"):
         conn.commit()
     return result
