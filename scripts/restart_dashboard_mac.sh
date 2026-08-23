@@ -40,8 +40,9 @@ fi
 
 echo ""
 echo "Starting dashboard at http://127.0.0.1:8080"
-echo "Expected version after restart: v0.9.0 · Phase 1B (check header badge or: curl -s http://127.0.0.1:8080/api/version)"
-echo "If you still see 'UI v2': git pull origin main, then run this script again, then Cmd+Shift+R in the browser."
+echo "Expected version after restart: v0.9.1 · \$15K · Annual Sweep (Cash \$15,000 · \$200/day target)"
+echo "Verify: curl -s http://127.0.0.1:8080/api/version"
+echo "If Cash still shows \$10,000: git pull origin main, restart dashboard, then Cmd+Shift+R."
 echo "Keep this Terminal window open. Press Ctrl+C to stop."
 echo ""
 

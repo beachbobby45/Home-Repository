@@ -584,7 +584,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.0 · Phase 1B</strong> (Phase 1B complete)</p>
+          <p class="brief">Latest release: <strong>v0.9.1 · $15K · Annual Sweep</strong> ($15K basis, annual 35% sweep, growth scenarios)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -677,8 +677,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (v.version === "0.9.0") {
-              setupHelp.textContent = "You are on the current release. If the header still shows UI v2, hard-refresh the browser (Cmd+Shift+R).";
+            if (v.version === "0.9.1") {
+              setupHelp.textContent = "You are on the current release ($15K basis · annual sweep). Hard-refresh (Cmd+Shift+R) if Cash still shows $10,000.";
               setupHelp.className = "brief setup-version-help setup-version-ok";
             } else {
               setupHelp.textContent = "Your dashboard is behind. Double-click Update and Open Dashboard.command in Finder (no Terminal typing).";
@@ -1068,7 +1068,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
       if (summary && dailyEl) {
         const todayNet = summary.today_realized_net ?? 0;
-        const target = summary.daily_target ?? 150;
+        const target = summary.daily_target ?? 200;
         dailyEl.textContent = `$${fmt(todayNet)} / $${fmt(target)}`;
         if (cashEl) cashEl.textContent = "$" + fmt(summary.tradable_cash);
         if (goalEl) goalEl.textContent = fmtPct(summary.goal_pct);
@@ -1572,7 +1572,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           : "At top growth tier shown";
 
         const st = s.strategy || {};
-        const dailyNet = st.daily_net_target ?? s.daily_target ?? 150;
+        const dailyNet = st.daily_net_target ?? s.daily_target ?? 200;
         document.getElementById("strategy-rules").innerHTML = [
           `Sell for <strong>$${fmt(dailyNet)} net/day</strong> (split-lot tier — 3× weekly at current balance)`,
           `Stop <strong>−${st.stop_pct ?? 0.75}%</strong> · Max <strong>${st.max_trades_per_day ?? 2}</strong> trades/day`,
@@ -2203,7 +2203,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       screenerRows = data.ranked || [];
       screenerRequestedTradingDays = data.period_days ?? Number(days);
       screenerTradingDaysInPeriod = data.trading_days_in_period ?? screenerRequestedTradingDays;
-      screenerNetTarget = data.net_target ?? 150;
+      screenerNetTarget = data.net_target ?? 200;
       screenerExcludedCount = data.excluded_count ?? 0;
       renderScreenerTable();
       updateScreenerSortHeaders();
