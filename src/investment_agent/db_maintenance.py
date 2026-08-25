@@ -19,6 +19,7 @@ REQUIRED_TABLES = (
     "rank_snapshots",
     "close_reports",
     "trade_journal",
+    "operator_day_log",
 )
 
 

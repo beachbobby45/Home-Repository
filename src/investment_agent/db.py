@@ -314,6 +314,26 @@ CREATE TABLE IF NOT EXISTS close_reports (
   UNIQUE(report_date, report_type)
 );
 
+CREATE TABLE IF NOT EXISTS operator_day_log (
+  id INTEGER PRIMARY KEY,
+  session_date_et TEXT NOT NULL UNIQUE,
+  outcome TEXT NOT NULL CHECK(outcome IN (
+    'TRADED', 'NO_TRADE_SYSTEM', 'PASS_NO_SETUP', 'NO_TRADE_OPERATOR', 'ATTENDED_ONLY'
+  )),
+  source TEXT NOT NULL CHECK(source IN ('auto_eod', 'auto_journal', 'manual')),
+  market_activity_score INTEGER,
+  market_activity_band TEXT,
+  allow_trade INTEGER,
+  top_pick_ticker TEXT,
+  journal_trade_count INTEGER NOT NULL DEFAULT 0,
+  notes TEXT,
+  recorded_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_operator_day_log_session
+  ON operator_day_log(session_date_et DESC);
+
 CREATE TABLE IF NOT EXISTS news_headlines (
   id INTEGER PRIMARY KEY,
   ticker TEXT NOT NULL,
@@ -475,6 +495,30 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
                 "ALTER TABLE trade_journal ADD COLUMN proposal_id INTEGER "
                 "REFERENCES trade_proposals(id)"
             )
+    if "operator_day_log" not in all_tables:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS operator_day_log (
+              id INTEGER PRIMARY KEY,
+              session_date_et TEXT NOT NULL UNIQUE,
+              outcome TEXT NOT NULL CHECK(outcome IN (
+                'TRADED', 'NO_TRADE_SYSTEM', 'PASS_NO_SETUP',
+                'NO_TRADE_OPERATOR', 'ATTENDED_ONLY'
+              )),
+              source TEXT NOT NULL CHECK(source IN ('auto_eod', 'auto_journal', 'manual')),
+              market_activity_score INTEGER,
+              market_activity_band TEXT,
+              allow_trade INTEGER,
+              top_pick_ticker TEXT,
+              journal_trade_count INTEGER NOT NULL DEFAULT 0,
+              notes TEXT,
+              recorded_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_operator_day_log_session
+              ON operator_day_log(session_date_et DESC);
+            """
+        )
     tables = {
         row[0]
         for row in conn.execute(

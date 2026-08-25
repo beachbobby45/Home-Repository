@@ -448,11 +448,20 @@ def generate_daily_close_report(
     journal = _journal_for_date(conn, day)
     rank1 = ranked[0]["ticker"] if ranked else None
 
+    from investment_agent.operator_day_log import get_operator_day, record_operator_day_from_eod
+
+    eod_log = record_operator_day_from_eod(conn, day)
+    operator_day = get_operator_day(conn, day)
+
     highlights: list[str] = []
     if journal["traded_today"]:
         highlights.append(
             f"Journal: ${journal['realized_net']:+.2f} realized on {day}"
             + (f" ({journal['round_trips'][0]['ticker']})" if journal["round_trips"] else "")
+        )
+    elif operator_day:
+        highlights.append(
+            f"Operator day: {operator_day.get('outcome_label', operator_day['outcome'])} on {day}"
         )
     else:
         highlights.append(f"No journal trades logged for {day}.")
@@ -486,6 +495,8 @@ def generate_daily_close_report(
         "deploy": deploy,
         "highlights": highlights,
         "journal": journal,
+        "operator_day": operator_day,
+        "operator_day_eod": eod_log,
         "rank1_ticker": rank1,
         "tabs": {
             "step3_pass": {

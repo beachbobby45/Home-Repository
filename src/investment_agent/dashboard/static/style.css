@@ -2458,6 +2458,79 @@ textarea {
   font-size: 0.85rem;
 }
 
+.journal-day-log-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.65rem 0;
+}
+
+.journal-day-log-label {
+  margin-right: 0.25rem;
+}
+
+#operator-day-date {
+  max-width: 11rem;
+}
+
+.operator-day-summary {
+  margin: 0.35rem 0 0.65rem;
+}
+
+.operator-day-card {
+  margin-bottom: 1rem;
+}
+
+.operator-day-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.outcome-pill {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.outcome-traded .outcome-pill,
+.outcome-pill.outcome-traded {
+  background: rgba(34, 197, 94, 0.18);
+  color: #166534;
+}
+
+.outcome-no-trade-system .outcome-pill,
+.outcome-pill.outcome-no-trade-system {
+  background: rgba(100, 116, 139, 0.2);
+  color: #334155;
+}
+
+.outcome-pass .outcome-pill,
+.outcome-pill.outcome-pass {
+  background: rgba(251, 191, 36, 0.22);
+  color: #92400e;
+}
+
+.outcome-operator .outcome-pill,
+.outcome-pill.outcome-operator {
+  background: rgba(59, 130, 246, 0.18);
+  color: #1e40af;
+}
+
+.outcome-attended .outcome-pill,
+.outcome-pill.outcome-attended {
+  background: rgba(148, 163, 184, 0.2);
+  color: #475569;
+}
+
+.attendance-missing {
+  color: #b45309;
+  font-weight: 600;
+}
+
 @media (max-width: 640px) {
   main, .app-main {
     padding: 1rem;

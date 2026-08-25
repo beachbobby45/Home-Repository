@@ -34,6 +34,16 @@ from investment_agent.historical import (
     evaluate_trading_day,
     pull_historical_data,
 )
+from investment_agent.operator_day_log import (
+    OUTCOME_ATTENDED_ONLY,
+    OUTCOME_PASS_NO_SETUP,
+    build_attendance_summary,
+    get_operator_day,
+    list_operator_days,
+    record_operator_day_from_journal,
+    record_operator_day_manual,
+    today_et_str,
+)
 from investment_agent.learning import (
     generate_learning_report,
     get_learning_report,
@@ -265,6 +275,17 @@ class IngestRunBody(BaseModel):
 
 class ScreenActionRecordBody(BaseModel):
     action: str = ACTION_REFRESH_RANKED
+
+
+class OperatorDayLogBody(BaseModel):
+    outcome: str
+    session_date_et: str | None = None
+    notes: str | None = None
+
+
+class OperatorDayNoTradeBody(BaseModel):
+    session_date_et: str | None = None
+    notes: str | None = None
 
 
 # Browser ingest is unreliable with large watchlists (DB lock, Finnhub rate limits, timeouts).
@@ -965,8 +986,119 @@ def api_journal_create(
                 confirmation_score=exc.get("confirmation_score"),
                 notes="Exceptional override consumed on journal BUY",
             )
+    from investment_agent.operator_day_log import (
+        record_operator_day_from_journal,
+        session_date_et_from_executed_at,
+    )
+
+    session_day = (
+        session_date_et_from_executed_at(executed_at)
+        if executed_at
+        else today_et_str()
+    )
+    operator_day_result = record_operator_day_from_journal(conn, session_day)
     conn.commit()
-    return {"ok": True, "id": trade_id, "trading_mode": mode, "proposal_id": body.proposal_id}
+    return {
+        "ok": True,
+        "id": trade_id,
+        "trading_mode": mode,
+        "proposal_id": body.proposal_id,
+        "operator_day": operator_day_result.get("entry"),
+    }
+
+
+@app.get("/api/operator-day-log")
+def api_operator_day_log_list(
+    conn=Depends(_db),
+    limit: int = 60,
+    since: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "entries": list_operator_days(conn, limit=min(max(limit, 1), 365), since=since),
+    }
+
+
+@app.get("/api/operator-day-log/summary")
+def api_operator_day_log_summary(
+    conn=Depends(_db),
+    since: str | None = None,
+) -> dict[str, Any]:
+    return build_attendance_summary(conn, since=since)
+
+
+@app.get("/api/operator-day-log/{session_date_et}")
+def api_operator_day_log_get(session_date_et: str, conn=Depends(_db)) -> dict[str, Any]:
+    entry = get_operator_day(conn, session_date_et)
+    if not entry:
+        raise HTTPException(status_code=404, detail="No operator day log for this date")
+    return entry
+
+
+@app.post("/api/operator-day-log")
+def api_operator_day_log_create(
+    body: OperatorDayLogBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    try:
+        result = record_operator_day_manual(
+            conn,
+            outcome=body.outcome,
+            session_date_et=body.session_date_et,
+            notes=body.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    conn.commit()
+    return result
+
+
+@app.post("/api/operator-day-log/no-trade")
+def api_operator_day_log_no_trade(
+    body: OperatorDayNoTradeBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    result = record_operator_day_manual(
+        conn,
+        outcome="NO_TRADE",
+        session_date_et=body.session_date_et,
+        notes=body.notes,
+    )
+    conn.commit()
+    return result
+
+
+@app.post("/api/operator-day-log/check-in")
+def api_operator_day_log_check_in(
+    body: OperatorDayNoTradeBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    result = record_operator_day_manual(
+        conn,
+        outcome=OUTCOME_ATTENDED_ONLY,
+        session_date_et=body.session_date_et,
+        notes=body.notes,
+    )
+    conn.commit()
+    return result
+
+
+@app.post("/api/operator-day-log/pass")
+def api_operator_day_log_pass(
+    body: OperatorDayNoTradeBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    result = record_operator_day_manual(
+        conn,
+        outcome=OUTCOME_PASS_NO_SETUP,
+        session_date_et=body.session_date_et,
+        notes=body.notes,
+    )
+    conn.commit()
+    return result
 
 
 @app.post("/api/journal/clear")
