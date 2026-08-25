@@ -11,6 +11,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$PWD"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/_resolve_python_env.sh"
 SKIP_REPORT=0
 for arg in "$@"; do
   case "$arg" in
@@ -21,6 +23,7 @@ done
 echo ""
 echo "  AI Investment Agent — end of day"
 echo "  Folder: $ROOT"
+echo "  Python: $PY ($("$PY" --version 2>&1))"
 echo "  Steps: after-close ingest → screener → daily close report"
 echo ""
 
@@ -31,9 +34,8 @@ echo "── Step 1/3: After-close ingest (~15–25 min for S&P 500) ──"
 
 echo ""
 echo "── Step 2/3: Ranked screener (14 trading days) ──"
-export PYTHONPATH="$ROOT/src"
-python3 "$ROOT/scripts/run_period_screener.py" --days 14 --save >/dev/null
-python3 - <<'PY'
+"$PY" "$ROOT/scripts/run_period_screener.py" --days 14 --save >/dev/null
+"$PY" - <<'PY'
 import json, sqlite3, sys
 from pathlib import Path
 sys.path.insert(0, str(Path("src").resolve()))
@@ -53,12 +55,12 @@ PY
 if [[ "$SKIP_REPORT" -eq 0 ]]; then
   echo ""
   echo "── Step 3/3: Daily close report ──"
-  python3 "$ROOT/scripts/run_daily_close.py" --daily
+  "$PY" "$ROOT/scripts/run_daily_close.py" --daily
 fi
 
 echo ""
 echo "── Freshness check ──"
-python3 "$ROOT/scripts/manage_watchlist.py" stats | python3 -c "
+"$PY" "$ROOT/scripts/manage_watchlist.py" stats | "$PY" -c "
 import json, sys
 s = json.load(sys.stdin)
 f = s.get('freshness', {})

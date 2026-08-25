@@ -35,6 +35,31 @@ def test_dashboard_homepage():
                 assert "AI Investment Agent" in resp.text
 
 
+def test_dashboard_inline_script_parses():
+    """Dashboard UI is one inline script — a syntax error bricks the whole page."""
+    html = (ROOT / "src/investment_agent/dashboard/templates/dashboard.html").read_text(
+        encoding="utf-8"
+    )
+    assert "<script>" in html
+    assert "??" in html  # sanity: template uses nullish coalescing
+    assert "?? cb.weekly_soft_progress_pct ||" not in html
+    script = html.split("<script>", 1)[1].split("</script>", 1)[0]
+    import subprocess
+
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(script)
+        script_path = fh.name
+    try:
+        proc = subprocess.run(
+            ["node", "--check", script_path],
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        Path(script_path).unlink(missing_ok=True)
+    assert proc.returncode == 0, proc.stderr
+
+
 def test_api_summary_empty_db():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "test.db"
@@ -51,5 +76,5 @@ def test_api_summary_empty_db():
                 resp = client.get("/api/summary")
                 assert resp.status_code == 200
                 data = resp.json()
-                assert data["tradable_cash"] == 10000.0
+                assert data["tradable_cash"] == 15000.0
                 assert "goal_pct" in data

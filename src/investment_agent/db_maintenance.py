@@ -28,10 +28,43 @@ def ingest_lock_active() -> bool:
 
 
 def ingest_lock_message() -> str:
+    if ingest_lock_stale():
+        return (
+            "Stale ingest lock from a prior crashed run (data/ingest.lock). "
+            "End of Day clears this automatically; if you see this in Terminal, run: "
+            "rm -f data/ingest.lock"
+        )
     return (
         "Ingest is running in Terminal (database busy). "
         "Wait for ./scripts/run_ingest_mac.sh to finish, then try again."
     )
+
+
+def ingest_lock_stale(*, max_age_hours: float = 2.0) -> bool:
+    """True if lock file exists but is older than max_age_hours (likely crashed ingest)."""
+    if not INGEST_LOCK_PATH.is_file():
+        return False
+    try:
+        lines = INGEST_LOCK_PATH.read_text(encoding="utf-8").strip().splitlines()
+        if len(lines) < 2:
+            return True
+        ts = datetime.fromisoformat(lines[1].replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - ts.astimezone(timezone.utc)
+        return age.total_seconds() > max_age_hours * 3600.0
+    except (OSError, ValueError):
+        return True
+
+
+def clear_stale_ingest_lock(*, max_age_hours: float = 2.0) -> bool:
+    """Remove ingest.lock if missing or stale. Returns True if a lock file was removed."""
+    if not INGEST_LOCK_PATH.is_file():
+        return False
+    if not ingest_lock_stale(max_age_hours=max_age_hours):
+        return False
+    INGEST_LOCK_PATH.unlink(missing_ok=True)
+    return True
 
 
 def acquire_ingest_lock(*, detail: str = "ingest") -> None:

@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.finance import (
     GOAL_ACCOUNT_VALUE,
+    ORIGINAL_BASIS,
     capital_tier_detail,
     compute_month_end_sweep,
     daily_profit_target,
@@ -57,3 +58,10 @@ def test_split_lot_weekly_at_10k():
     assert detail["weekly_production_target"] == 450.0
     assert weekly_production_target(10_000) == 450.0
     assert daily_profit_target(10_000) == 150.0
+
+
+def test_split_lot_weekly_at_15k_basis():
+    detail = capital_tier_detail(15_000)
+    assert detail["daily_production_target"] == 200.0
+    assert detail["weekly_production_target"] == 600.0
+    assert daily_profit_target(ORIGINAL_BASIS) == 200.0

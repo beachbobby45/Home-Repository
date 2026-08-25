@@ -11,6 +11,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$PWD"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/_resolve_python_env.sh"
+
 WITH_INGEST=0
 for arg in "$@"; do
   case "$arg" in
@@ -21,9 +24,8 @@ done
 echo ""
 echo "  AI Investment Agent — morning prep"
 echo "  Folder: $ROOT"
+echo "  Python: $PY ($("$PY" --version 2>&1))"
 echo ""
-
-export PYTHONPATH="$ROOT/src"
 
 if [[ "$WITH_INGEST" -eq 1 ]]; then
   echo "── Incremental ingest ──"
@@ -33,10 +35,17 @@ if [[ "$WITH_INGEST" -eq 1 ]]; then
 fi
 
 echo "── Prepare today's trades (screener + candidates) ──"
-python3 - <<'PY'
+PYTHONNOUSERSITE=1 "$PY" - <<'PY'
 import json, sys
 from pathlib import Path
 sys.path.insert(0, str(Path("src").resolve()))
+try:
+    import pandas  # noqa: F401
+    import numpy  # noqa: F401
+except ImportError as exc:
+    print(f"ERROR: pandas/numpy: {exc}")
+    print("Fix: double-click scripts/Fix Ingest Python.command")
+    sys.exit(1)
 from investment_agent.db import connect, init_db
 from investment_agent.daily_rhythm import build_trading_candidates
 from investment_agent.period_screener import date_range_for_period, list_trading_dates, run_period_screener, save_screener_run

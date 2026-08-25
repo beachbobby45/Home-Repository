@@ -14,10 +14,15 @@ from investment_agent.finance import (
     DAILY_TARGET_STEP,
     DEFAULT_BUY_FEE,
     DEFAULT_SELL_FEE,
+    DEFAULT_SWEEP_SCHEDULE,
     DEFAULT_TAX_RESERVE_RATE,
     GOAL_ACCOUNT_VALUE,
     ORIGINAL_BASIS,
+    SWEEP_SCHEDULE_ANNUAL,
+    SWEEP_SCHEDULE_MONTHLY,
+    VALID_SWEEP_SCHEDULES,
     compute_month_end_sweep,
+    compute_period_end_sweep,
     daily_profit_target,
     goal_progress_pct,
     growth_plan_milestones,
@@ -28,6 +33,7 @@ from investment_agent.journal import (
     compute_monthly_realized_net,
     compute_today_realized_net,
     compute_total_fees,
+    compute_ytd_realized_net,
     journal_cash_balance,
 )
 from investment_agent.strategy import (
@@ -42,6 +48,7 @@ TRADING_MODE_KEY = "trading_mode"
 TRADING_MODE_PAPER = "paper"
 TRADING_MODE_LIVE = "live"
 VALID_TRADING_MODES = frozenset({TRADING_MODE_PAPER, TRADING_MODE_LIVE})
+SWEEP_SCHEDULE_KEY = "sweep_schedule"
 
 
 @dataclass(frozen=True)
@@ -51,7 +58,10 @@ class DashboardSummary:
     goal_pct: float
     goal_target: float
     month_key: str
+    period_key: str
+    sweep_schedule: str
     monthly_realized_net: float
+    period_realized_net: float
     total_fees_paid: float
     sweep_preview: dict
     management_jar: float
@@ -74,6 +84,15 @@ class DashboardSummary:
 def _month_key(dt: datetime | None = None) -> str:
     when = dt or datetime.now(timezone.utc)
     return when.strftime("%Y-%m")
+
+
+def _year_key(dt: datetime | None = None) -> str:
+    when = dt or datetime.now(timezone.utc)
+    return when.strftime("%Y")
+
+
+def _annual_sweep_key(year_key: str | None = None) -> str:
+    return f"{year_key or _year_key()}-annual"
 
 
 def get_setting(conn: sqlite3.Connection, key: str, default: str) -> str:
@@ -102,6 +121,21 @@ def get_tax_rate(conn: sqlite3.Connection) -> float:
         return float(raw)
     except ValueError:
         return DEFAULT_TAX_RESERVE_RATE
+
+
+def get_sweep_schedule(conn: sqlite3.Connection) -> str:
+    raw = get_setting(conn, SWEEP_SCHEDULE_KEY, DEFAULT_SWEEP_SCHEDULE).lower().strip()
+    return raw if raw in VALID_SWEEP_SCHEDULES else DEFAULT_SWEEP_SCHEDULE
+
+
+def set_sweep_schedule(conn: sqlite3.Connection, schedule: str) -> str:
+    normalized = schedule.lower().strip()
+    if normalized not in VALID_SWEEP_SCHEDULES:
+        raise ValueError(
+            f"sweep_schedule must be one of: {', '.join(sorted(VALID_SWEEP_SCHEDULES))}"
+        )
+    set_setting(conn, SWEEP_SCHEDULE_KEY, normalized)
+    return normalized
 
 
 def get_trading_mode(conn: sqlite3.Connection) -> str:
@@ -142,35 +176,31 @@ def cumulative_sweeps(conn: sqlite3.Connection) -> float:
     return float(row["total"]) if row else 0.0
 
 
-def sweep_applied_for_month(conn: sqlite3.Connection, month_key: str) -> bool:
+def sweep_applied_for_period(conn: sqlite3.Connection, period_key: str) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM sweep_history WHERE month_key = ?", (month_key,)
+        "SELECT 1 FROM sweep_history WHERE month_key = ?", (period_key,)
     ).fetchone()
     return row is not None
 
 
-def apply_month_end_sweep(conn: sqlite3.Connection, month_key: str | None = None) -> dict:
-    """Record month-end sweep into jars (idempotent per month)."""
-    mk = month_key or _month_key()
-    if sweep_applied_for_month(conn, mk):
-        return {"ok": False, "error": f"Sweep already applied for {mk}"}
+def sweep_applied_for_month(conn: sqlite3.Connection, month_key: str) -> bool:
+    return sweep_applied_for_period(conn, month_key)
 
-    tax_rate = get_tax_rate(conn)
-    realized = compute_monthly_realized_net(conn, mk)
-    sweep = compute_month_end_sweep(realized, tax_rate=tax_rate)
-    if not sweep.applies:
-        return {
-            "ok": False,
-            "error": f"No positive realized net for {mk} (${realized:.2f})",
-        }
 
+def _record_sweep(
+    conn: sqlite3.Connection,
+    period_key: str,
+    realized: float,
+    sweep,
+    tax_rate: float,
+) -> dict:
     conn.execute(
         """
         INSERT INTO sweep_history
           (month_key, realized_net, management_amount, tax_amount, tax_rate)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (mk, realized, sweep.management_sweep, sweep.tax_sweep, tax_rate),
+        (period_key, realized, sweep.management_sweep, sweep.tax_sweep, tax_rate),
     )
     for jar_type, amount in (
         ("management", sweep.management_sweep),
@@ -188,12 +218,57 @@ def apply_month_end_sweep(conn: sqlite3.Connection, month_key: str | None = None
         )
     return {
         "ok": True,
-        "month_key": mk,
+        "period_key": period_key,
+        "month_key": period_key,
         "realized_net": realized,
         "management_sweep": sweep.management_sweep,
         "tax_sweep": sweep.tax_sweep,
         "total_sweep": sweep.total_sweep,
+        "sweep_schedule": get_sweep_schedule(conn),
     }
+
+
+def apply_month_end_sweep(conn: sqlite3.Connection, month_key: str | None = None) -> dict:
+    """Record month-end sweep into jars (idempotent per month)."""
+    mk = month_key or _month_key()
+    if sweep_applied_for_period(conn, mk):
+        return {"ok": False, "error": f"Sweep already applied for {mk}"}
+
+    tax_rate = get_tax_rate(conn)
+    realized = compute_monthly_realized_net(conn, mk)
+    sweep = compute_period_end_sweep(realized, tax_rate=tax_rate)
+    if not sweep.applies:
+        return {
+            "ok": False,
+            "error": f"No positive realized net for {mk} (${realized:.2f})",
+        }
+    return _record_sweep(conn, mk, realized, sweep, tax_rate)
+
+
+def apply_annual_sweep(conn: sqlite3.Connection, year_key: str | None = None) -> dict:
+    """Record year-end sweep on YTD realized net (idempotent per year)."""
+    yk = year_key or _year_key()
+    period_key = _annual_sweep_key(yk)
+    if sweep_applied_for_period(conn, period_key):
+        return {"ok": False, "error": f"Sweep already applied for {yk}"}
+
+    tax_rate = get_tax_rate(conn)
+    realized = compute_ytd_realized_net(conn, yk)
+    sweep = compute_period_end_sweep(realized, tax_rate=tax_rate)
+    if not sweep.applies:
+        return {
+            "ok": False,
+            "error": f"No positive YTD realized net for {yk} (${realized:.2f})",
+        }
+    return _record_sweep(conn, period_key, realized, sweep, tax_rate)
+
+
+def apply_period_sweep(conn: sqlite3.Connection) -> dict:
+    """Apply sweep using configured schedule (annual default, or monthly)."""
+    schedule = get_sweep_schedule(conn)
+    if schedule == SWEEP_SCHEDULE_ANNUAL:
+        return apply_annual_sweep(conn)
+    return apply_month_end_sweep(conn)
 
 
 def latest_vix(conn: sqlite3.Connection) -> float | None:
@@ -247,12 +322,20 @@ def build_market_brief(vix: float | None, regime: dict | None) -> str:
 
 def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
     mk = _month_key()
+    yk = _year_key()
     tax_rate = get_tax_rate(conn)
+    schedule = get_sweep_schedule(conn)
+    period_key = _annual_sweep_key(yk) if schedule == SWEEP_SCHEDULE_ANNUAL else mk
     journal_cash = journal_cash_balance(conn)
     sweeps = cumulative_sweeps(conn)
     tradable = journal_cash - sweeps
-    realized = compute_monthly_realized_net(conn, mk)
-    sweep = compute_month_end_sweep(realized, tax_rate=tax_rate)
+    monthly_realized = compute_monthly_realized_net(conn, mk)
+    period_realized = (
+        compute_ytd_realized_net(conn, yk)
+        if schedule == SWEEP_SCHEDULE_ANNUAL
+        else monthly_realized
+    )
+    sweep = compute_period_end_sweep(period_realized, tax_rate=tax_rate)
     vix = latest_vix(conn)
     regime = latest_regime(conn)
     daily_target = daily_profit_target(tradable)
@@ -265,19 +348,24 @@ def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
         goal_pct=goal_progress_pct(tradable),
         goal_target=GOAL_ACCOUNT_VALUE,
         month_key=mk,
-        monthly_realized_net=realized,
+        period_key=period_key,
+        sweep_schedule=schedule,
+        monthly_realized_net=monthly_realized,
+        period_realized_net=period_realized,
         total_fees_paid=compute_total_fees(conn),
         sweep_preview={
             "applies": sweep.applies,
             "management_sweep": sweep.management_sweep,
             "tax_sweep": sweep.tax_sweep,
             "total_sweep": sweep.total_sweep,
-            "monthly_realized_net": realized,
+            "monthly_realized_net": monthly_realized,
+            "period_realized_net": period_realized,
+            "period_label": "YTD" if schedule == SWEEP_SCHEDULE_ANNUAL else "month",
         },
         management_jar=get_jar_balance(conn, "management"),
         tax_jar=get_jar_balance(conn, "tax"),
         tax_rate=tax_rate,
-        sweep_already_applied=sweep_applied_for_month(conn, mk),
+        sweep_already_applied=sweep_applied_for_period(conn, period_key),
         vix=vix,
         regime=regime,
         market_brief=build_market_brief(vix, regime),
@@ -311,7 +399,10 @@ def summary_to_dict(summary: DashboardSummary) -> dict:
         "goal_pct": summary.goal_pct,
         "goal_target": summary.goal_target,
         "month_key": summary.month_key,
+        "period_key": summary.period_key,
+        "sweep_schedule": summary.sweep_schedule,
         "monthly_realized_net": summary.monthly_realized_net,
+        "period_realized_net": summary.period_realized_net,
         "total_fees_paid": summary.total_fees_paid,
         "round_trip_fee": round_trip_fees(DEFAULT_BUY_FEE, DEFAULT_SELL_FEE),
         "sweep_preview": summary.sweep_preview,

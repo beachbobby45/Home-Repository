@@ -50,9 +50,10 @@ def _set_tradable_cash(conn: sqlite3.Connection, target: float) -> None:
     delta = round(target - current, 2)
     if abs(delta) < 0.01:
         return
-    shares = 10
     buy_price = 100.0
     buy_fee = 7.0
+    sell_fee = 7.0
+    shares = max(10, int(abs(delta) / 25) + 1)
     insert_trade(
         conn,
         ticker="NFLX",
@@ -63,14 +64,15 @@ def _set_tradable_cash(conn: sqlite3.Connection, target: float) -> None:
         executed_at=MONDAY,
         notes="seed buy",
     )
-    sell_price = buy_price + (delta + buy_fee + 7.0) / shares
+    sell_price = buy_price + (delta + buy_fee + sell_fee) / shares
+    assert sell_price > 0, f"cannot seed cash delta {delta} with {shares} shares"
     insert_trade(
         conn,
         ticker="NFLX",
         side="SELL",
         shares=shares,
         price=sell_price,
-        fee=7.0,
+        fee=sell_fee,
         executed_at=FRIDAY,
         notes="seed sell",
     )

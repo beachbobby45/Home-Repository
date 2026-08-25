@@ -114,6 +114,30 @@ def test_trading_day_no_go_when_regime_blocks():
         path.unlink(missing_ok=True)
 
 
+def test_weekend_headline_not_overwritten_by_tradability():
+    """Weekend session message should stay in the regime banner even with skipped picks."""
+    conn, path = _conn()
+    try:
+        from unittest.mock import patch
+
+        skipped = [{"ticker": "TSCO"}, {"ticker": "FOXA"}]
+        saturday = datetime(2026, 8, 15, 14, 0, tzinfo=ET)
+        with patch("investment_agent.trading_day.now_et", return_value=saturday), patch(
+            "investment_agent.trading_day.resolve_actionable_pick",
+            return_value=(None, skipped),
+        ):
+            status = build_trading_day_status(conn)
+        assert status["session_phase"] == "weekend"
+        assert status["headline"] == "Market closed (weekend)"
+        session_checks = [c for c in status["checks"] if c["name"] == "Session"]
+        assert session_checks and "Weekend" in session_checks[0]["message"]
+        top_checks = [c for c in status["checks"] if c["name"] == "Top pick"]
+        assert top_checks and "TSCO" in top_checks[0]["message"]
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
 def test_build_extended_session_none_during_rth():
     assert build_extended_session(
         phase="trade_window",

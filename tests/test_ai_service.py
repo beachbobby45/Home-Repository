@@ -371,3 +371,21 @@ def test_build_rule_based_explanation_mentions_sentiment():
     )
     assert "sentiment 62" in detail
     assert "sentiment 62" in short
+
+
+def test_build_rule_based_explanation_handles_none_dollar_hit_rate():
+    """Ranked rows may omit dollar history — must not crash proposal generate."""
+    detail, short = build_rule_based_explanation(
+        ticker="GEN",
+        row={"opportunity_score": 80, "dollar_hit_rate_pct": None, "opportunity_floor": 65},
+        plan={
+            "limit_buy_price": 10.0,
+            "limit_sell_price": 10.5,
+            "net_at_target": 150,
+        },
+        risk_headline="Approved",
+        news_sentiment=50.0,
+        news_sentiment_detail="neutral",
+    )
+    assert "$0% historical" in detail
+    assert "GEN" in short

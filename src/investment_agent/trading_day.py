@@ -930,11 +930,21 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     quotes = _latest_quote_rows(conn, watch)
 
     from investment_agent.confirmation import (
+        CONFIRMATION_PASS_CAUTION_MIN,
         _rank_eligible,
         confirmations_to_dict,
+        confirmation_pass_threshold,
         evaluate_session_confirmations,
     )
-    from investment_agent.market_activity import evaluate_market_activity, market_activity_to_dict
+    from investment_agent.market_activity import (
+        GO_SESSION_MIN,
+        evaluate_market_activity,
+        market_activity_to_dict,
+    )
+    from investment_agent.opening_drive import (
+        evaluate_top_pick_opening_drive,
+        opening_drive_to_dict,
+    )
 
     market_activity = market_activity_to_dict(evaluate_market_activity(conn, when=now, persist=False))
     confirmations = confirmations_to_dict(
@@ -978,6 +988,18 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
     pick_quote = quotes.get(pick["ticker"]) if pick else None
     pick_change = _intraday_change_pct(pick_quote) if pick_quote else None
     pick_range = _opening_range_pct(pick_quote) if pick_quote else None
+
+    opening_drive_raw = evaluate_top_pick_opening_drive(
+        conn,
+        pick={"ticker": pick["ticker"]} if pick else None,
+        quotes=quotes,
+        market_activity=market_activity,
+        deploy_dollar=float(summary.tradable_cash or 0),
+        net_target=net_for_plan,
+        block_new_longs=summary.block_new_longs,
+        when=now,
+    )
+    opening_drive = opening_drive_to_dict(opening_drive_raw)
 
     checks: list[dict] = []
     verdict = "GO"
@@ -1039,16 +1061,45 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         detail = f"Market opens 9:30 AM ET. First entry window after {ENTRY_READY.strftime('%H:%M')} ET ({ENTRY_DELAY_MINUTES} min delay)."
         add_check("Session", None, "Pre-market", blocking=True)
     elif phase == "opening_wait":
-        verdict = "WAIT"
-        headline = "Opening period — wait for 30-minute gate"
-        mins_left = int(
-            (
-                datetime.combine(now.date(), ENTRY_READY, tzinfo=ET) - now
-            ).total_seconds()
-            // 60
-        )
-        detail = f"Let the opening chop settle. Entry gate opens in ~{max(mins_left, 0)} min (10:00 AM ET)."
-        add_check("30-minute gate", None, f"Wait until {ENTRY_READY.strftime('%H:%M')} ET", blocking=True)
+        od_pass = bool(opening_drive and opening_drive.get("eligible_early_entry"))
+        if od_pass:
+            verdict = "GO"
+            headline = "Opening Drive PASS — early entry eligible"
+            detail = opening_drive.get("summary") or (
+                f"{pick['ticker']} opening drive ≥75 — enter before 10:00 if tradable"
+                if pick
+                else "Opening drive pass — wait for ranked pick"
+            )
+            add_check(
+                "Opening Drive",
+                True,
+                opening_drive.get("summary") or "OPEN DRIVE PASS (9:35–9:45 ET)",
+            )
+            add_check(
+                "30-minute gate",
+                None,
+                "Early entry allowed via Opening Drive — default gate still 10:00 ET",
+            )
+        else:
+            verdict = "WAIT"
+            headline = "Opening period — wait for 30-minute gate"
+            mins_left = int(
+                (
+                    datetime.combine(now.date(), ENTRY_READY, tzinfo=ET) - now
+                ).total_seconds()
+                // 60
+            )
+            detail = f"Let the opening chop settle. Entry gate opens in ~{max(mins_left, 0)} min (10:00 AM ET)."
+            if opening_drive and opening_drive.get("active"):
+                detail += f" · Opening Drive: {opening_drive.get('score', '—')}/100 ({opening_drive.get('verdict_label', '')})"
+            add_check("30-minute gate", None, f"Wait until {ENTRY_READY.strftime('%H:%M')} ET", blocking=True)
+            if opening_drive and opening_drive.get("active"):
+                od_ok = opening_drive.get("verdict") == "pass"
+                add_check(
+                    "Opening Drive",
+                    True if od_ok else None if opening_drive.get("verdict") == "watch" else False,
+                    opening_drive.get("summary") or "Opening drive scoring…",
+                )
     elif phase in ("late_day", "after_hours"):
         verdict = "NO_GO"
         headline = "Too late for new entries"
@@ -1072,11 +1123,12 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         add_check("Regime", True, regime_msg)
 
     ma_summary = market_activity.get("summary") or "Market Activity pending"
+    ma_score = int(market_activity.get("score") or 0)
     if not market_activity.get("allow_trade"):
         add_check(
             "Market Activity",
             False,
-            f"{market_activity.get('score', 0)}/100 — {market_activity.get('band_label', 'blocked')} · NO TRADE",
+            f"{ma_score}/100 — {market_activity.get('band_label', 'blocked')} · NO TRADE",
             blocking=phase == "trade_window",
         )
         if phase == "trade_window" and verdict in ("GO", "CAUTION"):
@@ -1085,12 +1137,29 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             detail = ma_summary
         elif phase in ("opening_wait", "pre_market"):
             detail = f"{detail} · Preliminary: {ma_summary}"
+            if phase == "opening_wait" and opening_drive and opening_drive.get("eligible_early_entry"):
+                verdict = "WAIT"
+                headline = "Opening period — day blocked"
+                opening_drive = {**opening_drive, "eligible_early_entry": False}
     else:
-        add_check(
-            "Market Activity",
-            True,
-            f"{market_activity.get('score', 0)}/100 — {market_activity.get('band_label', 'ok')} · entries allowed",
-        )
+        ma_ok_msg = f"{ma_score}/100 — {market_activity.get('band_label', 'ok')} · entries allowed"
+        if ma_score < GO_SESSION_MIN:
+            ma_ok_msg += f" · CAUTION band (confirm ≥{CONFIRMATION_PASS_CAUTION_MIN})"
+        add_check("Market Activity", True, ma_ok_msg)
+        if phase == "trade_window" and ma_score < GO_SESSION_MIN and verdict == "GO":
+            verdict = "CAUTION"
+            headline = "Caution — average market day"
+            detail = (
+                f"Market Activity {ma_score}/100 — trade only if #1 confirms "
+                f"(≥{CONFIRMATION_PASS_CAUTION_MIN})"
+            )
+        elif phase == "opening_wait" and ma_score < GO_SESSION_MIN and verdict == "GO":
+            verdict = "CAUTION"
+            headline = "Opening Drive PASS — caution day"
+            detail = (
+                f"{opening_drive.get('summary', '')} · Average market day "
+                f"(confirm ≥{CONFIRMATION_PASS_CAUTION_MIN} at 10:00)"
+            )
 
     if market_activity.get("allow_trade") and phase == "trade_window":
         confirmed = [c for c in confirmations if c.get("passes") and c.get("eligible")]
@@ -1116,7 +1185,10 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
                 if verdict in ("GO", "CAUTION"):
                     verdict = "NO_GO"
                 headline = "No confirming setup"
-                detail = top.get("summary") or f"Ranked #{top.get('rank')} below {75} confirmation threshold"
+                detail = top.get("summary") or (
+                    f"Ranked #{top.get('rank')} below "
+                    f"{confirmation_pass_threshold(market_activity)} confirmation threshold"
+                )
                 add_check(
                     "Confirmation",
                     False,
@@ -1264,16 +1336,19 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             verdict = "NO_GO"
         if skipped_picks:
             skipped_names = ", ".join(s["ticker"] for s in skipped_picks[:5])
-            headline = "No tradable setup for today's $ goal"
-            detail = (
+            trad_detail = (
                 f"Step 3 passers fail live tradability for ${net_for_plan:.0f} net: "
                 f"{skipped_names}"
                 + (f" +{len(skipped_picks) - 5} more" if len(skipped_picks) > 5 else "")
             )
-            add_check("Top pick", False, detail, blocking=True)
+            if phase != "weekend":
+                headline = "No tradable setup for today's $ goal"
+                detail = trad_detail
+            add_check("Top pick", False, trad_detail, blocking=True)
         else:
-            headline = "No live top pick"
-            detail = "No ticker passes Step 3 today — run ingest and refresh ranked screener."
+            if phase != "weekend":
+                headline = "No live top pick"
+                detail = "No ticker passes Step 3 today — run ingest and refresh ranked screener."
             add_check("Top pick", False, "No live Step 3 candidates today", blocking=True)
     else:
         pick_ok = True
@@ -1515,6 +1590,17 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         },
         "market_activity_components": market_activity.get("components") or {},
         "block_new_proposals": phase == "trade_window" and not market_activity.get("allow_trade"),
+        "market_activity_caution": bool(
+            market_activity.get("allow_trade")
+            and int(market_activity.get("score") or 0) < GO_SESSION_MIN
+        ),
+        "caution_headline": (
+            "CAUTION — average market day"
+            if market_activity.get("allow_trade")
+            and int(market_activity.get("score") or 0) < GO_SESSION_MIN
+            else None
+        ),
+        "opening_drive": opening_drive,
         "exceptional_trade": exceptional,
         "show_exceptional_banner": bool(exceptional.get("active")),
         "exceptional_headline": (
@@ -1538,7 +1624,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "daily_target_met": target_met,
         "stopped_out_today": stopped,
         "can_enter_new": (
-            verdict == "GO"
+            verdict in ("GO", "CAUTION")
             and len(open_positions) < 2
             and (not target_met or exceptional.get("active"))
             and (not weekly_target_met or exceptional.get("active"))
@@ -1546,7 +1632,16 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
             and portfolio_risk.verdict == "approved"
             and market_activity.get("allow_trade")
             and (
+                phase == "trade_window"
+                or (
+                    phase == "opening_wait"
+                    and opening_drive
+                    and opening_drive.get("eligible_early_entry")
+                )
+            )
+            and (
                 not confirmation_filter
+                or phase == "opening_wait"
                 or (pick and pick.get("ticker"))
             )
         ),
@@ -1571,6 +1666,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
         "quote_snapshots": quote_snapshot_status,
         "market_activity": market_activity,
         "confirmations": confirmations,
+        "opening_drive": opening_drive,
         "phase1b": phase1b,
         "exceptional_trade": exceptional,
     }

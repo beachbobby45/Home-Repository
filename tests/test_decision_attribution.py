@@ -183,7 +183,7 @@ def test_generate_proposals_logs_attribution():
         _seed_proposal_env(conn)
         with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
             with patch(
-                "investment_agent.trade_proposal.get_latest_quotes",
+                "investment_agent.trade_proposal.get_latest_quote_rows",
                 return_value={"AAPL": {"open": 100, "price": 100}, "NVDA": {"open": 100, "price": 100}},
             ):
                 with patch("investment_agent.trading_day.session_phase", return_value="pre_market"):
@@ -201,7 +201,7 @@ def test_approve_and_reject_log_attribution():
         _seed_proposal_env(conn)
         quotes = {"AAPL": {"open": 100, "price": 100}, "NVDA": {"open": 100, "price": 100}}
         with patch("investment_agent.trade_proposal.build_ranked_candidates", return_value=_mock_ranked()):
-            with patch("investment_agent.trade_proposal.get_latest_quotes", return_value=quotes):
+            with patch("investment_agent.trade_proposal.get_latest_quote_rows", return_value=quotes):
                 with patch("investment_agent.trading_day.session_phase", return_value="pre_market"):
                     generate_proposals(conn, max_proposals=2)
         proposals = list_proposals_for_session(conn)

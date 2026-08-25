@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from investment_agent.db import init_db, insert_quote
 from investment_agent.monitor import (
     evaluate_queue_item,
+    get_latest_quote_rows,
     pnl_pct,
     run_monitor_cycle,
     target_stop_prices,
@@ -117,6 +118,31 @@ def test_missing_quote_skipped():
         _queue_row(conn, "AMD", "armed", 160.0)
         result = run_monitor_cycle(conn, {})
         assert "AMD" in result["missing_quotes"]
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
+def test_get_latest_quote_rows_returns_ohlcv_fields():
+    conn, path = _conn()
+    try:
+        insert_quote(
+            conn,
+            {
+                "ticker": "AAPL",
+                "price": 101.0,
+                "open": 100.0,
+                "high": 102.0,
+                "low": 99.5,
+                "prev_close": 98.0,
+                "captured_at": "2026-08-21T14:00:00+00:00",
+            },
+        )
+        conn.commit()
+        rows = get_latest_quote_rows(conn, ["AAPL"])
+        assert rows["AAPL"]["price"] == 101.0
+        assert rows["AAPL"]["open"] == 100.0
+        assert rows["AAPL"]["high"] == 102.0
     finally:
         conn.close()
         path.unlink(missing_ok=True)

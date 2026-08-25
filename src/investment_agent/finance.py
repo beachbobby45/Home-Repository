@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Defaults from approved product spec v3
-ORIGINAL_BASIS = 10_000.0
+# Defaults from approved product spec v3 (Phase 1 operating model)
+ORIGINAL_BASIS = 15_000.0
 GOAL_ACCOUNT_VALUE = 5_000_000.0
 DEFAULT_BUY_FEE = 7.0
 DEFAULT_SELL_FEE = 7.0
 DEFAULT_TAX_RESERVE_RATE = 0.25
 DEFAULT_MGMT_SWEEP_RATE = 0.10
+DEFAULT_TOTAL_SWEEP_RATE = DEFAULT_MGMT_SWEEP_RATE + DEFAULT_TAX_RESERVE_RATE
+
+SWEEP_SCHEDULE_MONTHLY = "monthly"
+SWEEP_SCHEDULE_ANNUAL = "annual"
+DEFAULT_SWEEP_SCHEDULE = SWEEP_SCHEDULE_ANNUAL
+VALID_SWEEP_SCHEDULES = frozenset({SWEEP_SCHEDULE_MONTHLY, SWEEP_SCHEDULE_ANNUAL})
 
 # Scalable daily net profit target (v3.1 operating plan — superseded by split-lot model Inc 10)
 DAILY_TARGET_BASE = 150.0  # at $10K basis
@@ -43,17 +49,21 @@ TIER_LOT_STRUCTURES: dict[int, tuple[int, ...]] = {
 
 
 @dataclass(frozen=True)
-class MonthEndSweep:
-    """Sweeps applied only when monthly realized net profit is positive."""
+class PeriodEndSweep:
+    """Sweeps applied only when period realized net profit is positive."""
 
-    monthly_realized_net: float
+    realized_net: float
     management_sweep: float
     tax_sweep: float
     total_sweep: float
 
     @property
     def applies(self) -> bool:
-        return self.monthly_realized_net > 0
+        return self.realized_net > 0
+
+
+# Backward-compatible alias
+MonthEndSweep = PeriodEndSweep
 
 
 def round_trip_fees(
@@ -93,36 +103,45 @@ def goal_progress_pct(
     return (tradable_balance / goal) * 100.0
 
 
-def compute_month_end_sweep(
-    monthly_realized_net: float,
+def compute_period_end_sweep(
+    realized_net: float,
     tax_rate: float = DEFAULT_TAX_RESERVE_RATE,
     mgmt_rate: float = DEFAULT_MGMT_SWEEP_RATE,
-) -> MonthEndSweep:
+) -> PeriodEndSweep:
     """
-    10% management + tax reserve on positive monthly realized net only.
-    During the month, tradable cash is unchanged by this calculation;
-    sweeps are applied at month-end on the trading account.
+    10% management + tax reserve on positive period realized net only.
+    During the period, tradable cash is unchanged by this calculation;
+    sweeps are applied at period-end on the trading account.
     """
-    if monthly_realized_net <= 0:
-        return MonthEndSweep(
-            monthly_realized_net=monthly_realized_net,
+    if realized_net <= 0:
+        return PeriodEndSweep(
+            realized_net=realized_net,
             management_sweep=0.0,
             tax_sweep=0.0,
             total_sweep=0.0,
         )
-    mgmt = monthly_realized_net * mgmt_rate
-    tax = monthly_realized_net * tax_rate
-    return MonthEndSweep(
-        monthly_realized_net=monthly_realized_net,
+    mgmt = realized_net * mgmt_rate
+    tax = realized_net * tax_rate
+    return PeriodEndSweep(
+        realized_net=realized_net,
         management_sweep=mgmt,
         tax_sweep=tax,
         total_sweep=mgmt + tax,
     )
 
 
+def compute_month_end_sweep(
+    monthly_realized_net: float,
+    tax_rate: float = DEFAULT_TAX_RESERVE_RATE,
+    mgmt_rate: float = DEFAULT_MGMT_SWEEP_RATE,
+) -> PeriodEndSweep:
+    """Backward-compatible wrapper for monthly sweep preview/apply."""
+    return compute_period_end_sweep(monthly_realized_net, tax_rate=tax_rate, mgmt_rate=mgmt_rate)
+
+
 def tradable_after_sweep(
     tradable_balance_before_sweep: float,
-    sweep: MonthEndSweep,
+    sweep: PeriodEndSweep,
 ) -> float:
     return tradable_balance_before_sweep - sweep.total_sweep
 
@@ -139,9 +158,8 @@ def tier_threshold_for_equity(
     *,
     basis: float = ORIGINAL_BASIS,
 ) -> int:
-    """Highest tier milestone at or below ``equity``."""
-    if equity < basis:
-        return int(basis)
+    """Highest tier milestone at or below ``equity`` (ignores basis floor)."""
+    _ = basis
     thresholds = sorted(TIER_LOT_STRUCTURES.keys())
     selected = thresholds[0]
     for threshold in thresholds:
@@ -181,14 +199,18 @@ def capital_tier_detail(
     ]
     daily = round(sum(row["daily_rate"] for row in lot_rows), 2)
     weekly = round(daily * WEEKLY_PRODUCTION_OPPORTUNITIES, 2)
+    threshold = tier_threshold_for_equity(equity, basis=basis)
     return {
-        "tier_threshold": tier_threshold_for_equity(equity, basis=basis),
+        "tier_threshold": threshold,
         "lot_structure": list(lots),
         "lots": lot_rows,
         "daily_production_target": daily,
+        "trade_net_target": daily,
         "weekly_production_target": weekly,
         "weekly_opportunities": WEEKLY_PRODUCTION_OPPORTUNITIES,
-        "structure_label": " + ".join(_format_lot_label(lot) for lot in lots),
+        # One E*TRADE order at full tier deploy (virtual lots are accounting only).
+        "structure_label": _format_lot_label(threshold),
+        "virtual_lot_label": " + ".join(_format_lot_label(lot) for lot in lots),
         "per_opportunity_target": daily,
     }
 
@@ -236,9 +258,11 @@ def growth_plan_milestones(
             {
                 "balance_at_least": float(threshold),
                 "daily_target": detail["daily_production_target"],
+                "trade_net_target": detail["trade_net_target"],
                 "weekly_target": detail["weekly_production_target"],
                 "lot_structure": detail["lot_structure"],
                 "structure_label": detail["structure_label"],
+                "virtual_lot_label": detail["virtual_lot_label"],
             }
         )
     return rows

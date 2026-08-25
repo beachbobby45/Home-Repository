@@ -128,7 +128,19 @@ def run_ingest(
     """Fetch macro + quotes + daily bars; compute liquidity/range metrics + regime."""
     from investment_agent.db_maintenance import acquire_ingest_lock, release_ingest_lock
 
-    acquire_ingest_lock(detail="run_ingest")
+    try:
+        acquire_ingest_lock(detail="run_ingest")
+    except RuntimeError as exc:
+        return {
+            "ok": False,
+            "partial": False,
+            "errors": [str(exc)],
+            "quotes_refreshed": 0,
+            "quotes_skipped": 0,
+            "bars_refreshed": 0,
+            "bars_skipped": 0,
+            "error_count": 1,
+        }
     try:
         return _run_ingest_body(
             settings,

@@ -16,13 +16,14 @@ from investment_agent.risk_engine import build_portfolio_snapshot
 PHASE1_START = ORIGINAL_BASIS
 PHASE1_TARGET = 30_000.0
 SOFT_TARGET_NOTE = (
-    "Guidance only — 3 production opportunities per week at tier daily rate; "
-    "no trade is required to hit the weekly band."
+    "Guidance only — up to 3 winning trades/week at tier net/trade; "
+    "default is one #1 pick per day. A second trade only on exceptional days "
+    "after #1 wins and market activity stays GO."
 )
 
 
 def phase1_journey_progress_pct(current_equity: float) -> float:
-    """Percent complete along the $10K→$30K path (0–100)."""
+    """Percent complete along the $15K→$30K path (0–100)."""
     span = PHASE1_TARGET - PHASE1_START
     if span <= 0:
         return 0.0

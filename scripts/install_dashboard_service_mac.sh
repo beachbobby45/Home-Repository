@@ -6,7 +6,11 @@
 set -e
 cd "$(dirname "$0")/.."
 ROOT="$(cd "$PWD" && pwd)"
-PYTHON="$(command -v python3)"
+chmod +x "$ROOT/scripts/resolve_python.sh" 2>/dev/null || true
+PYTHON="$("$ROOT/scripts/resolve_python.sh")" || {
+  echo "ERROR: No working Python. Run: ./scripts/fix_ingest_python_mac.sh"
+  exit 1
+}
 PLIST_LABEL="com.investment-agent.dashboard"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 LOG_DIR="$HOME/Library/Logs/investment-agent"
@@ -15,6 +19,9 @@ if [[ -z "$PYTHON" ]]; then
   echo "ERROR: python3 not found. Install Python 3 first."
   exit 1
 fi
+
+echo "Using Python: $PYTHON ($("$PYTHON" --version 2>&1))"
+echo ""
 
 if [[ ! -f "$ROOT/.env" ]]; then
   cp "$ROOT/.env.example" "$ROOT/.env"

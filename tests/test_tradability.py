@@ -8,7 +8,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from investment_agent.finance import ORIGINAL_BASIS
 from investment_agent.tradability import assess_entry_tradability
 
 
@@ -16,7 +15,7 @@ def _assess(entry: float, quote: dict, **kwargs):
     return assess_entry_tradability(
         quote=quote,
         entry_price=entry,
-        deploy_dollar=ORIGINAL_BASIS,
+        deploy_dollar=10_000.0,
         net_target=150.0,
         **kwargs,
     )

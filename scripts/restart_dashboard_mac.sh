@@ -40,8 +40,9 @@ fi
 
 echo ""
 echo "Starting dashboard at http://127.0.0.1:8080"
-echo "UI v2 — look for Trade | Screen | Review tabs and Pick #1 / #2 side by side."
-echo "If you still see the old layout: hard-refresh the browser (Cmd+Shift+R)."
+echo "Expected version after restart: v0.9.1 · \$15K · Annual Sweep (Cash \$15,000 · \$200/day target)"
+echo "Verify: curl -s http://127.0.0.1:8080/api/version"
+echo "If Cash still shows \$10,000: git pull origin main, restart dashboard, then Cmd+Shift+R."
 echo "Keep this Terminal window open. Press Ctrl+C to stop."
 echo ""
 

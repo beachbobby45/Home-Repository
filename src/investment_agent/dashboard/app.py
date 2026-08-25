@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from investment_agent.account import (
-    apply_month_end_sweep,
+    apply_period_sweep,
     build_dashboard_summary,
     format_journal_notes,
     get_tax_rate,
@@ -25,6 +25,7 @@ from investment_agent.account import (
 )
 from investment_agent.cio import build_cio_summary
 from investment_agent.config import Settings
+from investment_agent.version import version_info
 from investment_agent.finance import ORIGINAL_BASIS
 from investment_agent.historical import (
     build_historical_summary,
@@ -82,6 +83,7 @@ from investment_agent.journal import (
     resolve_executed_at,
     trade_to_dict,
 )
+from investment_agent.growth_projection import build_ten_year_growth_plan
 from investment_agent.scenario import build_scenario_visualizer
 from investment_agent.watchlist import (
     add_special_watch_ticker,
@@ -154,9 +156,10 @@ from investment_agent.daily_rhythm import (
 DASHBOARD_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DASHBOARD_DIR.parents[2]
 ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
+OPERATOR_CHECKLIST_PDF = REPO_ROOT / "docs" / "DAILY_OPERATOR_CHECKLIST.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
 
-app = FastAPI(title="AI Investment Agent Dashboard", version="0.8.0")
+app = FastAPI(title="AI Investment Agent Dashboard", version=version_info()["version"])
 
 
 @app.exception_handler(sqlite3.OperationalError)
@@ -320,6 +323,17 @@ def one_pager_pdf() -> FileResponse:
     )
 
 
+@app.get("/operator-checklist.pdf")
+def operator_checklist_pdf() -> FileResponse:
+    if not OPERATOR_CHECKLIST_PDF.is_file():
+        raise HTTPException(status_code=404, detail="Operator checklist PDF not found")
+    return FileResponse(
+        OPERATOR_CHECKLIST_PDF,
+        media_type="application/pdf",
+        filename="AI-Investment-Agent-Daily-Operator-Checklist.pdf",
+    )
+
+
 @app.get("/api/config")
 def api_config() -> dict[str, bool]:
     settings = Settings.from_env()
@@ -329,16 +343,26 @@ def api_config() -> dict[str, bool]:
     }
 
 
+@app.get("/api/version")
+def api_version() -> dict[str, str]:
+    return version_info()
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard_page(request: Request) -> HTMLResponse:
     settings = Settings.from_env()
     key = settings.app_api_key.strip()
+    info = version_info()
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         {
             "request": request,
             "api_key_required": bool(key and key != "change-me-to-a-random-secret"),
+            "app_version": info["version"],
+            "app_version_label": info["label"],
+            "app_release": info["release"],
+            "app_release_tag": info["tag"],
         },
     )
 
@@ -349,6 +373,12 @@ def api_scenario_visualizer(
     projection_months: int = 120,
 ) -> dict[str, Any]:
     return build_scenario_visualizer(conn, projection_horizon=projection_months)
+
+
+@app.get("/api/growth-plan/ten-year")
+def api_growth_plan_ten_year() -> dict[str, Any]:
+    """Year 1–10 projection: $15K base vs +$10K injection at ~month 6."""
+    return build_ten_year_growth_plan()
 
 
 @app.get("/api/cio/summary")
@@ -764,12 +794,18 @@ def api_proposals_generate(
         raise HTTPException(status_code=503, detail=ingest_lock_message())
     opts = body or ProposalGenerateBody()
     settings = Settings.from_env()
-    result = generate_proposals(
-        conn,
-        max_proposals=opts.max_proposals,
-        replace_existing=opts.replace_existing,
-        settings=settings,
-    )
+    try:
+        result = generate_proposals(
+            conn,
+            max_proposals=opts.max_proposals,
+            replace_existing=opts.replace_existing,
+            settings=settings,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Proposal generate failed: {exc}",
+        ) from exc
     if not result.get("ok", True):
         raise HTTPException(status_code=409, detail=result.get("error") or "Proposal generate blocked")
     conn.commit()
@@ -1110,7 +1146,7 @@ def api_apply_sweep(
     conn=Depends(_db),
     _: None = Depends(_require_api_key),
 ) -> dict:
-    result = apply_month_end_sweep(conn)
+    result = apply_period_sweep(conn)
     if result.get("ok"):
         conn.commit()
     return result

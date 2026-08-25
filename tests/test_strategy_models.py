@@ -35,28 +35,38 @@ def test_weekly_production_target_three_times_daily():
 
 def test_capital_tier_detail_structure():
     detail = capital_tier_detail(25_000)
-    assert detail["structure_label"] == "$10K + $15K"
+    assert detail["structure_label"] == "$25K"
+    assert detail["virtual_lot_label"] == "$10K + $15K"
     assert detail["daily_production_target"] == 350
+    assert detail["trade_net_target"] == 350
     assert detail["weekly_production_target"] == 1050
+
+
+def test_capital_tier_single_trade_deploy_at_20k():
+    detail = capital_tier_detail(20_000)
+    assert detail["structure_label"] == "$20K"
+    assert detail["virtual_lot_label"] == "$10K + $10K"
+    assert detail["trade_net_target"] == 300
 
 
 def test_growth_plan_milestones():
     rows = growth_plan_milestones(max_balance=30_000)
-    assert rows[0]["balance_at_least"] == 10_000.0
-    assert rows[0]["daily_target"] == 150.0
-    assert rows[0]["weekly_target"] == 450.0
+    assert rows[0]["balance_at_least"] == 15_000.0
+    assert rows[0]["daily_target"] == 200.0
+    assert rows[0]["weekly_target"] == 600.0
     row_20k = next(r for r in rows if r["balance_at_least"] == 20_000.0)
     assert row_20k["daily_target"] == 300.0
-    assert row_20k["structure_label"] == "$10K + $10K"
+    assert row_20k["structure_label"] == "$20K"
+    assert row_20k["virtual_lot_label"] == "$10K + $10K"
 
 
 def test_next_growth_tier():
-    tier = next_growth_tier(12_500)
-    assert tier["current_daily_target"] == 150
-    assert tier["current_weekly_target"] == 450
-    assert tier["next_balance"] == 15_000
-    assert tier["next_daily_target"] == 200
-    assert tier["amount_to_next_tier"] == 2_500
+    tier = next_growth_tier(16_500)
+    assert tier["current_daily_target"] == 200
+    assert tier["current_weekly_target"] == 600
+    assert tier["next_balance"] == 20_000
+    assert tier["next_daily_target"] == 300
+    assert tier["amount_to_next_tier"] == 3_500
 
 
 def test_target_pct_for_dollars_on_10k():

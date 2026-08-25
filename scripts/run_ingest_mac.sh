@@ -9,10 +9,13 @@ cd "$(dirname "$0")/.." || {
   exit 1
 }
 ROOT="$PWD"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/_resolve_python_env.sh"
 
 echo ""
 echo "  AI Investment Agent — ingest"
 echo "  Folder: $ROOT"
+echo "  Python: $PY ($("$PY" --version 2>&1))"
 echo ""
 
 if [[ ! -f "$ROOT/scripts/run_ingest.py" ]]; then
@@ -20,22 +23,71 @@ if [[ ! -f "$ROOT/scripts/run_ingest.py" ]]; then
   exit 1
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "ERROR: python3 not found. Install Python 3 or run: xcode-select --install"
+# Clear stale lock from a prior crashed ingest (before preflight / dashboard pause).
+CLEARED=$("$PY" -c "from investment_agent.db_maintenance import clear_stale_ingest_lock; print('yes' if clear_stale_ingest_lock() else 'no')")
+if [[ "$CLEARED" == "yes" ]]; then
+  echo "Cleared stale ingest lock from a prior crashed run."
+fi
+
+echo "Preflight (API keys + quick test)…"
+if ! "$PY" "$ROOT/scripts/preflight_ingest.py"; then
+  echo ""
+  echo "Preflight failed — fix the ERROR above, then retry End of Day."
   exit 1
 fi
+echo ""
+
 PLIST_LABEL="com.investment-agent.dashboard"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 PAUSED=0
 
 cleanup() {
-  if [[ "$PAUSED" -eq 1 && -f "$PLIST_PATH" ]]; then
+  local code=$?
+  if [[ "$PAUSED" -eq 1 ]]; then
     echo ""
     echo "Restarting dashboard service…"
-    launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
-    launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
-    echo "Dashboard back at http://127.0.0.1:8080"
+    if [[ -f "$PLIST_PATH" ]]; then
+      launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
+      launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
+    fi
+    if ! curl -sf --connect-timeout 3 "http://127.0.0.1:8080/api/version" >/dev/null 2>&1; then
+      echo "LaunchAgent did not respond — starting dashboard with .venv Python…"
+      chmod +x "$ROOT/scripts/ensure_dashboard_mac.sh" 2>/dev/null || true
+      "$ROOT/scripts/ensure_dashboard_mac.sh" 2>&1 || true
+    fi
+    if curl -sf --connect-timeout 3 "http://127.0.0.1:8080/api/version" >/dev/null 2>&1; then
+      echo "Dashboard back at http://127.0.0.1:8080"
+    else
+      echo "WARN: Dashboard not responding yet."
+      echo "      Click Update & Open Dashboard in the Desktop app, or run:"
+      echo "      ./scripts/ensure_dashboard_mac.sh"
+    fi
   fi
+  if [[ "$code" -ne 0 ]]; then
+    echo ""
+    if [[ -f "$ROOT/data/ingest_last_error.txt" ]]; then
+      cat "$ROOT/data/ingest_last_error.txt"
+    elif [[ -f "$ROOT/data/ingest_last_run.json" ]]; then
+      "$PY" - "$ROOT/data/ingest_last_run.json" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+data = json.loads(p.read_text(encoding="utf-8"))
+if not data.get("ok") and data.get("errors"):
+    print("INGEST FAILED — errors:")
+    for err in data["errors"][:8]:
+        print(f"  • {err}")
+PY
+    else
+      echo "ERROR: Ingest failed — run: ./scripts/fix_ingest_python_mac.sh"
+      echo "       or: ./scripts/doctor_ingest_mac.sh"
+    fi
+    echo ""
+    echo "Ingest failed (exit $code)."
+    echo "Dashboard was restarted anyway so the browser works again."
+    echo "Tip: ./scripts/fix_ingest_python_mac.sh"
+  fi
+  exit "$code"
 }
 trap cleanup EXIT
 
@@ -47,11 +99,9 @@ export YFINANCE_CACHE_DIR="$ROOT/data/yfinance_cache"
 mkdir -p "$YFINANCE_CACHE_DIR"
 export YFINANCE_MIN_INTERVAL_SEC="${YFINANCE_MIN_INTERVAL_SEC:-0.2}"
 
-# Clear stale lock from a prior crashed ingest.
-rm -f "$ROOT/data/ingest.lock"
-
 if launchctl print "gui/$(id -u)/$PLIST_LABEL" &>/dev/null; then
   echo "Pausing background dashboard (database unlock for ingest)…"
+  echo "  Note: browser dashboard will show 'not connected' until ingest finishes — normal."
   launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
   sleep 2
   PAUSED=1
@@ -71,9 +121,8 @@ if [[ -f "$PIDFILE" ]]; then
 fi
 
 echo "Starting ingest…"
-export PYTHONPATH="$ROOT/src"
-python3 "$ROOT/scripts/run_ingest.py" "$@"
+"$PY" "$ROOT/scripts/run_ingest.py" "$@"
 
 echo ""
 echo "Stats:"
-python3 "$ROOT/scripts/manage_watchlist.py" stats
+"$PY" "$ROOT/scripts/manage_watchlist.py" stats
