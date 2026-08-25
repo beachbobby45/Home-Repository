@@ -542,7 +542,22 @@
             <button class="btn secondary btn-sm" type="button" id="save-trading-mode">Save</button>
             <span class="brief" id="trading-mode-status"></span>
           </div>
+          <div class="journal-day-log-actions">
+            <span class="brief journal-day-log-label">Daily attendance (September paper):</span>
+            <button class="btn secondary btn-sm" type="button" id="log-no-trade-day">Log NO TRADE day</button>
+            <button class="btn secondary btn-sm" type="button" id="log-pass-day">Trade day — no entry</button>
+            <button class="btn secondary btn-sm" type="button" id="log-check-in">Checked in</button>
+            <input type="date" id="operator-day-date" title="Session date (ET)" />
+          </div>
+          <div id="operator-day-summary" class="brief operator-day-summary">Loading attendance…</div>
           <button class="btn secondary btn-sm" type="button" id="clear-journal">Clear journal</button>
+        </div>
+        <div class="card table-card operator-day-card">
+          <h3 class="operator-day-title">Operator day log</h3>
+          <p class="brief">Distinguishes system NO TRADE days, trade days with no entry, and days you forgot to log. EOD script auto-records when you run End of Day.</p>
+          <table class="operator-day-table"><thead><tr>
+            <th>Session (ET)</th><th>Outcome</th><th>MA</th><th>Top pick</th><th>Journal legs</th><th>Source</th><th>Notes</th>
+          </tr></thead><tbody id="operator-day-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table>
         </div>
         <div class="card">
           <form id="trade-form"><div class="form-row">
@@ -1577,6 +1592,73 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       `).join("");
     }
 
+    function todayEtDateStr() {
+      return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    }
+
+    function operatorOutcomeClass(outcome) {
+      const map = {
+        TRADED: "outcome-traded",
+        NO_TRADE_SYSTEM: "outcome-no-trade-system",
+        PASS_NO_SETUP: "outcome-pass",
+        NO_TRADE_OPERATOR: "outcome-operator",
+        ATTENDED_ONLY: "outcome-attended",
+      };
+      return map[outcome] || "outcome-attended";
+    }
+
+    async function loadOperatorDayLog() {
+      const dateInput = document.getElementById("operator-day-date");
+      if (dateInput && !dateInput.value) dateInput.value = todayEtDateStr();
+
+      const summaryEl = document.getElementById("operator-day-summary");
+      const body = document.getElementById("operator-day-body");
+      try {
+        const monthStart = todayEtDateStr().slice(0, 8) + "01";
+        const [list, summary] = await Promise.all([
+          api("/api/operator-day-log?limit=45"),
+          api(`/api/operator-day-log/summary?since=${monthStart}`),
+        ]);
+        const entries = list.entries || [];
+        if (summaryEl) {
+          const miss = (summary.missing_dates || []).length;
+          summaryEl.innerHTML =
+            `<strong>Attendance:</strong> ${summary.attended_days}/${summary.trading_days} trading days logged` +
+            (summary.attendance_pct != null ? ` (${summary.attendance_pct}%)` : "") +
+            (miss ? ` · <span class="attendance-missing">${miss} missing</span>` : "") +
+            (summary.by_outcome?.NO_TRADE_SYSTEM
+              ? ` · ${summary.by_outcome.NO_TRADE_SYSTEM} system NO TRADE`
+              : "");
+        }
+        if (!entries.length) {
+          body.innerHTML = '<tr><td colspan="7" class="empty">No day log entries yet — use buttons above or run End of Day</td></tr>';
+          return;
+        }
+        body.innerHTML = entries.map((e) => `
+          <tr class="${operatorOutcomeClass(e.outcome)}">
+            <td><strong>${e.session_date_et}</strong></td>
+            <td><span class="outcome-pill ${operatorOutcomeClass(e.outcome)}">${e.outcome_label || e.outcome}</span></td>
+            <td>${e.market_activity_score != null ? `${e.market_activity_score} (${e.market_activity_band || "—"})` : "—"}</td>
+            <td>${e.top_pick_ticker || "—"}</td>
+            <td>${e.journal_trade_count ?? 0}</td>
+            <td>${e.source || "—"}</td>
+            <td>${e.notes || ""}</td>
+          </tr>
+        `).join("");
+      } catch (e) {
+        if (summaryEl) summaryEl.textContent = "Could not load attendance summary.";
+        body.innerHTML = `<tr><td colspan="7" class="empty">${e.message}</td></tr>`;
+      }
+    }
+
+    async function postOperatorDay(path, notes) {
+      const session_date_et = document.getElementById("operator-day-date")?.value || todayEtDateStr();
+      return api(path, {
+        method: "POST",
+        body: JSON.stringify({ session_date_et, notes: notes || null }),
+      });
+    }
+
     async function loadCio() {
       const cio = await api("/api/cio/summary");
       document.getElementById("cio-headline").textContent = cio.headline || "—";
@@ -2601,6 +2683,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadAlerts(),
         loadQueue(),
         loadJournal(),
+        loadOperatorDayLog(),
       ]);
     }
 
@@ -2940,6 +3023,27 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         const r = await api("/api/journal/clear", { method: "POST" });
         toast(`Cleared ${r.removed} journal entr${r.removed === 1 ? "y" : "ies"}`);
         await refreshAll();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("log-no-trade-day")?.addEventListener("click", async () => {
+      try {
+        const r = await postOperatorDay("/api/operator-day-log/no-trade");
+        toast(`Logged: ${r.entry?.outcome_label || "NO TRADE"}`);
+        await loadOperatorDayLog();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("log-pass-day")?.addEventListener("click", async () => {
+      try {
+        const r = await postOperatorDay("/api/operator-day-log/pass");
+        toast(`Logged: ${r.entry?.outcome_label || "Pass"}`);
+        await loadOperatorDayLog();
+      } catch (e) { toast(e.message); }
+    });
+    document.getElementById("log-check-in")?.addEventListener("click", async () => {
+      try {
+        const r = await postOperatorDay("/api/operator-day-log/check-in");
+        toast(`Logged: ${r.entry?.outcome_label || "Checked in"}`);
+        await loadOperatorDayLog();
       } catch (e) { toast(e.message); }
     });
     document.getElementById("apply-sweep").addEventListener("click", async () => {
