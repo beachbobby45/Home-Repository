@@ -40,28 +40,33 @@ echo ""
 PLIST_LABEL="com.investment-agent.dashboard"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 PAUSED=0
+DASHBOARD_STOPPED=0
+
+_restart_dashboard_after_ingest() {
+  echo ""
+  echo "Restarting dashboard service…"
+  if [[ -f "$PLIST_PATH" ]]; then
+    launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
+    launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
+  fi
+  if ! curl -sf --connect-timeout 3 "http://127.0.0.1:8080/api/version" >/dev/null 2>&1; then
+    echo "LaunchAgent did not respond — running ensure_dashboard_mac.sh…"
+    chmod +x "$ROOT/scripts/ensure_dashboard_mac.sh" 2>/dev/null || true
+    "$ROOT/scripts/ensure_dashboard_mac.sh" 2>&1 || true
+  fi
+  if curl -sf --connect-timeout 3 "http://127.0.0.1:8080/api/version" >/dev/null 2>&1; then
+    echo "Dashboard back at http://127.0.0.1:8080"
+  else
+    echo "WARN: Dashboard not responding yet."
+    echo "      In Desktop app: Update & Open Dashboard"
+    echo "      Or Terminal: ./scripts/ensure_dashboard_mac.sh"
+  fi
+}
 
 cleanup() {
   local code=$?
-  if [[ "$PAUSED" -eq 1 ]]; then
-    echo ""
-    echo "Restarting dashboard service…"
-    if [[ -f "$PLIST_PATH" ]]; then
-      launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
-      launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
-    fi
-    if ! curl -sf --connect-timeout 3 "http://127.0.0.1:8080/api/version" >/dev/null 2>&1; then
-      echo "LaunchAgent did not respond — starting dashboard with .venv Python…"
-      chmod +x "$ROOT/scripts/ensure_dashboard_mac.sh" 2>/dev/null || true
-      "$ROOT/scripts/ensure_dashboard_mac.sh" 2>&1 || true
-    fi
-    if curl -sf --connect-timeout 3 "http://127.0.0.1:8080/api/version" >/dev/null 2>&1; then
-      echo "Dashboard back at http://127.0.0.1:8080"
-    else
-      echo "WARN: Dashboard not responding yet."
-      echo "      Click Update & Open Dashboard in the Desktop app, or run:"
-      echo "      ./scripts/ensure_dashboard_mac.sh"
-    fi
+  if [[ "$DASHBOARD_STOPPED" -eq 1 || "$PAUSED" -eq 1 ]]; then
+    _restart_dashboard_after_ingest
   fi
   if [[ "$code" -ne 0 ]]; then
     echo ""
@@ -105,18 +110,26 @@ if launchctl print "gui/$(id -u)/$PLIST_LABEL" &>/dev/null; then
   launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
   sleep 2
   PAUSED=1
+  DASHBOARD_STOPPED=1
 fi
 
 if command -v lsof >/dev/null 2>&1; then
   PIDS=$(lsof -ti:8080 2>/dev/null || true)
-  [[ -n "$PIDS" ]] && kill $PIDS 2>/dev/null || true
-  sleep 1
+  if [[ -n "$PIDS" ]]; then
+    echo "Stopping dashboard on port 8080 for ingest…"
+    kill $PIDS 2>/dev/null || true
+    sleep 1
+    DASHBOARD_STOPPED=1
+  fi
 fi
 
 PIDFILE="$ROOT/data/dashboard.pid"
 if [[ -f "$PIDFILE" ]]; then
   DPID=$(cat "$PIDFILE" 2>/dev/null || true)
-  [[ -n "$DPID" ]] && kill "$DPID" 2>/dev/null || true
+  if [[ -n "$DPID" ]]; then
+    kill "$DPID" 2>/dev/null || true
+    DASHBOARD_STOPPED=1
+  fi
   rm -f "$PIDFILE"
 fi
 
