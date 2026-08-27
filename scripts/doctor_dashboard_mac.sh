@@ -43,7 +43,7 @@ fi
 if [[ -f "$HOME/Library/LaunchAgents/com.investment-agent.dashboard.plist" ]]; then
   ok "LaunchAgent plist installed"
 else
-  warn "no LaunchAgent — dashboard starts via Open Dashboard.command or ensure_dashboard_mac.sh"
+  warn "no LaunchAgent — run once: ./scripts/install_dashboard_service_mac.sh (KeepAlive; survives sleep/reboot)"
 fi
 
 if command -v lsof >/dev/null 2>&1; then

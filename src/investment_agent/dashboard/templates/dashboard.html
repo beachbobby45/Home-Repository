@@ -667,7 +667,16 @@
           </ul>
         </div>
         <div class="card setup-onboarding">
-          <h3>1. Enable automatic data refresh (recommended)</h3>
+          <h3>0. Keep dashboard always running (do this once)</h3>
+          <p class="brief">Prevents &quot;Cannot reach the dashboard server&quot; after sleep, reboot, or code updates. Uses macOS KeepAlive — auto-restarts on crash and login.</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/install_dashboard_service_mac.sh</pre>
+          <p class="brief">After <code>git pull</code>, run <strong>Update and Open Dashboard.command</strong> or:</p>
+          <pre class="setup-terminal" tabindex="0">cd ~/Home-Repository
+./scripts/hard_restart_dashboard_mac.sh --pull</pre>
+          <p class="brief" id="setup-dashboard-service-status">Checking dashboard service…</p>
+
+          <h3 style="margin-top:1.25rem">1. Enable automatic data refresh (recommended)</h3>
           <p class="brief">Updates metrics after close (4:30 PM) and before open (6:30 AM).</p>
           <p>In Finder, open <code>Home-Repository/scripts/</code> and double-click <strong>Enable Auto Refresh.command</strong>.</p>
           <p class="brief">If double-click does not launch, paste in Terminal:</p>
@@ -888,8 +897,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (err instanceof TypeError) {
           throw new Error(
             "Cannot reach the dashboard server (connection failed). "
-            + "If using 127.0.0.1, start run_dashboard.py on this machine. "
-            + "If using a cloud link, ask for a new tunnel URL — they expire."
+            + "On Mac run: ./scripts/hard_restart_dashboard_mac.sh --pull "
+            + "(uses KeepAlive service). If using a cloud link, open http://127.0.0.1:8080 instead."
           );
         }
         throw err;
@@ -941,18 +950,45 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }, 12000);
     }
 
+    async function fetchConfigWithRetry(retries = 20, delayMs = 1000) {
+      let lastErr = null;
+      for (let i = 0; i < retries; i++) {
+        try {
+          const r = await fetch("/api/config", { signal: AbortSignal.timeout(3000) });
+          if (r.ok) return await r.json();
+          lastErr = new Error(`HTTP ${r.status}`);
+        } catch (e) {
+          lastErr = e;
+        }
+        if (i < retries - 1) {
+          await new Promise((res) => setTimeout(res, delayMs));
+        }
+      }
+      throw lastErr || new Error("Could not reach dashboard server");
+    }
+
     async function initDashboard() {
       startLoadingWatchdog();
       try {
-        const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => ({ api_key_required: false }));
+        const cfg = await fetchConfigWithRetry();
         apiKeyRequired = !!cfg.api_key_required;
         if (!apiKeyRequired) {
           localStorage.removeItem(API_KEY_STORAGE);
         } else {
           initApiKeyBar();
         }
+        const svc = document.getElementById("setup-dashboard-service-status");
+        if (svc) {
+          svc.textContent =
+            "Dashboard server is connected. For auto-restart after sleep/reboot, run install_dashboard_service_mac.sh once (Setup step 0).";
+        }
       } catch (err) {
-        toast(err.message || "Could not read dashboard config", 6000);
+        toast(
+          (err instanceof TypeError || (err && err.message && err.message.includes("Failed to fetch")))
+            ? "Cannot reach the dashboard server. On Mac run: ./scripts/hard_restart_dashboard_mac.sh --pull"
+            : (err.message || "Could not read dashboard config"),
+          8000
+        );
       }
       initJournalForm();
       refreshAll().catch((e) => toast(e.message || "Refresh failed", 6000));
