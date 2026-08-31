@@ -73,3 +73,7 @@ echo ""
 echo "Done. Tomorrow: Trade tab → Prepare today's trades, then Refresh live before buy."
 echo "Or run: ./scripts/run_morning_prep_mac.sh"
 echo ""
+echo "── Restarting dashboard (browser reconnect) ──"
+chmod +x "$ROOT/scripts/ensure_dashboard_mac.sh" 2>/dev/null || true
+"$ROOT/scripts/ensure_dashboard_mac.sh" || true
+echo ""

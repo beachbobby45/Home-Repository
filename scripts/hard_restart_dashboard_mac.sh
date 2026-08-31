@@ -1,42 +1,48 @@
 #!/bin/bash
 # Hard restart dashboard, wait until healthy, open browser (Mac).
+# Uses KeepAlive LaunchAgent so the server survives sleep/reboot/crashes.
 # Usage: ./scripts/hard_restart_dashboard_mac.sh
+#        ./scripts/hard_restart_dashboard_mac.sh --pull   # git pull origin main first
 
 set -u
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-LOG="$ROOT/data/dashboard.log"
-PIDFILE="$ROOT/data/dashboard.pid"
 URL="http://127.0.0.1:8080"
+PLIST_LABEL="com.investment-agent.dashboard"
+PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
+LOG_DIR="$HOME/Library/Logs/investment-agent"
+PIDFILE="$ROOT/data/dashboard.pid"
 
-# shellcheck disable=SC1091
-source "$ROOT/scripts/_resolve_python_env.sh"
+DO_PULL=0
+for arg in "$@"; do
+  case "$arg" in
+    --pull) DO_PULL=1 ;;
+  esac
+done
 
 echo "=== Hard restart AI Investment Agent Dashboard ==="
 echo "Repo: $ROOT"
-echo "Python: $PY ($("$PY" --version 2>&1))"
 echo ""
 
-if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "Pulling latest from origin/main…"
-  git -C "$ROOT" pull --ff-only origin main 2>/dev/null || echo "(git pull skipped — update manually if needed)"
+if [[ "$DO_PULL" -eq 1 ]]; then
+  echo "── git pull origin main ──"
+  git pull origin main
   echo ""
 fi
 
 mkdir -p "$ROOT/data"
 
-stop_pid() {
-  if [[ -f "$PIDFILE" ]]; then
-    OLD=$(cat "$PIDFILE" 2>/dev/null || true)
-    if [[ -n "$OLD" ]] && kill -0 "$OLD" 2>/dev/null; then
-      echo "Stopping prior dashboard PID $OLD"
-      kill "$OLD" 2>/dev/null || true
-      sleep 1
-      kill -9 "$OLD" 2>/dev/null || true
-    fi
-    rm -f "$PIDFILE"
+# Stop legacy nohup process (older hard_restart versions)
+if [[ -f "$PIDFILE" ]]; then
+  OLD=$(cat "$PIDFILE" 2>/dev/null || true)
+  if [[ -n "$OLD" ]] && kill -0 "$OLD" 2>/dev/null; then
+    echo "Stopping legacy nohup dashboard PID $OLD"
+    kill "$OLD" 2>/dev/null || true
+    sleep 1
+    kill -9 "$OLD" 2>/dev/null || true
   fi
-}
+  rm -f "$PIDFILE"
+fi
 
 if command -v lsof >/dev/null 2>&1; then
   PIDS=$(lsof -ti:8080 2>/dev/null || true)
@@ -48,52 +54,44 @@ if command -v lsof >/dev/null 2>&1; then
     [[ -n "$PIDS" ]] && kill -9 $PIDS 2>/dev/null || true
   fi
 fi
-stop_pid
 
 if [[ ! -f "$ROOT/.env" ]]; then
   echo "Creating .env from .env.example"
   cp "$ROOT/.env.example" "$ROOT/.env"
 fi
 
-if ! "$PY" -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
-  echo "Installing dashboard dependencies (one time)…"
+if ! python3 -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
+  echo "Installing dependencies (this may take a minute)…"
+  python3 -m pip install -r "$ROOT/requirements.txt" || pip3 install -r "$ROOT/requirements.txt"
 fi
-"$PY" -m pip install -r "$ROOT/requirements.txt" "pandas>=2.0" "numpy>=1.26"
 
-echo "Checking dashboard loads…"
-if ! PYTHONPATH="$ROOT/src" "$PY" -c "from investment_agent.dashboard.app import app" 2>&1; then
+if ! PYTHONPATH="$ROOT/src" python3 -c "from investment_agent.dashboard.app import app" 2>/dev/null; then
   echo ""
-  echo "ERROR: Dashboard code failed to import (see traceback above)."
-  echo "Run: ./scripts/fix_ingest_python_mac.sh"
+  echo "ERROR: Dashboard failed to load. Run ./scripts/doctor_dashboard_mac.sh for details."
   exit 1
 fi
 
 if [[ ! -f "$ROOT/data/agent.db" ]]; then
   echo "Initializing database…"
-  PYTHONPATH="$ROOT/src" "$PY" -c "from investment_agent.demo_seed import seed_demo_db; seed_demo_db()"
+  PYTHONPATH="$ROOT/src" python3 -c "from investment_agent.demo_seed import seed_demo_db; seed_demo_db()"
 fi
 
-export PYTHONPATH="$ROOT/src"
-: > "$LOG"
-echo "[$(date)] Starting run_dashboard.py on 127.0.0.1:8080" >> "$LOG"
+echo "── Installing / restarting KeepAlive dashboard service ──"
+echo "(Auto-restarts on crash and on login — no fragile nohup process.)"
+echo ""
 
-# Start server (background)
-nohup "$PY" "$ROOT/scripts/run_dashboard.py" --host 127.0.0.1 --port 8080 >> "$LOG" 2>&1 &
-echo $! > "$PIDFILE"
-PID=$(cat "$PIDFILE")
-echo "Starting dashboard (PID $PID)…"
+# install_dashboard_service_mac.sh: writes LaunchAgent plist, bootstrap, kickstart
+if ! "$ROOT/scripts/install_dashboard_service_mac.sh"; then
+  echo ""
+  echo "ERROR: Could not start persistent dashboard service."
+  echo "Run: ./scripts/doctor_dashboard_mac.sh"
+  echo "Logs: ${LOG_DIR}/dashboard.err.log"
+  exit 1
+fi
 
 READY=0
+CODE="000"
 for i in $(seq 1 30); do
-  if ! kill -0 "$PID" 2>/dev/null; then
-    echo ""
-    echo "ERROR: Dashboard process exited before becoming ready."
-    echo "--- Log ---"
-    tail -50 "$LOG" || true
-    echo ""
-    echo "Run: ./scripts/doctor_dashboard_mac.sh"
-    exit 1
-  fi
   CODE=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 "$URL/api/config" 2>/dev/null || echo "000")
   if [[ "$CODE" == "200" ]]; then
     READY=1
@@ -106,28 +104,24 @@ echo ""
 
 if [[ "$READY" != "1" ]]; then
   echo "ERROR: Dashboard not responding after 30s (last HTTP $CODE)."
-  echo "--- Log ---"
-  tail -50 "$LOG" || true
+  echo "--- LaunchAgent stderr ---"
+  tail -30 "${LOG_DIR}/dashboard.err.log" 2>/dev/null || true
   echo ""
   echo "Run: ./scripts/doctor_dashboard_mac.sh"
   exit 1
 fi
 
-echo "Dashboard UP: $URL"
-VER=$(curl -s --connect-timeout 2 "$URL/api/version" 2>/dev/null || echo "")
-if [[ -n "$VER" ]]; then
-  echo "Version: $(echo "$VER" | "$PY" -c "import sys,json; d=json.load(sys.stdin); print(d.get('label','?'))" 2>/dev/null || echo "$VER")"
-else
-  echo "Version: (could not read /api/version)"
-fi
+echo "Dashboard UP (KeepAlive service): $URL"
 if command -v open >/dev/null 2>&1; then
   open "$URL"
   echo "Opened in your default browser."
 else
   echo "Open this URL manually: $URL"
 fi
-echo "Log: $LOG"
-echo "Stop: kill \$(cat $PIDFILE)"
 echo ""
-echo "If the browser still says 'can't be reached', wait 2s and refresh (Cmd+R)."
+echo "Service logs: ${LOG_DIR}/dashboard.out.log"
+echo "Status:       ./scripts/dashboard_service_status_mac.sh"
+echo "Restart:      launchctl kickstart -k gui/$(id -u)/${PLIST_LABEL}"
+echo ""
+echo "If the browser shows 'connection failed', wait 2s and Cmd+Shift+R."
 exit 0
