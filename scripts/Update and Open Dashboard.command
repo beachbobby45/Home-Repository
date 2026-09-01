@@ -25,8 +25,9 @@ if [[ ! -f "$ROOT/scripts/hard_restart_dashboard_mac.sh" ]]; then
   exit 1
 fi
 
-chmod +x "$ROOT/scripts/hard_restart_dashboard_mac.sh" "$ROOT/scripts/doctor_dashboard_mac.sh" 2>/dev/null || true
-"$ROOT/scripts/hard_restart_dashboard_mac.sh"
+chmod +x "$ROOT/scripts/hard_restart_dashboard_mac.sh" "$ROOT/scripts/doctor_dashboard_mac.sh" \
+  "$ROOT/scripts/update_and_open_dashboard_mac.sh" 2>/dev/null || true
+"$ROOT/scripts/update_and_open_dashboard_mac.sh"
 STATUS=$?
 
 echo ""

@@ -14,9 +14,11 @@ LOG_DIR="$HOME/Library/Logs/investment-agent"
 PIDFILE="$ROOT/data/dashboard.pid"
 
 DO_PULL=0
+DO_OPEN=1
 for arg in "$@"; do
   case "$arg" in
     --pull) DO_PULL=1 ;;
+    --no-open) DO_OPEN=0 ;;
   esac
 done
 
@@ -60,20 +62,30 @@ if [[ ! -f "$ROOT/.env" ]]; then
   cp "$ROOT/.env.example" "$ROOT/.env"
 fi
 
-if ! python3 -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
-  echo "Installing dependencies (this may take a minute)…"
-  python3 -m pip install -r "$ROOT/requirements.txt" || pip3 install -r "$ROOT/requirements.txt"
+chmod +x "$ROOT/scripts/resolve_python.sh" 2>/dev/null || true
+PYTHON="$("$ROOT/scripts/resolve_python.sh")" || {
+  echo ""
+  echo "ERROR: No working Python (.venv). Run ./scripts/fix_ingest_python_mac.sh"
+  exit 1
+}
+echo "Using Python: $PYTHON ($("$PYTHON" --version 2>&1))"
+echo ""
+
+if ! "$PYTHON" -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
+  echo "Installing dependencies into .venv (this may take a minute)…"
+  "$PYTHON" -m pip install -r "$ROOT/requirements.txt"
 fi
 
-if ! PYTHONPATH="$ROOT/src" python3 -c "from investment_agent.dashboard.app import app" 2>/dev/null; then
+if ! PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.dashboard.app import app" 2>/dev/null; then
   echo ""
   echo "ERROR: Dashboard failed to load. Run ./scripts/doctor_dashboard_mac.sh for details."
+  PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.dashboard.app import app" 2>&1 | tail -8
   exit 1
 fi
 
 if [[ ! -f "$ROOT/data/agent.db" ]]; then
   echo "Initializing database…"
-  PYTHONPATH="$ROOT/src" python3 -c "from investment_agent.demo_seed import seed_demo_db; seed_demo_db()"
+  PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.demo_seed import seed_demo_db; seed_demo_db()"
 fi
 
 echo "── Installing / restarting KeepAlive dashboard service ──"
@@ -112,11 +124,15 @@ if [[ "$READY" != "1" ]]; then
 fi
 
 echo "Dashboard UP (KeepAlive service): $URL"
-if command -v open >/dev/null 2>&1; then
-  open "$URL"
-  echo "Opened in your default browser."
+if [[ "$DO_OPEN" -eq 1 ]]; then
+  if command -v open >/dev/null 2>&1; then
+    open "$URL"
+    echo "Opened in your default browser."
+  else
+    echo "Open this URL manually: $URL"
+  fi
 else
-  echo "Open this URL manually: $URL"
+  echo "(Browser open skipped — caller will open $URL)"
 fi
 echo ""
 echo "Service logs: ${LOG_DIR}/dashboard.out.log"
