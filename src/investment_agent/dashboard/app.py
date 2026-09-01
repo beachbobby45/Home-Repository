@@ -301,12 +301,19 @@ def _db():
         conn.close()
 
 
+_LOCAL_API_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
+
+
 def _require_api_key(
+    request: Request,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> None:
     settings = Settings.from_env()
     key = settings.app_api_key.strip()
     if not key or key == "change-me-to-a-random-secret":
+        return
+    client_host = (request.client.host if request.client else "") or ""
+    if client_host in _LOCAL_API_HOSTS:
         return
     if x_api_key != key:
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")

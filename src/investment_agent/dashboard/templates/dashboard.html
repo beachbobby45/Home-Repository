@@ -554,6 +554,7 @@
             <button class="btn secondary btn-sm" type="button" id="log-check-in">Checked in</button>
             <input type="date" id="operator-day-date" title="Session date (ET)" />
           </div>
+          <p class="brief operator-day-auth-hint" id="operator-day-auth-hint" hidden></p>
           <div id="operator-day-summary" class="brief operator-day-summary">Loading attendance…</div>
           <button class="btn secondary btn-sm" type="button" id="clear-journal">Clear journal</button>
         </div>
@@ -920,16 +921,19 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (!key) {
           localStorage.removeItem(API_KEY_STORAGE);
           document.getElementById("api-key-status").textContent = "Password cleared.";
+          updateOperatorDayAuthHint();
           return;
         }
         localStorage.setItem(API_KEY_STORAGE, key);
         document.getElementById("api-key-status").textContent = "Password saved — retry your action.";
+        updateOperatorDayAuthHint();
         toast("Dashboard password saved in this browser");
       });
       document.getElementById("clear-api-key")?.addEventListener("click", () => {
         localStorage.removeItem(API_KEY_STORAGE);
         input.value = "";
         document.getElementById("api-key-status").textContent = "Password cleared.";
+        updateOperatorDayAuthHint();
       });
     }
 
@@ -977,6 +981,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         } else {
           initApiKeyBar();
         }
+        updateOperatorDayAuthHint();
         const svc = document.getElementById("setup-dashboard-service-status");
         if (svc) {
           svc.textContent =
@@ -1900,11 +1905,29 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     }
 
     async function postOperatorDay(path, notes) {
+      if (apiKeyRequired && !getApiKey()) {
+        throw new Error(
+          "Dashboard password required — enter APP_API_KEY from your .env in the bar at the top, click Save, then try again."
+        );
+      }
       const session_date_et = document.getElementById("operator-day-date")?.value || todayEtDateStr();
       return api(path, {
         method: "POST",
         body: JSON.stringify({ session_date_et, notes: notes || null }),
       });
+    }
+
+    function updateOperatorDayAuthHint() {
+      const hint = document.getElementById("operator-day-auth-hint");
+      if (!hint) return;
+      if (apiKeyRequired && !getApiKey()) {
+        hint.textContent =
+          "Enter the dashboard password at the top and click Save before logging attendance.";
+        hint.hidden = false;
+      } else {
+        hint.hidden = true;
+        hint.textContent = "";
+      }
     }
 
     async function loadCio() {
@@ -3406,10 +3429,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     });
     on("log-no-trade-day", "click", async () => {
       try {
+        const day = document.getElementById("operator-day-date")?.value || todayEtDateStr();
         const r = await postOperatorDay("/api/operator-day-log/no-trade");
-        toast(`Logged: ${r.entry?.outcome_label || "NO TRADE"}`);
+        toast(`Logged ${day}: ${r.entry?.outcome_label || "NO TRADE"}`);
         await loadOperatorDayLog();
-      } catch (e) { toast(e.message); }
+      } catch (e) { toast(e.message, 6000); }
     });
     on("log-pass-day", "click", async () => {
       try {
