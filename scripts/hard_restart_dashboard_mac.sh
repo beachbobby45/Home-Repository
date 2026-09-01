@@ -102,13 +102,22 @@ if ! _dashboard_import_ok; then
 fi
 
 if ! _dashboard_import_ok; then
+  echo "Dashboard import still failing — rebuilding .venv from scratch (~1–2 min)…"
+  if "$ROOT/scripts/fix_ingest_python_mac.sh"; then
+    PYTHON="$(_resolve_venv_python || true)"
+  fi
+fi
+
+if ! _dashboard_import_ok; then
   echo ""
   echo "ERROR: Dashboard failed to load."
-  echo "--- import error ---"
-  PYTHONNOUSERSITE=1 PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.dashboard.app import app" 2>&1 | tail -12
+  echo "--- import error (from Home-Repository/.venv) ---"
+  PYTHONNOUSERSITE=1 PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.dashboard.app import app" 2>&1 | tail -15
   echo ""
-  echo "Fix: double-click  Home-Repository/scripts/Repair Dashboard.command"
-  echo "Or:  ./scripts/doctor_dashboard_mac.sh"
+  echo "── Fix (pick one) ──"
+  echo "  1. Finder → Home-Repository/scripts → double-click Repair Dashboard.command"
+  echo "  2. Terminal:  cd \"$ROOT\" && ./scripts/fix_ingest_python_mac.sh && ./scripts/ensure_dashboard_mac.sh"
+  echo "  3. Diagnose:   ./scripts/doctor_dashboard_mac.sh"
   exit 1
 fi
 
