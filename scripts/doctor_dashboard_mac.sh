@@ -65,6 +65,8 @@ echo ""
 if [[ "$fail" -eq 0 ]]; then
   echo "Dashboard looks healthy. Open: $URL"
 else
-  echo "Fix FAIL items above, then: ./scripts/ensure_dashboard_mac.sh"
+  echo "Fix FAIL items above, then:"
+  echo "  Double-click: scripts/Repair Dashboard.command"
+  echo "  Or: ./scripts/hard_restart_dashboard_mac.sh --pull"
 fi
 exit "$fail"

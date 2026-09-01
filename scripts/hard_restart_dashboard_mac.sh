@@ -62,30 +62,59 @@ if [[ ! -f "$ROOT/.env" ]]; then
   cp "$ROOT/.env.example" "$ROOT/.env"
 fi
 
-chmod +x "$ROOT/scripts/resolve_python.sh" 2>/dev/null || true
-PYTHON="$("$ROOT/scripts/resolve_python.sh")" || {
-  echo ""
-  echo "ERROR: No working Python (.venv). Run ./scripts/fix_ingest_python_mac.sh"
-  exit 1
+chmod +x "$ROOT/scripts/resolve_python.sh" "$ROOT/scripts/fix_ingest_python_mac.sh" 2>/dev/null || true
+
+_resolve_venv_python() {
+  "$ROOT/scripts/resolve_python.sh" 2>/dev/null
 }
+
+PYTHON="$(_resolve_venv_python || true)"
+if [[ -z "$PYTHON" ]]; then
+  echo "No working Home-Repository/.venv — running one-time Python repair (~1–2 min)…"
+  echo "(Uses project .venv only — not Mac system python3 or ~/Library/Python.)"
+  echo ""
+  if "$ROOT/scripts/fix_ingest_python_mac.sh"; then
+    PYTHON="$(_resolve_venv_python || true)"
+  fi
+fi
+if [[ -z "$PYTHON" ]]; then
+  echo ""
+  echo "ERROR: Could not set up Python for the dashboard."
+  echo "Fix: double-click  Home-Repository/scripts/Repair Dashboard.command"
+  echo "Or:  ./scripts/fix_ingest_python_mac.sh"
+  exit 1
+fi
 echo "Using Python: $PYTHON ($("$PYTHON" --version 2>&1))"
 echo ""
 
+_dashboard_import_ok() {
+  PYTHONNOUSERSITE=1 PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.dashboard.app import app" 2>/dev/null
+}
+
 if ! "$PYTHON" -c "import uvicorn, fastapi, jinja2" 2>/dev/null; then
   echo "Installing dependencies into .venv (this may take a minute)…"
-  "$PYTHON" -m pip install -r "$ROOT/requirements.txt"
+  PYTHONNOUSERSITE=1 "$PYTHON" -m pip install -r "$ROOT/requirements.txt"
 fi
 
-if ! PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.dashboard.app import app" 2>/dev/null; then
+if ! _dashboard_import_ok; then
+  echo "Dashboard import failed — reinstalling .venv packages…"
+  PYTHONNOUSERSITE=1 "$PYTHON" -m pip install -r "$ROOT/requirements.txt" "pandas>=2.0" "numpy>=1.26"
+fi
+
+if ! _dashboard_import_ok; then
   echo ""
-  echo "ERROR: Dashboard failed to load. Run ./scripts/doctor_dashboard_mac.sh for details."
-  PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.dashboard.app import app" 2>&1 | tail -8
+  echo "ERROR: Dashboard failed to load."
+  echo "--- import error ---"
+  PYTHONNOUSERSITE=1 PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.dashboard.app import app" 2>&1 | tail -12
+  echo ""
+  echo "Fix: double-click  Home-Repository/scripts/Repair Dashboard.command"
+  echo "Or:  ./scripts/doctor_dashboard_mac.sh"
   exit 1
 fi
 
 if [[ ! -f "$ROOT/data/agent.db" ]]; then
   echo "Initializing database…"
-  PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.demo_seed import seed_demo_db; seed_demo_db()"
+  PYTHONNOUSERSITE=1 PYTHONPATH="$ROOT/src" "$PYTHON" -c "from investment_agent.demo_seed import seed_demo_db; seed_demo_db()"
 fi
 
 echo "── Installing / restarting KeepAlive dashboard service ──"

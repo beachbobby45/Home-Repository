@@ -121,6 +121,15 @@ def _extract_failure_lines(lines: list[str]) -> list[str]:
         elif "INGEST FAILED" in text or text == "── Ingest errors ──":
             hits.append(text)
             capture = True
+        elif (
+            "Dashboard failed to load" in text
+            or "Could not set up Python" in text
+            or text == "--- import error ---"
+        ):
+            hits.append(text)
+            capture = True
+        elif capture and ('File "' in text or text.startswith("ModuleNotFoundError") or text.startswith("ImportError")):
+            hits.append(text)
         elif (text.startswith("•") or raw.lstrip().startswith("•")) and hits:
             hits.append(text)
         elif "incompatible architecture" in lower or "unable to import required dependency numpy" in lower:
@@ -654,9 +663,9 @@ class DesktopHelperApp:
                             "In the app: Activity log → Open last run log (TextEdit).\n"
                             "Or: Activity log → Copy activity log."
                         )
-                        if task_key in ("end_of_day", "morning_prep", "refresh_live"):
+                        if task_key in ("end_of_day", "morning_prep", "refresh_live", "update_dashboard"):
                             extra += (
-                                "\n\nNumPy architecture error? Double-click:\n"
+                                "\n\nPython / dashboard error? Double-click:\n"
                                 "  Home-Repository/scripts/Repair Dashboard.command\n"
                                 "Then quit (Cmd+Q) and reopen this app."
                             )
