@@ -564,6 +564,23 @@
             <th>Session (ET)</th><th>Outcome</th><th>MA</th><th>Top pick</th><th>Journal legs</th><th>Source</th><th>Notes</th>
           </tr></thead><tbody id="operator-day-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table>
         </div>
+        <div class="card operator-day-card ma-breakdown-card">
+          <h3 class="operator-day-title">Market Activity breakdown</h3>
+          <p class="brief">Last 14 sessions — bar height = day score. Orange line = <strong>60 TRADE</strong> minimum. Click a bar to see direction, momentum, VIX, and bull gate for that day.</p>
+          <div id="ma-breakdown-chart" class="ma-breakdown-chart">
+            <div class="ma-breakdown-chart-empty">Loading chart…</div>
+          </div>
+          <div id="ma-breakdown-detail" class="ma-breakdown-detail" hidden>
+            <div class="ma-breakdown-detail-head">
+              <h4 id="ma-breakdown-detail-title">—</h4>
+              <span id="ma-breakdown-detail-badge" class="outcome-pill">—</span>
+            </div>
+            <p class="brief" id="ma-breakdown-detail-summary"></p>
+            <div class="ma-breakdown-gates" id="ma-breakdown-gates"></div>
+            <div class="ma-breakdown-indexes brief" id="ma-breakdown-indexes"></div>
+            <div class="ma-breakdown-components" id="ma-breakdown-components"></div>
+          </div>
+        </div>
         <div class="card">
           <form id="trade-form"><div class="form-row">
             <div><label for="t-ticker">Ticker</label><input id="t-ticker" required /></div>
@@ -1883,7 +1900,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           return;
         }
         body.innerHTML = entries.map((e) => `
-          <tr class="${operatorOutcomeClass(e.outcome)}">
+          <tr class="${operatorOutcomeClass(e.outcome)} ma-day-row" data-ma-day="${e.session_date_et}" title="Show Market Activity breakdown">
             <td><strong>${e.session_date_et}</strong></td>
             <td><span class="outcome-pill ${operatorOutcomeClass(e.outcome)}">${e.outcome_label || e.outcome}</span></td>
             <td>${e.market_activity_score != null ? `${e.market_activity_score} (${e.market_activity_band || "—"})` : "—"}</td>
@@ -1893,9 +1910,143 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
             <td>${e.notes || ""}</td>
           </tr>
         `).join("");
+        body.querySelectorAll(".ma-day-row").forEach((row) => {
+          row.addEventListener("click", () => {
+            selectMaBreakdownDay(row.dataset.maDay);
+            document.getElementById("ma-breakdown-chart")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          });
+        });
       } catch (e) {
         if (summaryEl) summaryEl.textContent = "Could not load attendance summary.";
         body.innerHTML = `<tr><td colspan="7" class="empty">${e.message}</td></tr>`;
+      }
+    }
+
+    let maBreakdownDays = [];
+    let maBreakdownSelected = null;
+
+    function maScoreBarClass(score, tradeMin) {
+      if (score >= 70) return "ma-bar-high";
+      if (score >= tradeMin) return "ma-bar-trade";
+      return "ma-bar-blocked";
+    }
+
+    function formatMaChartDate(sessionDateEt) {
+      const parts = sessionDateEt.split("-");
+      return `${Number(parts[1])}/${Number(parts[2])}`;
+    }
+
+    function renderMaBreakdownChart(days, tradeMin) {
+      const el = document.getElementById("ma-breakdown-chart");
+      if (!el) return;
+      if (!days?.length) {
+        el.innerHTML =
+          '<div class="ma-breakdown-chart-empty">No Market Activity history yet — run End of Day or Refresh live to record daily scores.</div>';
+        return;
+      }
+      const chronological = [...days].reverse();
+      el.innerHTML = `
+        <div class="ma-chart-wrap">
+          <div class="ma-chart-threshold" style="bottom: ${tradeMin}%" title="TRADE minimum (${tradeMin})"></div>
+          <div class="ma-chart-cols">
+            ${chronological.map((d) => `
+              <button type="button" class="ma-chart-col${maBreakdownSelected === d.session_date_et ? " selected" : ""}"
+                data-ma-day="${d.session_date_et}" title="${(d.summary || "").replace(/"/g, "&quot;")}">
+                <div class="ma-chart-bar ${maScoreBarClass(d.score, tradeMin)}" style="height: ${Math.max(4, d.score)}%"></div>
+                <span class="ma-chart-score">${d.score}</span>
+                <span class="ma-chart-date">${formatMaChartDate(d.session_date_et)}</span>
+              </button>
+            `).join("")}
+          </div>
+        </div>
+        <div class="ma-chart-legend brief">
+          <span><i class="ma-legend-swatch ma-bar-blocked"></i> &lt; ${tradeMin} NO TRADE</span>
+          <span><i class="ma-legend-swatch ma-bar-trade"></i> ${tradeMin}–69 CAUTION</span>
+          <span><i class="ma-legend-swatch ma-bar-high"></i> ≥ 70 TRADE</span>
+        </div>
+      `;
+      el.querySelectorAll(".ma-chart-col").forEach((btn) => {
+        btn.addEventListener("click", () => selectMaBreakdownDay(btn.dataset.maDay));
+      });
+    }
+
+    function renderMaBreakdownDetail(day) {
+      const panel = document.getElementById("ma-breakdown-detail");
+      if (!panel) return;
+      if (!day) {
+        panel.hidden = true;
+        return;
+      }
+      panel.hidden = false;
+      document.getElementById("ma-breakdown-detail-title").textContent =
+        `${day.session_date_et} · ${day.score}/100 — ${day.band_label || day.band || "—"}`;
+      const badge = document.getElementById("ma-breakdown-detail-badge");
+      badge.textContent = day.allow_trade ? "TRADE day" : "NO TRADE";
+      badge.className = `outcome-pill ${day.allow_trade ? "outcome-pass" : "outcome-no-trade-system"}`;
+
+      const summaryEl = document.getElementById("ma-breakdown-detail-summary");
+      const parts = [];
+      if (day.summary) parts.push(day.summary);
+      if (day.vix != null) parts.push(`VIX ${day.vix}`);
+      summaryEl.textContent = parts.join(" · ");
+
+      const gatesEl = document.getElementById("ma-breakdown-gates");
+      gatesEl.innerHTML = (day.gates || []).map((g) => `
+        <div class="ma-gate ${g.passed ? "ma-gate-pass" : "ma-gate-fail"}">
+          <span class="ma-gate-icon">${g.passed ? "✓" : "✗"}</span>
+          <span class="ma-gate-label">${g.label}</span>
+          <span class="ma-gate-detail">${g.detail || ""}</span>
+        </div>
+      `).join("");
+
+      const idx = day.index_changes || {};
+      const idxEl = document.getElementById("ma-breakdown-indexes");
+      const idxParts = ["SPY", "DIA", "QQQ"]
+        .filter((sym) => idx[sym] != null)
+        .map((sym) => `${sym} ${idx[sym] >= 0 ? "+" : ""}${Number(idx[sym]).toFixed(2)}%`);
+      idxEl.textContent = idxParts.length ? `Session index change: ${idxParts.join(" · ")}` : "";
+
+      const compEl = document.getElementById("ma-breakdown-components");
+      compEl.innerHTML = (day.components || []).map((c) => {
+        const val = c.score != null ? c.score : null;
+        const width = val != null ? Math.max(2, Math.min(100, val)) : 0;
+        return `
+          <div class="ma-component-row">
+            <span class="ma-component-label" title="Weight ${c.weight_pct}%">${c.label}</span>
+            <div class="ma-component-track">
+              <div class="ma-component-fill ${maScoreBarClass(val ?? 0, day.trade_min || 60)}" style="width: ${width}%"></div>
+            </div>
+            <span class="ma-component-val">${val != null ? val : "—"}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function selectMaBreakdownDay(sessionDateEt) {
+      if (!sessionDateEt) return;
+      maBreakdownSelected = sessionDateEt;
+      const day = maBreakdownDays.find((d) => d.session_date_et === sessionDateEt);
+      renderMaBreakdownDetail(day);
+      document.querySelectorAll(".ma-chart-col").forEach((btn) => {
+        btn.classList.toggle("selected", btn.dataset.maDay === sessionDateEt);
+      });
+    }
+
+    async function loadMarketActivityBreakdown() {
+      const chartEl = document.getElementById("ma-breakdown-chart");
+      if (!chartEl) return;
+      try {
+        const monthStart = todayEtDateStr().slice(0, 8) + "01";
+        const data = await api(`/api/market-activity/daily-breakdown?days=14&since=${monthStart}`);
+        maBreakdownDays = data.days || [];
+        const tradeMin = data.trade_min || 60;
+        maBreakdownSelected = maBreakdownDays[0]?.session_date_et || null;
+        renderMaBreakdownChart(maBreakdownDays, tradeMin);
+        selectMaBreakdownDay(maBreakdownSelected);
+      } catch (e) {
+        chartEl.innerHTML = `<div class="ma-breakdown-chart-empty">${e.message}</div>`;
+        const panel = document.getElementById("ma-breakdown-detail");
+        if (panel) panel.hidden = true;
       }
     }
 
@@ -2997,6 +3148,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadQueue(),
         loadJournal(),
         loadOperatorDayLog(),
+        loadMarketActivityBreakdown(),
       ]);
     }
 

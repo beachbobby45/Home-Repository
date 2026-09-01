@@ -560,6 +560,22 @@ def api_trading_day_market_activity(
     return result
 
 
+@app.get("/api/market-activity/daily-breakdown")
+def api_market_activity_daily_breakdown(
+    conn=Depends(_db),
+    days: int = 14,
+    since: str | None = None,
+) -> dict[str, Any]:
+    from investment_agent.market_activity import TRADE_MIN, list_daily_breakdowns
+
+    rows = list_daily_breakdowns(conn, days=days, since=since)
+    return {
+        "days": rows,
+        "trade_min": TRADE_MIN,
+        "count": len(rows),
+    }
+
+
 @app.get("/api/trading-day/confirmation")
 def api_trading_day_confirmation(
     conn=Depends(_db),

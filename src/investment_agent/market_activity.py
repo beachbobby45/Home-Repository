@@ -534,3 +534,214 @@ def market_activity_to_dict(result: dict) -> dict:
         "summary": result.get("summary"),
         "authoritative": result.get("authoritative", False),
     }
+
+
+COMPONENT_LABELS: dict[str, str] = {
+    "market_direction": "Direction (indices vs open)",
+    "market_volume": "Volume vs 20d avg",
+    "volatility": "VIX",
+    "momentum": "5–20d momentum",
+    "sector_participation": "Sector participation",
+    "news_catalysts": "Macro news",
+}
+
+
+def _parse_components_json(raw: str | None) -> dict[str, float | None]:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out: dict[str, float | None] = {}
+    for key, val in data.items():
+        if val is None:
+            out[key] = None
+        else:
+            try:
+                out[key] = float(val)
+            except (TypeError, ValueError):
+                out[key] = None
+    return out
+
+
+def _session_eval_time(session_date_et: str) -> datetime:
+    """Morning evaluation anchor (~10:00 ET) for historical recompute."""
+    day = datetime.strptime(session_date_et, "%Y-%m-%d")
+    return day.replace(hour=10, minute=0, second=0, microsecond=0, tzinfo=ET)
+
+
+def _component_rows(components: dict[str, float | None]) -> list[dict]:
+    rows: list[dict] = []
+    for key in V0_ACTIVE_WEIGHTS:
+        score = components.get(key)
+        rows.append(
+            {
+                "key": key,
+                "label": COMPONENT_LABELS.get(key, key.replace("_", " ").title()),
+                "weight_pct": round(V0_ACTIVE_WEIGHTS[key], 1),
+                "score": round(score, 1) if score is not None else None,
+            }
+        )
+    return rows
+
+
+def _gate_rows(result: dict) -> list[dict]:
+    score = int(result["score"])
+    bull_ok = bool(result.get("bull_gate_ok"))
+    spy_20d = result.get("spy_20d_return_pct")
+    band = result.get("band_label") or result.get("band") or "—"
+    score_ok = score >= TRADE_MIN
+    gates = [
+        {
+            "key": "score",
+            "label": f"Score ≥ {TRADE_MIN} (Average band)",
+            "passed": score_ok,
+            "detail": f"{score}/100 — {band}",
+        },
+        {
+            "key": "bull_gate",
+            "label": "Bull gate (SPY 20d > 0)",
+            "passed": bull_ok,
+            "detail": (
+                f"SPY 20d {spy_20d:+.2f}%"
+                if spy_20d is not None
+                else "SPY 20d return unavailable"
+            ),
+        },
+    ]
+    return gates
+
+
+def get_stored_evaluation_for_session(
+    conn: sqlite3.Connection,
+    session_date_et: str,
+) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT captured_at, slot, score, band, allow_trade, bull_gate_ok,
+               exit_alert, components_json, summary
+        FROM market_activity_evaluations
+        WHERE session_date_et = ?
+        ORDER BY captured_at DESC
+        LIMIT 1
+        """,
+        (session_date_et,),
+    ).fetchone()
+    if not row:
+        return None
+    components = _parse_components_json(row["components_json"])
+    return {
+        "session_date_et": session_date_et,
+        "captured_at": row["captured_at"],
+        "snapshot_slot": row["slot"],
+        "score": int(row["score"]),
+        "band": row["band"],
+        "band_label": band_for_score(int(row["score"])).label,
+        "allow_trade": bool(row["allow_trade"]),
+        "bull_gate_ok": bool(row["bull_gate_ok"]),
+        "components": components,
+        "summary": row["summary"],
+        "source": "stored",
+    }
+
+
+def build_daily_breakdown(conn: sqlite3.Connection, session_date_et: str) -> dict:
+    """Per-day MA score with component bars and gate checklist."""
+    stored = get_stored_evaluation_for_session(conn, session_date_et)
+    vix = latest_vix(conn)
+
+    if stored and stored["components"]:
+        enriched = evaluate_market_activity(
+            conn, when=_session_eval_time(session_date_et), persist=False
+        )
+        result = {
+            **stored,
+            "index_changes": enriched.get("index_changes") or {},
+            "spy_20d_return_pct": enriched.get("spy_20d_return_pct"),
+        }
+        if result["spy_20d_return_pct"] is not None:
+            result["bull_gate_ok"] = result["spy_20d_return_pct"] > 0
+        result["allow_trade"] = (
+            result["score"] >= TRADE_MIN
+            and result["bull_gate_ok"]
+            and band_for_score(result["score"]).allow_trade
+        )
+    else:
+        when = _session_eval_time(session_date_et)
+        evaluated = evaluate_market_activity(conn, when=when, persist=False)
+        result = {
+            **market_activity_to_dict(evaluated),
+            "source": "computed",
+        }
+
+    components = result.get("components") or {}
+    if isinstance(components, dict):
+        comp_map = {k: (float(v) if v is not None else None) for k, v in components.items()}
+    else:
+        comp_map = {}
+
+    return {
+        "session_date_et": session_date_et,
+        "score": int(result["score"]),
+        "band": result.get("band"),
+        "band_label": result.get("band_label") or band_for_score(int(result["score"])).label,
+        "allow_trade": bool(result.get("allow_trade")),
+        "bull_gate_ok": bool(result.get("bull_gate_ok")),
+        "spy_20d_return_pct": result.get("spy_20d_return_pct"),
+        "vix": round(vix, 2) if vix is not None else None,
+        "index_changes": result.get("index_changes") or {},
+        "components": _component_rows(comp_map),
+        "gates": _gate_rows(result),
+        "summary": result.get("summary") or "",
+        "source": result.get("source", "computed"),
+        "trade_min": TRADE_MIN,
+    }
+
+
+def list_daily_breakdowns(
+    conn: sqlite3.Connection,
+    *,
+    days: int = 14,
+    since: str | None = None,
+) -> list[dict]:
+    """Recent session breakdowns (newest first) for dashboard chart + drill-down."""
+    limit = max(1, min(days, 45))
+    if since:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT session_date_et
+            FROM market_activity_evaluations
+            WHERE session_date_et >= ?
+            ORDER BY session_date_et DESC
+            LIMIT ?
+            """,
+            (since, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT session_date_et
+            FROM market_activity_evaluations
+            ORDER BY session_date_et DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    dates = [row["session_date_et"] for row in rows]
+    if not dates:
+        from investment_agent.close_report import _latest_ohlcv_date, _trading_days_in_range
+
+        end = _latest_ohlcv_date(conn) or today_et_str()
+        start = since or (datetime.strptime(end, "%Y-%m-%d") - timedelta(days=limit * 2)).strftime(
+            "%Y-%m-%d"
+        )
+        trading = _trading_days_in_range(conn, start, end)
+        dates = list(reversed(trading[-limit:]))
+
+    breakdowns = [build_daily_breakdown(conn, day) for day in dates]
+    breakdowns.sort(key=lambda row: row["session_date_et"], reverse=True)
+    return breakdowns
