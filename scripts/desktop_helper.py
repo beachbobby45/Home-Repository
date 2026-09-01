@@ -665,10 +665,32 @@ class DesktopHelperApp:
                         )
                         if task_key in ("end_of_day", "morning_prep", "refresh_live", "update_dashboard"):
                             extra += (
-                                "\n\nPython / dashboard error? Double-click:\n"
-                                "  Home-Repository/scripts/Repair Dashboard.command\n"
-                                "Then quit (Cmd+Q) and reopen this app."
+                                "\n\nPython / dashboard error?\n"
+                                "  Finder → Home-Repository/scripts → Repair Dashboard.command\n"
+                                "  (Or Terminal: ./scripts/fix_ingest_python_mac.sh)\n"
+                                "Then quit this app (Cmd+Q) and reopen."
                             )
+                        dashboard_load_fail = task_key == "update_dashboard" and any(
+                            "Dashboard failed to load" in ln or "Could not set up Python" in ln
+                            for ln in all_lines
+                        )
+                        if dashboard_load_fail and messagebox.askyesno(
+                            "Run dashboard repair?",
+                            "The dashboard Python environment (.venv) needs repair (~1–2 min).\n\n"
+                            "Run repair now? (You can also use Repair Dashboard.command in Finder.)",
+                        ):
+                            repair_sh = self.repo / "scripts" / "fix_ingest_python_mac.sh"
+                            if repair_sh.is_file():
+                                self.root.after(
+                                    100,
+                                    lambda: self._run_script(
+                                        "Repair dashboard Python",
+                                        repair_sh,
+                                        task_key="",
+                                        open_browser_after=False,
+                                    ),
+                                )
+                                return
                         messagebox.showerror(
                             f"{title} failed",
                             f"Exit code {exit_code}.{extra}\n\nLast log lines:\n{hint}",
