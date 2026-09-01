@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 import webbrowser
@@ -29,8 +30,8 @@ DASHBOARD_URL = "http://127.0.0.1:8080"
 CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
-EXPECTED_VERSION = "0.9.0"
-DESKTOP_HELPER_BUILD = "20260819b"
+EXPECTED_VERSION = "0.9.3"
+DESKTOP_HELPER_BUILD = "20260901a"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
@@ -531,6 +532,7 @@ class DesktopHelperApp:
         *,
         task_key: str = "",
         open_browser_after: bool = False,
+        script_args: list[str] | None = None,
     ) -> None:
         if self._busy():
             messagebox.showinfo(
@@ -554,9 +556,12 @@ class DesktopHelperApp:
         def worker() -> None:
             exit_code = 1
             all_lines: list[str] = []
+            cmd = ["/bin/bash", str(script)]
+            if script_args:
+                cmd.extend(script_args)
             try:
                 proc = subprocess.Popen(
-                    ["/bin/bash", str(script)],
+                    cmd,
                     cwd=self.repo,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -589,7 +594,24 @@ class DesktopHelperApp:
                         lambda: self.log(f"✗ {title} failed (exit {exit_code}) at {finished}"),
                     )
                 if open_browser_after and exit_code == 0:
-                    self.root.after(0, self.open_browser)
+                    def open_after_restart() -> None:
+                        if self._open_dashboard_browser(wait=True):
+                            messagebox.showinfo(
+                                "Dashboard ready",
+                                f"Dashboard is running at {DASHBOARD_URL}\n\n"
+                                "If the page shows 'connection failed', wait 2 seconds "
+                                "and press Cmd+Shift+R to hard-refresh.",
+                            )
+                        else:
+                            messagebox.showerror(
+                                "Dashboard not responding",
+                                f"Restart finished but {DASHBOARD_URL} did not respond.\n\n"
+                                "In Activity log, scroll up for errors.\n"
+                                "Or run in Terminal:\n"
+                                "  ./scripts/doctor_dashboard_mac.sh",
+                            )
+
+                    self.root.after(0, open_after_restart)
             except Exception as exc:
                 self.root.after(0, lambda: self.log(f"ERROR: {exc}"))
             finally:
@@ -679,48 +701,50 @@ class DesktopHelperApp:
         threading.Thread(target=worker, daemon=True).start()
 
     def update_and_open(self) -> None:
-        if self._busy():
-            messagebox.showinfo(
-                "Please wait",
-                f"Still running: {self.current_task or 'Update & open dashboard'}\n\n"
-                "Wait for the progress bar to finish, or quit this app (Cmd+Q) and reopen.",
+        script = self.repo / "scripts" / "update_and_open_dashboard_mac.sh"
+        if script.is_file():
+            self._run_script(
+                "Update & open dashboard",
+                script,
+                task_key="update_dashboard",
+                open_browser_after=True,
+                script_args=["--no-open"],
             )
             return
-        self.running = True
-        self.current_task = "Checking for updates"
-        self._set_rhythm_buttons_enabled(False)
-        self._set_task_banner("Updating from GitHub…", running=True)
-        self.log("── Update & open dashboard ──")
-
-        def worker() -> None:
-            try:
-                git = subprocess.run(
-                    ["git", "-C", str(self.repo), "pull", "--ff-only", "origin", "main"],
-                    capture_output=True,
-                    text=True,
-                )
-                if git.stdout.strip():
-                    self.root.after(0, lambda: self.log(git.stdout.strip()))
-                if git.returncode != 0 and git.stderr.strip():
-                    self.root.after(0, lambda: self.log(git.stderr.strip()))
-            finally:
-                self.running = False
-                self.current_task = ""
-
-            def start_restart() -> None:
-                self._run_script(
-                    "Restart dashboard",
-                    self.repo / "scripts" / "hard_restart_dashboard_mac.sh",
-                    open_browser_after=True,
-                )
-
-            self.root.after(0, start_restart)
-
-        threading.Thread(target=worker, daemon=True).start()
+        self._run_script(
+            "Update & open dashboard",
+            self.repo / "scripts" / "hard_restart_dashboard_mac.sh",
+            task_key="update_dashboard",
+            open_browser_after=True,
+            script_args=["--pull", "--no-open"],
+        )
 
     def open_browser(self) -> None:
-        webbrowser.open(DASHBOARD_URL)
+        self._open_dashboard_browser(wait=False)
+
+    def _open_dashboard_browser(self, *, wait: bool = True, wait_seconds: int = 35) -> bool:
+        """Open dashboard URL; optionally wait until /api/version responds."""
+        if wait:
+            deadline = time.time() + wait_seconds
+            while time.time() < deadline:
+                try:
+                    with urllib.request.urlopen(f"{DASHBOARD_URL}/api/version", timeout=2) as resp:
+                        json.loads(resp.read().decode())
+                    break
+                except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+                    time.sleep(1)
+            else:
+                self.log(
+                    f"Dashboard not responding at {DASHBOARD_URL} after {wait_seconds}s"
+                )
+                return False
+
+        if sys.platform == "darwin":
+            subprocess.run(["open", DASHBOARD_URL], check=False)
+        else:
+            webbrowser.open(DASHBOARD_URL)
         self.log(f"Opened {DASHBOARD_URL}")
+        return True
 
     def morning_prep(self) -> None:
         self._start_rhythm_task("morning_prep", "run_morning_prep_mac.sh", "Morning prep")
