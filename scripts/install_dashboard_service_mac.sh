@@ -41,7 +41,6 @@ if command -v lsof >/dev/null 2>&1; then
   [[ -n "$PIDS" ]] && kill $PIDS 2>/dev/null || true
 fi
 
-# Unload old agent if reloading
 launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
 
 cat > "$PLIST_PATH" <<EOF
@@ -77,7 +76,11 @@ cat > "$PLIST_PATH" <<EOF
 </plist>
 EOF
 
-launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
+launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || {
+  echo "LaunchAgent already loaded — reloading plist…"
+  launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
+}
 launchctl enable "gui/$(id -u)/$PLIST_LABEL"
 launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL"
 
