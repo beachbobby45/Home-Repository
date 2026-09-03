@@ -982,7 +982,6 @@ def api_journal_create(
         exc = exceptional_snapshot.get("exceptional_trade") or {}
         if exc.get("active"):
             from investment_agent.exceptional_trade import log_exceptional_trade_consumed
-            from investment_agent.quote_snapshots import today_et_str
 
             log_exceptional_trade_consumed(
                 conn,
