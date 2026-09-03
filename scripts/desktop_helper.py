@@ -742,6 +742,7 @@ class DesktopHelperApp:
         needles = (
             "dashboard failed to load",
             "could not set up python",
+            "could not create a working .venv",
             "could not start dashboard service",
             "could not start persistent dashboard service",
             "dashboard service installed but not responding",
@@ -749,6 +750,7 @@ class DesktopHelperApp:
             "incompatible architecture",
             "numpy architecture mismatch",
             "mach-o file, but is an incompatible architecture",
+            "need python 3.9",
         )
         return any(n in combined for n in needles)
 

@@ -80,8 +80,12 @@ fi
 if [[ -z "$PYTHON" ]]; then
   echo ""
   echo "ERROR: Could not set up Python for the dashboard."
-  echo "Fix: double-click  Home-Repository/scripts/Repair Dashboard.command"
-  echo "Or:  ./scripts/fix_ingest_python_mac.sh"
+  echo ""
+  echo "── Fix (pick one) ──"
+  echo "  1. Finder → Home-Repository/scripts → Install Python.command"
+  echo "     (installs Python 3.12 if needed, builds .venv, starts dashboard)"
+  echo "  2. Finder → Repair Dashboard.command"
+  echo "  3. Terminal:  brew install python@3.12 && ./scripts/fix_ingest_python_mac.sh"
   exit 1
 fi
 echo "Using Python: $PYTHON ($("$PYTHON" --version 2>&1))"

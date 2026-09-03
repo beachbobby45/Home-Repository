@@ -74,7 +74,62 @@ _pick_base_python() {
     fi
     echo "  Skip $c ($(_arch_label "$c")) — need Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+" >&2
   done
+  # Also scan PATH for other python3 installs (python.org, pyenv shims, etc.).
+  if command -v python3 >/dev/null 2>&1; then
+    while IFS= read -r c; do
+      [[ -x "$c" ]] || continue
+      case "$c" in
+        /opt/homebrew/bin/python3|/opt/homebrew/opt/python@3.12/bin/python3|/opt/homebrew/opt/python@3.13/bin/python3|/usr/local/bin/python3|/usr/bin/python3) continue ;;
+      esac
+      if _python_new_enough "$c"; then
+        echo "  Found: $c ($(_arch_label "$c"))" >&2
+        echo "$c"
+        return 0
+      fi
+    done < <(command -v -a python3 2>/dev/null || true)
+  fi
   return 1
+}
+
+_list_all_candidates() {
+  local c host_arch seen=""
+  host_arch="$(uname -m)"
+  for c in \
+    /opt/homebrew/bin/python3 \
+    /opt/homebrew/opt/python@3.12/bin/python3 \
+    /opt/homebrew/opt/python@3.13/bin/python3 \
+    /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 \
+    /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
+    /usr/local/bin/python3 \
+    /usr/bin/python3
+  do
+    [[ -x "$c" ]] || continue
+    if [[ "$host_arch" == "arm64" && "$c" == "/usr/local/bin/python3" && -x /opt/homebrew/bin/python3 ]]; then
+      continue
+    fi
+    echo "$c"
+    seen="$seen|$c|"
+  done
+  if command -v python3 >/dev/null 2>&1; then
+    while IFS= read -r c; do
+      [[ -x "$c" ]] || continue
+      [[ "$seen" == *"|$c|"* ]] && continue
+      echo "$c"
+    done < <(command -v -a python3 2>/dev/null || true)
+  fi
+}
+
+_print_python_scan() {
+  local c
+  echo "  Python scan on this Mac:" >&2
+  while IFS= read -r c; do
+    [[ -n "$c" ]] || continue
+    if _python_new_enough "$c"; then
+      echo "    OK   $c — $(_arch_label "$c")" >&2
+    else
+      echo "    SKIP $c — $(_arch_label "$c") (need ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+)" >&2
+    fi
+  done < <(_list_all_candidates)
 }
 
 _pip_install_venv() {
@@ -115,23 +170,33 @@ if [[ -x "$VENV_PY" ]] && _python_ok "$VENV_PY"; then
   _pin
 fi
 
-# Repair broken .venv (or create new).
-BASE="$(_pick_base_python || true)"
-if [[ -n "$BASE" ]] && _bootstrap_venv "$BASE"; then
-  echo "  .venv ready: $VENV_PY ($(_arch_label "$VENV_PY"))" >&2
-  _pin
-fi
+# Repair broken .venv (or create new) — try every usable Python on the Mac.
+while IFS= read -r BASE; do
+  [[ -n "$BASE" ]] || continue
+  if ! _python_new_enough "$BASE"; then
+    continue
+  fi
+  if _bootstrap_venv "$BASE"; then
+    echo "  .venv ready: $VENV_PY ($(_arch_label "$VENV_PY"))" >&2
+    _pin
+  fi
+  echo "  Bootstrap failed with $BASE — $(
+    if [[ -x "$VENV_PY" ]]; then _python_err "$VENV_PY"; else echo "venv or pip install failed"; fi
+  )" >&2
+done < <(_list_all_candidates | while read -r c; do _python_new_enough "$c" && echo "$c"; done)
 
 echo "ERROR: Could not create a working .venv (need Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+)." >&2
 echo "" >&2
-echo "  Your Mac has /usr/bin/python3 3.8 — too old for this project." >&2
-echo "  Install a newer Python, then run fix again:" >&2
+_print_python_scan
 echo "" >&2
-echo "    brew install python@3.12" >&2
-echo "    ./scripts/fix_ingest_python_mac.sh" >&2
+echo "  No usable Python 3.9+ found (macOS /usr/bin/python3 is often 3.8)." >&2
+echo "  Install Python, then run fix again:" >&2
+echo "" >&2
+echo "    Finder → Home-Repository/scripts → Install Python.command" >&2
+echo "    Or Terminal: brew install python@3.12 && ./scripts/fix_ingest_python_mac.sh" >&2
 echo "" >&2
 echo "  Or download: https://www.python.org/downloads/macos/" >&2
 if [[ -x "$VENV_PY" ]]; then
-  echo "  .venv broken: $(_python_err "$VENV_PY")" >&2
+  echo "  Last .venv error: $(_python_err "$VENV_PY")" >&2
 fi
 exit 1

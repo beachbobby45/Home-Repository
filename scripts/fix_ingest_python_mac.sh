@@ -28,12 +28,24 @@ rm -rf "$ROOT/.venv"
 
 PY="$("$ROOT/scripts/resolve_python.sh")" || {
   echo ""
-  echo "Setup failed — need Python 3.9 or newer (native arm64 on Apple Silicon)."
+  echo "No working .venv yet — checking for Python 3.9+…"
+  if [[ -x "$ROOT/scripts/install_python_mac.sh" ]]; then
+    echo ""
+    echo "Attempting to install Python via Homebrew (if missing)…"
+    if INSTALL_PYTHON_AUTO_FIX=1 "$ROOT/scripts/install_python_mac.sh" --fix; then
+      exit 0
+    fi
+  fi
   echo ""
-  echo "Option A — double-click: scripts/Install Python.command"
-  echo "Option B — Terminal:"
-  echo "  brew install python@3.12"
-  echo "  ./scripts/fix_ingest_python_mac.sh"
+  echo "Setup failed — need Python 3.9 or newer."
+  echo ""
+  echo "── Do this ──"
+  echo "  Finder → Home-Repository/scripts → Install Python.command"
+  echo "  (installs Python + builds .venv + starts dashboard)"
+  echo ""
+  echo "  Or Terminal:"
+  echo "    brew install python@3.12"
+  echo "    ./scripts/fix_ingest_python_mac.sh"
   echo ""
   exit 1
 }
