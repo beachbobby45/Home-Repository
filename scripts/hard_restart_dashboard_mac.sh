@@ -132,11 +132,24 @@ echo ""
 
 # install_dashboard_service_mac.sh: writes LaunchAgent plist, bootstrap, kickstart
 if ! "$ROOT/scripts/install_dashboard_service_mac.sh"; then
-  echo ""
-  echo "ERROR: Could not start persistent dashboard service."
-  echo "Run: ./scripts/doctor_dashboard_mac.sh"
-  echo "Logs: ${LOG_DIR}/dashboard.err.log"
-  exit 1
+  if grep -qi "incompatible architecture\|mach-o.*wrong" "${LOG_DIR}/dashboard.err.log" 2>/dev/null; then
+    echo ""
+    echo "NumPy/Python architecture mismatch — rebuilding .venv and service (~1–2 min)…"
+    if "$ROOT/scripts/fix_ingest_python_mac.sh"; then
+      echo "Repair complete — continuing health check…"
+    else
+      echo ""
+      echo "ERROR: Python repair failed."
+      echo "Run: ./scripts/doctor_dashboard_mac.sh"
+      exit 1
+    fi
+  else
+    echo ""
+    echo "ERROR: Could not start persistent dashboard service."
+    echo "Run: ./scripts/doctor_dashboard_mac.sh"
+    echo "Logs: ${LOG_DIR}/dashboard.err.log"
+    exit 1
+  fi
 fi
 
 READY=0

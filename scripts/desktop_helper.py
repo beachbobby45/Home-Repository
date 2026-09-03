@@ -31,7 +31,7 @@ CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.3"
-DESKTOP_HELPER_BUILD = "20260903a"
+DESKTOP_HELPER_BUILD = "20260903b"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
@@ -138,7 +138,7 @@ def _extract_failure_lines(lines: list[str]) -> list[str]:
             hits.append(text)
         elif "incompatible architecture" in lower or "unable to import required dependency numpy" in lower:
             hits.append("ERROR: Python/NumPy architecture mismatch (see log above)")
-            hits.append("Fix: double-click scripts/Fix Ingest Python.command")
+            hits.append("Fix: Desktop app → Repair Dashboard Service (or Fix Ingest Python.command)")
             capture = True
     if hits:
         return hits[-12:]
@@ -746,6 +746,9 @@ class DesktopHelperApp:
             "could not start persistent dashboard service",
             "dashboard service installed but not responding",
             "service installed but dashboard not responding",
+            "incompatible architecture",
+            "numpy architecture mismatch",
+            "mach-o file, but is an incompatible architecture",
         )
         return any(n in combined for n in needles)
 

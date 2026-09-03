@@ -111,6 +111,12 @@ done
 
 echo ""
 echo "ERROR: Dashboard service installed but not responding (last HTTP $CODE)."
+if grep -qi "incompatible architecture\|mach-o.*wrong" "${LOG_DIR}/dashboard.err.log" 2>/dev/null; then
+  echo ""
+  echo "NumPy/Python architecture mismatch detected in service log."
+  echo "Fix: ./scripts/fix_ingest_python_mac.sh"
+  echo "Or:  Finder → Repair Dashboard.command"
+fi
 echo "--- ${LOG_DIR}/dashboard.err.log (last 25 lines) ---"
 tail -25 "${LOG_DIR}/dashboard.err.log" 2>/dev/null || echo "(no stderr log yet)"
 echo "--- ${LOG_DIR}/dashboard.out.log (last 10 lines) ---"

@@ -19,6 +19,7 @@ _python_ok() {
 import pandas
 import numpy
 from investment_agent.providers import yfinance_bars
+from investment_agent.dashboard.app import app
 " 2>/dev/null
 }
 
@@ -49,17 +50,24 @@ _pin() {
 }
 
 _pick_base_python() {
-  local c
+  local c host_arch
+  host_arch="$(uname -m)"
   # Prefer Homebrew / python.org /usr/local — NOT macOS stub /usr/bin/python3 (usually 3.8).
   for c in \
     /opt/homebrew/bin/python3 \
     /opt/homebrew/opt/python@3.12/bin/python3 \
+    /opt/homebrew/opt/python@3.13/bin/python3 \
     /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 \
     /Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
     /usr/local/bin/python3 \
     /usr/bin/python3
   do
     [[ -x "$c" ]] || continue
+    # On Apple Silicon, skip /usr/local x86 Python when native Homebrew exists.
+    if [[ "$host_arch" == "arm64" && "$c" == "/usr/local/bin/python3" && -x /opt/homebrew/bin/python3 ]]; then
+      echo "  Skip $c (prefer native arm64 Homebrew over /usr/local x86)" >&2
+      continue
+    fi
     if _python_new_enough "$c"; then
       echo "$c"
       return 0
@@ -71,7 +79,7 @@ _pick_base_python() {
 
 _pip_install_venv() {
   PYTHONNOUSERSITE=1 "$VENV_PY" -m pip install --upgrade pip >&2
-  PYTHONNOUSERSITE=1 "$VENV_PY" -m pip install -r "$ROOT/requirements.txt" "pandas>=2.0" "numpy>=1.26" >&2
+  PYTHONNOUSERSITE=1 "$VENV_PY" -m pip install --no-cache-dir -r "$ROOT/requirements.txt" "pandas>=2.0" "numpy>=1.26" >&2
 }
 
 _bootstrap_venv() {
