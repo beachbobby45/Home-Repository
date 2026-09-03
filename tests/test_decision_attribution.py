@@ -6,8 +6,9 @@ import sqlite3
 import sys
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,25 +107,27 @@ def test_log_and_list_decision_attribution():
 def test_build_market_activity_band_stats():
     conn = _conn()
     try:
+        session_day = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
         conn.execute(
             """
             INSERT INTO trade_proposals
               (proposal_uuid, strategy_version, model_version, created_at, valid_until,
                session_date_et, ticker, direction, opportunity_score, factor_scores_json,
                plan_json, risk_verdict, risk_checks_json, status, outcome_net_pnl)
-            VALUES (?, 'v1', 'test', ?, ?, '2026-08-03', 'AAPL', 'long', 80, '{}', '{}',
+            VALUES (?, 'v1', 'test', ?, ?, ?, 'AAPL', 'long', 80, '{}', '{}',
                     'approved', '[]', 'closed', 120.0)
             """,
             (
                 str(uuid.uuid4()),
                 datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                 datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                session_day,
             ),
         )
         log_decision_attribution(
             conn,
             event_type="proposal_approve",
-            session_date_et="2026-08-03",
+            session_date_et=session_day,
             ticker="AAPL",
             proposal_id=1,
             market_activity={"score": 90, "band": "exceptional", "allow_trade": True},
