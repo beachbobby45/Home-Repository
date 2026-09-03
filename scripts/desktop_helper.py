@@ -31,7 +31,7 @@ CONFIG_PATH = Path.home() / ".investment_agent" / "repo.path"
 LOG_PATH = Path.home() / ".investment_agent" / "desktop-app.log"
 LAST_RUN_LOG = Path.home() / ".investment_agent" / "last-run.log"
 EXPECTED_VERSION = "0.9.3"
-DESKTOP_HELPER_BUILD = "20260901a"
+DESKTOP_HELPER_BUILD = "20260903a"
 
 
 def _save_last_run_log(title: str, lines: list[str], exit_code: int) -> Path:
@@ -124,7 +124,11 @@ def _extract_failure_lines(lines: list[str]) -> list[str]:
         elif (
             "Dashboard failed to load" in text
             or "Could not set up Python" in text
+            or "Could not start dashboard service" in text
+            or "Could not start persistent dashboard service" in text
+            or "Dashboard service installed but not responding" in text
             or text == "--- import error ---"
+            or text.startswith("--- ") and "dashboard.err.log" in text
         ):
             hits.append(text)
             capture = True
@@ -322,6 +326,9 @@ class DesktopHelperApp:
             fill="x", pady=3
         )
         ttk.Button(primary, text="Open Dashboard in Browser", command=self.open_browser).pack(
+            fill="x", pady=3
+        )
+        ttk.Button(primary, text="Repair Dashboard Service", command=self.repair_dashboard).pack(
             fill="x", pady=3
         )
 
@@ -670,24 +677,21 @@ class DesktopHelperApp:
                                 "  (Or Terminal: ./scripts/fix_ingest_python_mac.sh)\n"
                                 "Then quit this app (Cmd+Q) and reopen."
                             )
-                        dashboard_load_fail = task_key == "update_dashboard" and any(
-                            "Dashboard failed to load" in ln or "Could not set up Python" in ln
-                            for ln in all_lines
-                        )
+                        dashboard_load_fail = self._dashboard_needs_repair(all_lines, task_key)
                         if dashboard_load_fail and messagebox.askyesno(
                             "Run dashboard repair?",
-                            "The dashboard Python environment (.venv) needs repair (~1–2 min).\n\n"
-                            "Run repair now? (You can also use Repair Dashboard.command in Finder.)",
+                            "The dashboard service could not start (~1–2 min repair).\n\n"
+                            "Rebuild .venv and reinstall the background service now?",
                         ):
-                            repair_sh = self.repo / "scripts" / "fix_ingest_python_mac.sh"
+                            repair_sh = self.repo / "scripts" / "repair_dashboard_service_mac.sh"
                             if repair_sh.is_file():
                                 self.root.after(
                                     100,
                                     lambda: self._run_script(
-                                        "Repair dashboard Python",
+                                        "Repair dashboard service",
                                         repair_sh,
-                                        task_key="",
-                                        open_browser_after=False,
+                                        task_key="repair_dashboard",
+                                        open_browser_after=True,
                                     ),
                                 )
                                 return
@@ -730,6 +734,35 @@ class DesktopHelperApp:
                 self.root.after(0, finish_ui)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _dashboard_needs_repair(self, all_lines: list[str], task_key: str) -> bool:
+        if task_key not in ("update_dashboard", ""):
+            return False
+        combined = "\n".join(all_lines).lower()
+        needles = (
+            "dashboard failed to load",
+            "could not set up python",
+            "could not start dashboard service",
+            "could not start persistent dashboard service",
+            "dashboard service installed but not responding",
+            "service installed but dashboard not responding",
+        )
+        return any(n in combined for n in needles)
+
+    def repair_dashboard(self) -> None:
+        script = self.repo / "scripts" / "repair_dashboard_service_mac.sh"
+        if not script.is_file():
+            messagebox.showerror(
+                "Repair script missing",
+                f"Not found:\n{script}\n\nRun git pull, or use Repair Dashboard.command in Finder.",
+            )
+            return
+        self._run_script(
+            "Repair dashboard service",
+            script,
+            task_key="repair_dashboard",
+            open_browser_after=True,
+        )
 
     def update_and_open(self) -> None:
         script = self.repo / "scripts" / "update_and_open_dashboard_mac.sh"

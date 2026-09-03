@@ -61,6 +61,12 @@ else
   bad "dashboard not responding (HTTP $CODE) — run: ./scripts/ensure_dashboard_mac.sh"
 fi
 
+if [[ "$fail" -ne 0 ]]; then
+  echo ""
+  echo "--- LaunchAgent stderr (last 15 lines) ---"
+  tail -15 "$HOME/Library/Logs/investment-agent/dashboard.err.log" 2>/dev/null || echo "(no log)"
+fi
+
 echo ""
 if [[ "$fail" -eq 0 ]]; then
   echo "Dashboard looks healthy. Open: $URL"
