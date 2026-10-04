@@ -136,15 +136,22 @@ echo ""
 
 # install_dashboard_service_mac.sh: writes LaunchAgent plist, bootstrap, kickstart
 if ! "$ROOT/scripts/install_dashboard_service_mac.sh"; then
-  if grep -qi "incompatible architecture\|mach-o.*wrong" "${LOG_DIR}/dashboard.err.log" 2>/dev/null; then
+  RECENT_ERR="$(tail -20 "${LOG_DIR}/dashboard.err.log" 2>/dev/null || true)"
+  if echo "$RECENT_ERR" | grep -qi "incompatible architecture\|mach-o.*wrong"; then
     echo ""
     echo "NumPy/Python architecture mismatch — rebuilding .venv and service (~1–2 min)…"
-    if "$ROOT/scripts/fix_ingest_python_mac.sh"; then
-      echo "Repair complete — continuing health check…"
-    else
+    if ! "$ROOT/scripts/fix_ingest_python_mac.sh"; then
       echo ""
       echo "ERROR: Python repair failed."
       echo "Run: ./scripts/doctor_dashboard_mac.sh"
+      exit 1
+    fi
+    echo "Repair complete — reinstalling dashboard service…"
+    if ! "$ROOT/scripts/install_dashboard_service_mac.sh"; then
+      echo ""
+      echo "ERROR: Service still not responding after Python repair."
+      echo "Run: ./scripts/doctor_dashboard_mac.sh"
+      echo "Logs: ${LOG_DIR}/dashboard.err.log"
       exit 1
     fi
   else
@@ -158,7 +165,8 @@ fi
 
 READY=0
 CODE="000"
-for i in $(seq 1 30); do
+HEALTH_WAIT_SEC="${DASHBOARD_HEALTH_WAIT_SEC:-60}"
+for i in $(seq 1 "$HEALTH_WAIT_SEC"); do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 "$URL/api/config" 2>/dev/null || echo "000")
   if [[ "$CODE" == "200" ]]; then
     READY=1
@@ -170,7 +178,7 @@ done
 echo ""
 
 if [[ "$READY" != "1" ]]; then
-  echo "ERROR: Dashboard not responding after 30s (last HTTP $CODE)."
+  echo "ERROR: Dashboard not responding after ${HEALTH_WAIT_SEC}s (last HTTP $CODE)."
   echo "--- LaunchAgent stderr ---"
   tail -30 "${LOG_DIR}/dashboard.err.log" 2>/dev/null || true
   echo ""

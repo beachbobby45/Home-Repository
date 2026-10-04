@@ -11,7 +11,12 @@ echo "Repo: $ROOT"
 echo ""
 
 "$ROOT/scripts/fix_ingest_python_mac.sh"
-"$ROOT/scripts/install_dashboard_service_mac.sh"
+if ! "$ROOT/scripts/install_dashboard_service_mac.sh"; then
+  echo ""
+  echo "Retrying dashboard service install (cold start can take up to 60s)…"
+  sleep 5
+  "$ROOT/scripts/install_dashboard_service_mac.sh"
+fi
 "$ROOT/scripts/ensure_dashboard_mac.sh"
 
 echo ""
