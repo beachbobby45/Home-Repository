@@ -17,8 +17,10 @@ from investment_agent.account import (
     apply_period_sweep,
     build_dashboard_summary,
     format_journal_notes,
+    get_day_gate_mode,
     get_tax_rate,
     get_trading_mode,
+    set_day_gate_mode,
     set_setting,
     set_trading_mode,
     summary_to_dict,
@@ -215,6 +217,10 @@ class TaxRateUpdate(BaseModel):
 
 
 class TradingModeUpdate(BaseModel):
+    mode: str
+
+
+class DayGateModeUpdate(BaseModel):
     mode: str
 
 
@@ -1134,6 +1140,41 @@ def api_set_trading_mode(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     conn.commit()
     return {"ok": True, "mode": mode}
+
+
+@app.get("/api/settings/day-gate-mode")
+def api_get_day_gate_mode(conn=Depends(_db)) -> dict:
+    from investment_agent.market_activity import PRODUCE_TRADE_MIN, TRADE_MIN
+
+    mode = get_day_gate_mode(conn)
+    return {
+        "mode": mode,
+        "trade_min": TRADE_MIN,
+        "produce_trade_min": PRODUCE_TRADE_MIN,
+        "bull_gate_required": mode != "produce",
+    }
+
+
+@app.put("/api/settings/day-gate-mode")
+def api_set_day_gate_mode(
+    body: DayGateModeUpdate,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict:
+    from investment_agent.market_activity import PRODUCE_TRADE_MIN, TRADE_MIN
+
+    try:
+        mode = set_day_gate_mode(conn, body.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    conn.commit()
+    return {
+        "ok": True,
+        "mode": mode,
+        "trade_min": TRADE_MIN,
+        "produce_trade_min": PRODUCE_TRADE_MIN,
+        "bull_gate_required": mode != "produce",
+    }
 
 
 @app.put("/api/settings/tax-rate")

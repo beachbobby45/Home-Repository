@@ -58,6 +58,9 @@ EXCEPTIONAL_MIN = 80
 AVERAGE_MIN = TRADE_MIN
 BELOW_AVERAGE_MIN = 40
 FLIP_EXIT_MIN = 55
+# Produce mode (paper calibration): unlocks the 55–59 score cluster observed on Tony's Mac
+# (Sep 2026 avg ~49–51; near-misses at 55–59). Bull gate is not required in produce.
+PRODUCE_TRADE_MIN = FLIP_EXIT_MIN
 
 MACRO_POSITIVE = re.compile(
     r"\b(rate cut|cuts rates|dovish|soft landing|beat estimates|gdp growth)\b",
@@ -140,6 +143,25 @@ def band_for_score(score: int) -> MarketActivityBand:
         if score >= band.min_score:
             return band
     return BANDS[-1]
+
+
+def authorize_trade(
+    *,
+    score: int,
+    band: MarketActivityBand,
+    bull_gate_ok: bool,
+    day_gate_mode: str,
+) -> bool:
+    """Effective day authorization.
+
+    preserve — band.allow_trade (score ≥60) AND bull gate (SPY 20d > 0)
+    produce  — score ≥ PRODUCE_TRADE_MIN (55); bull gate not required
+    """
+    from investment_agent.account import DAY_GATE_PRODUCE
+
+    if day_gate_mode == DAY_GATE_PRODUCE:
+        return int(score) >= PRODUCE_TRADE_MIN
+    return bool(band.allow_trade and bull_gate_ok)
 
 
 def score_market_direction(index_changes: dict[str, float]) -> float | None:
@@ -350,8 +372,11 @@ def evaluate_market_activity(
     persist: bool = False,
 ) -> dict:
     """Compute market activity score, band, and trade authorization for the session."""
+    from investment_agent.account import DAY_GATE_PRESERVE, DAY_GATE_PRODUCE, get_day_gate_mode
+
     dt = when or now_et()
     session_date = today_et_str(dt)
+    day_gate_mode = get_day_gate_mode(conn)
     index_quotes, snapshot_slot = _resolve_index_quotes(
         conn, session_date_et=session_date, when=dt
     )
@@ -369,7 +394,13 @@ def evaluate_market_activity(
     band = band_for_score(score)
     spy_20d = spy_20d_return_pct(conn)
     bull_gate_ok = spy_20d is not None and spy_20d > 0
-    allow_trade = band.allow_trade and bull_gate_ok
+    preserve_allow_trade = bool(band.allow_trade and bull_gate_ok)
+    allow_trade = authorize_trade(
+        score=score,
+        band=band,
+        bull_gate_ok=bull_gate_ok,
+        day_gate_mode=day_gate_mode,
+    )
 
     exit_alert = False
     flip_reason: str | None = None
@@ -384,6 +415,16 @@ def evaluate_market_activity(
                 f"Two consecutive reads below {FLIP_EXIT_MIN} — exit at market if holding"
             )
 
+    summary = _build_summary(
+        score,
+        band,
+        bull_gate_ok,
+        spy_20d,
+        index_changes,
+        day_gate_mode=day_gate_mode,
+        allow_trade=allow_trade,
+    )
+
     if persist:
         save_market_activity_evaluation(
             conn,
@@ -396,7 +437,7 @@ def evaluate_market_activity(
             bull_gate_ok=bull_gate_ok,
             exit_alert=exit_alert,
             components=factor_scores,
-            summary=_build_summary(score, band, bull_gate_ok, spy_20d, index_changes),
+            summary=summary,
         )
         if exit_alert and not flip_reason:
             flip_reason = "Market Activity flip — exit at market if holding"
@@ -412,6 +453,10 @@ def evaluate_market_activity(
         "band": band.key,
         "band_label": band.label,
         "allow_trade": allow_trade,
+        "preserve_allow_trade": preserve_allow_trade,
+        "day_gate_mode": day_gate_mode,
+        "produce_trade_min": PRODUCE_TRADE_MIN,
+        "trade_min": TRADE_MIN,
         "bull_gate_ok": bull_gate_ok,
         "spy_20d_return_pct": round(spy_20d, 3) if spy_20d is not None else None,
         "index_changes": {k: round(v, 3) for k, v in index_changes.items()},
@@ -419,10 +464,11 @@ def evaluate_market_activity(
         "weights_used": used_weights,
         "exit_alert": exit_alert,
         "flip_reason": flip_reason,
-        "summary": _build_summary(score, band, bull_gate_ok, spy_20d, index_changes),
+        "summary": summary,
         "authoritative": snapshot_slot == "plus_15m" or (
             snapshot_slot is None and dt.time().hour >= 9 and dt.minute >= 45
         ),
+        "produce_active": day_gate_mode == DAY_GATE_PRODUCE,
     }
 
 
@@ -432,13 +478,42 @@ def _build_summary(
     bull_gate_ok: bool,
     spy_20d: float | None,
     index_changes: dict[str, float],
+    *,
+    day_gate_mode: str = "preserve",
+    allow_trade: bool | None = None,
 ) -> str:
+    from investment_agent.account import DAY_GATE_PRODUCE
+
     parts = [f"Market Activity {score}/100 — {band.label}"]
     if index_changes:
         idx = ", ".join(f"{sym} {index_changes[sym]:+.2f}%" for sym in REGIME_SYMBOLS if sym in index_changes)
         if idx:
             parts.append(idx)
-    if not bull_gate_ok:
+    effective_allow = (
+        allow_trade
+        if allow_trade is not None
+        else authorize_trade(
+            score=score,
+            band=band,
+            bull_gate_ok=bull_gate_ok,
+            day_gate_mode=day_gate_mode,
+        )
+    )
+    if day_gate_mode == DAY_GATE_PRODUCE:
+        if effective_allow:
+            parts.append(
+                f"PRODUCE mode — entries allowed (MA ≥{PRODUCE_TRADE_MIN}; confirm #1)"
+            )
+            if not bull_gate_ok:
+                ret = f"{spy_20d:+.2f}%" if spy_20d is not None else "n/a"
+                parts.append(f"Bull gate soft (SPY 20d {ret})")
+            elif score < GO_SESSION_MIN:
+                parts.append("CAUTION — trade only if #1 confirms (≥70)")
+        else:
+            parts.append(
+                f"PRODUCE mode — NO TRADE (need MA ≥{PRODUCE_TRADE_MIN})"
+            )
+    elif not bull_gate_ok:
         ret = f"{spy_20d:+.2f}%" if spy_20d is not None else "n/a"
         parts.append(f"Bull gate off (SPY 20d {ret}) — NO TRADE")
     elif not band.allow_trade:
@@ -525,6 +600,11 @@ def market_activity_to_dict(result: dict) -> dict:
         "band": result["band"],
         "band_label": result["band_label"],
         "allow_trade": result["allow_trade"],
+        "preserve_allow_trade": result.get("preserve_allow_trade"),
+        "day_gate_mode": result.get("day_gate_mode", "preserve"),
+        "produce_trade_min": result.get("produce_trade_min", PRODUCE_TRADE_MIN),
+        "trade_min": result.get("trade_min", TRADE_MIN),
+        "produce_active": result.get("produce_active", False),
         "bull_gate_ok": result["bull_gate_ok"],
         "spy_20d_return_pct": result.get("spy_20d_return_pct"),
         "index_changes": result.get("index_changes") or {},

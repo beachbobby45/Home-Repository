@@ -14,10 +14,16 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from investment_agent.account import (
+    get_day_gate_mode,
+    set_day_gate_mode,
+)
 from investment_agent.db import init_db, insert_macro, insert_ohlcv_rows, insert_regime_snapshot
 from investment_agent.market_activity import (
     ABOVE_AVERAGE_MIN,
     FLIP_EXIT_MIN,
+    PRODUCE_TRADE_MIN,
+    authorize_trade,
     band_for_score,
     evaluate_market_activity,
     list_recent_evaluations,
@@ -113,6 +119,76 @@ def test_average_band_allows_trade():
         assert result["bull_gate_ok"] is True
     finally:
         conn.close()
+
+def test_authorize_trade_preserve_vs_produce():
+    band_below = band_for_score(55)
+    assert band_below.key == "below_average"
+    assert band_below.allow_trade is False
+    # Preserve: blocked even with bull gate
+    assert (
+        authorize_trade(
+            score=55, band=band_below, bull_gate_ok=True, day_gate_mode="preserve"
+        )
+        is False
+    )
+    # Produce: unlocked at ≥55 without bull gate
+    assert (
+        authorize_trade(
+            score=55, band=band_below, bull_gate_ok=False, day_gate_mode="produce"
+        )
+        is True
+    )
+    assert (
+        authorize_trade(
+            score=54, band=band_for_score(54), bull_gate_ok=True, day_gate_mode="produce"
+        )
+        is False
+    )
+    assert PRODUCE_TRADE_MIN == FLIP_EXIT_MIN == 55
+
+
+def test_produce_mode_allows_score_55_without_bull_gate():
+    conn = _conn()
+    try:
+        _seed_spy_bars(conn, uptrend=False)  # bull gate off
+        _seed_index_snapshots(conn, spy_change=0.2)
+        insert_macro(conn, "VIXCLS", "2026-08-03", 18.0, "2026-08-03T12:00:00+00:00")
+        set_day_gate_mode(conn, "produce")
+        when = datetime(2026, 8, 3, 10, 0, tzinfo=ET)
+        with patch(
+            "investment_agent.market_activity.composite_opportunity_score",
+            return_value=(55, {"market_direction": 20.0}),
+        ):
+            result = evaluate_market_activity(conn, when=when, persist=False)
+        assert result["day_gate_mode"] == "produce"
+        assert result["score"] == 55
+        assert result["bull_gate_ok"] is False
+        assert result["preserve_allow_trade"] is False
+        assert result["allow_trade"] is True
+        assert "PRODUCE" in (result["summary"] or "")
+    finally:
+        conn.close()
+
+
+def test_preserve_mode_still_blocks_score_55():
+    conn = _conn()
+    try:
+        _seed_spy_bars(conn, uptrend=True)
+        _seed_index_snapshots(conn, spy_change=0.2)
+        insert_macro(conn, "VIXCLS", "2026-08-03", 18.0, "2026-08-03T12:00:00+00:00")
+        assert get_day_gate_mode(conn) == "preserve"
+        when = datetime(2026, 8, 3, 10, 0, tzinfo=ET)
+        with patch(
+            "investment_agent.market_activity.composite_opportunity_score",
+            return_value=(55, {"market_direction": 20.0}),
+        ):
+            result = evaluate_market_activity(conn, when=when, persist=False)
+        assert result["score"] == 55
+        assert result["allow_trade"] is False
+        assert result["day_gate_mode"] == "preserve"
+    finally:
+        conn.close()
+
 
 def test_score_market_direction_positive():
     score = score_market_direction({"SPY": 0.5, "DIA": 0.3, "QQQ": 0.4})

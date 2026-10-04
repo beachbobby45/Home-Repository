@@ -14,7 +14,9 @@ from investment_agent.account import (
     apply_month_end_sweep,
     build_dashboard_summary,
     format_journal_notes,
+    get_day_gate_mode,
     get_trading_mode,
+    set_day_gate_mode,
     set_trading_mode,
     set_setting,
 )
@@ -97,6 +99,25 @@ def test_trading_mode_defaults_to_paper():
         assert get_trading_mode(conn) == "paper"
         summary = build_dashboard_summary(conn)
         assert summary.trading_mode == "paper"
+        assert summary.day_gate_mode == "preserve"
+    finally:
+        conn.close()
+        path.unlink(missing_ok=True)
+
+
+def test_day_gate_mode_defaults_preserve_and_switches():
+    conn, path = _conn()
+    try:
+        assert get_day_gate_mode(conn) == "preserve"
+        assert set_day_gate_mode(conn, "produce") == "produce"
+        assert get_day_gate_mode(conn) == "produce"
+        summary = build_dashboard_summary(conn)
+        assert summary.day_gate_mode == "produce"
+        try:
+            set_day_gate_mode(conn, "invalid")
+            assert False, "expected ValueError"
+        except ValueError:
+            pass
     finally:
         conn.close()
         path.unlink(missing_ok=True)
