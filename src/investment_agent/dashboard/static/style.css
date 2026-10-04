@@ -2531,6 +2531,228 @@ textarea {
   font-weight: 600;
 }
 
+/* Market Activity breakdown (Account tab) */
+.ma-breakdown-card {
+  margin-top: 0.75rem;
+}
+
+.ma-breakdown-chart-empty {
+  padding: 1rem 0;
+  color: var(--muted, #64748b);
+  font-size: 0.9rem;
+}
+
+.ma-chart-wrap {
+  position: relative;
+  height: 160px;
+  margin: 0.75rem 0 0.5rem;
+  padding: 0 0.25rem;
+}
+
+.ma-chart-threshold {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(234, 88, 12, 0.85);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.ma-chart-threshold::after {
+  content: "60 TRADE";
+  position: absolute;
+  right: 0;
+  top: -1.1rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #ea580c;
+}
+
+.ma-chart-cols {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 4px;
+  height: 100%;
+  overflow-x: auto;
+  padding-bottom: 1.6rem;
+}
+
+.ma-chart-col {
+  flex: 1 1 0;
+  min-width: 2.1rem;
+  max-width: 3rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+
+.ma-chart-col.selected .ma-chart-bar {
+  outline: 2px solid rgba(59, 130, 246, 0.75);
+  outline-offset: 1px;
+}
+
+.ma-chart-bar {
+  width: 100%;
+  min-height: 4px;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.2s ease;
+}
+
+.ma-bar-blocked {
+  background: rgba(100, 116, 139, 0.75);
+}
+
+.ma-bar-trade {
+  background: rgba(251, 191, 36, 0.85);
+}
+
+.ma-bar-high {
+  background: rgba(34, 197, 94, 0.85);
+}
+
+.ma-chart-score {
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-top: 0.2rem;
+  line-height: 1;
+}
+
+.ma-chart-date {
+  font-size: 0.65rem;
+  color: var(--muted, #64748b);
+  margin-top: 0.15rem;
+}
+
+.ma-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.ma-legend-swatch {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+}
+
+.ma-breakdown-detail {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.ma-breakdown-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.ma-breakdown-detail-head h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.ma-breakdown-gates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+}
+
+.ma-gate {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr auto;
+  gap: 0.35rem 0.5rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+}
+
+.ma-gate-pass {
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.ma-gate-fail {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.ma-gate-icon {
+  font-weight: 700;
+}
+
+.ma-gate-pass .ma-gate-icon {
+  color: #15803d;
+}
+
+.ma-gate-fail .ma-gate-icon {
+  color: #b91c1c;
+}
+
+.ma-gate-detail {
+  color: var(--muted, #64748b);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.ma-breakdown-indexes {
+  margin-bottom: 0.65rem;
+}
+
+.ma-component-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 9rem) 1fr 2.25rem;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  font-size: 0.82rem;
+}
+
+.ma-component-label {
+  color: var(--muted, #475569);
+}
+
+.ma-component-track {
+  height: 0.55rem;
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ma-component-fill {
+  height: 100%;
+  border-radius: 3px;
+  min-width: 2px;
+}
+
+.ma-component-val {
+  font-weight: 600;
+  text-align: right;
+}
+
+tr.ma-day-row {
+  cursor: pointer;
+}
+
+tr.ma-day-row:hover td {
+  background: rgba(59, 130, 246, 0.06);
+}
+
 @media (max-width: 640px) {
   main, .app-main {
     padding: 1rem;
