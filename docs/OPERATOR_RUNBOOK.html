@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Investment Agent — Operator Runbook</title>
+  <style>
+    @page { margin: 0.75in; size: letter; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 10.5pt;
+      line-height: 1.35;
+      color: #111;
+      max-width: 7.5in;
+      margin: 0 auto;
+      padding: 0.5in;
+    }
+    h1 { font-size: 18pt; margin: 0 0 0.25em; border-bottom: 2px solid #222; padding-bottom: 0.2em; }
+    h2 { font-size: 13pt; margin: 1.2em 0 0.4em; page-break-after: avoid; }
+    h3 { font-size: 11pt; margin: 0.8em 0 0.3em; page-break-after: avoid; }
+    p { margin: 0.4em 0; }
+    .meta { font-size: 9pt; color: #444; margin-bottom: 1em; }
+    .principle { background: #f5f5f5; border-left: 4px solid #333; padding: 0.5em 0.75em; margin: 0.75em 0; font-size: 10pt; }
+    table { width: 100%; border-collapse: collapse; margin: 0.5em 0 0.75em; font-size: 9.5pt; page-break-inside: avoid; }
+    th, td { border: 1px solid #999; padding: 0.35em 0.5em; text-align: left; vertical-align: top; }
+    th { background: #eee; font-weight: bold; }
+    ul, ol { margin: 0.3em 0 0.6em; padding-left: 1.4em; }
+    li { margin: 0.15em 0; }
+    .checklist li { list-style: none; margin-left: -1.4em; padding-left: 1.4em; }
+    .checklist li::before { content: "☐ "; font-family: sans-serif; }
+    hr { border: none; border-top: 1px solid #ccc; margin: 1.25em 0; }
+    .page-break { page-break-before: always; }
+    .small { font-size: 9pt; color: #333; }
+    a { color: #000; text-decoration: none; }
+    .cover-box { border: 2px solid #222; padding: 1em; margin: 1em 0; text-align: center; }
+    code { font-family: Consolas, monospace; font-size: 9pt; background: #f0f0f0; padding: 0.1em 0.3em; }
+  </style>
+</head>
+<body>
+
+<div class="cover-box">
+  <h1 style="border:none;">Investment Agent<br>Operator Runbook</h1>
+  <p><strong>Version:</strong> August 2026 · v0.9.3 strategy account</p>
+  <p>Phase Gates · API Addendum (3a/3b/3c) · E*TRADE Developer Prep · Quick Reference</p>
+  <p class="small">Print double-sided if desired. Dates are targets; criteria decide advancement.</p>
+</div>
+
+<div class="principle">
+  <strong>Core principle:</strong> Advance only when <strong>Go</strong> criteria are met. Broker = financial truth (balances, positions, fills). Dashboard journal = synced copy + your intent (GO/NO-GO, proposal ID, reasoning).
+</div>
+
+<!-- ========== PHASE GATE CHECKLIST ========== -->
+<h2>1. Phase Gate Checklist</h2>
+
+<h3>Phase 0 — September 2026 · Paper (Dashboard PAPER mode)</h3>
+<p><strong>Your job:</strong> Daily operator — log what you would buy/sell; journal everything.</p>
+<table>
+  <tr><th>Gate</th><th>Go</th><th>No-Go</th></tr>
+  <tr><td>Daily use</td><td>≥20 trading days with entries (buy, sell, or explicit NO TRADE)</td><td>Skipping days without logging NO TRADE</td></tr>
+  <tr><td>Workflow</td><td>EOD review → next-day prep → pre-purchase check before each would-be entry</td><td>Trades logged after the fact without limits/times</td></tr>
+  <tr><td>Journal quality</td><td>Symbol, side, limit/stop/target, timestamp, fees, GO/NO-GO reason</td><td>Missing stops, targets, or rationale</td></tr>
+  <tr><td>Picker / ranking</td><td>Top tickets align with judgment ≥70% of days</td><td>Repeated wrong names at top</td></tr>
+  <tr><td>Risk gates</td><td>Kill switch, daily loss, deploy size respected in paper log</td><td>Repeated overrides undocumented</td></tr>
+  <tr><td>Metrics vs Plan</td><td>Track hit rate, hold time, gross vs Plan tab</td><td>No comparison to Plan assumptions</td></tr>
+  <tr><td>Exit discipline</td><td>Every open paper position has stop + target documented</td><td>Open-ended holds</td></tr>
+</table>
+<p><strong>Exit to Phase 1:</strong> All Go rows met and you trust the dashboard workflow.</p>
+
+<h3>Phase 1 — Q4 2026 · Live Manual (Dedicated E*TRADE ~$15K)</h3>
+<p><strong>Your job:</strong> Same analysis; <strong>you</strong> execute in a separate funded account; journal in LIVE mode.</p>
+<table>
+  <tr><th>Gate</th><th>Go</th><th>No-Go</th></tr>
+  <tr><td>Account isolation</td><td>Dedicated account; only agent strategy trades</td><td>Mixed personal + agent trades</td></tr>
+  <tr><td>Capital</td><td>~$15K basis; deploy rules match Capital Builder</td><td>Oversized or idle cash drift</td></tr>
+  <tr><td>Execution</td><td>Limit entries; stop + profit target every live trade</td><td>Market-only entries without protection</td></tr>
+  <tr><td>Reconciliation</td><td>Weekly: broker statement ↔ journal</td><td>Unexplained cash/position gaps</td></tr>
+  <tr><td>Performance</td><td>≥8 weeks live; journal complete</td><td>&lt;4 weeks or incomplete journal</td></tr>
+  <tr><td>Risk</td><td>No kill-switch breaches without post-mortem</td><td>Undocumented limit breaches</td></tr>
+  <tr><td>Fees</td><td>Actual commissions logged (~$0 US stocks typical)</td><td>Modeled $14 RT without note</td></tr>
+  <tr><td>Process</td><td>EOD + pre-market routine followed</td><td>Reactive trading without checklist</td></tr>
+</table>
+<p><strong>Exit to Phase 3a:</strong> Live journal trustworthy; ready for broker API read-only sync.</p>
+
+<h3>Phase 3 — Q1 2027+ · API Automation (3a → 3b → 3c)</h3>
+
+<h3>3a — Read-only sync (broker → journal)</h3>
+<table>
+  <tr><th>Gate</th><th>Go</th><th>No-Go</th></tr>
+  <tr><td>Auth</td><td>Stable daily session (renew/re-auth documented)</td><td>Silent auth failures</td></tr>
+  <tr><td>Balances</td><td>API cash/net liq matches broker within $1</td><td>Persistent drift</td></tr>
+  <tr><td>Positions</td><td>API positions match broker 100%</td><td>Missing or stale holdings</td></tr>
+  <tr><td>Fills / transactions</td><td>Buys/sells auto-import with timestamps</td><td>Manual re-keying required</td></tr>
+  <tr><td>Mode</td><td>trading_mode=live; no API orders placed</td><td>Any accidental write</td></tr>
+</table>
+<p><strong>Exit to 3b:</strong> 2+ weeks clean daily sync.</p>
+
+<h3>3b — Write orders (human approves each proposal)</h3>
+<table>
+  <tr><th>Gate</th><th>Go</th><th>No-Go</th></tr>
+  <tr><td>Proposal flow</td><td>Approve → preview → place → confirm fill</td><td>Direct place without preview</td></tr>
+  <tr><td>Exit policy</td><td>Entry + stop + target documented and tested</td><td>Stop/target left to memory</td></tr>
+  <tr><td>Idempotency</td><td>Duplicate-submit protection tested</td><td>Double orders on retry</td></tr>
+  <tr><td>Cancel</td><td>Can cancel working orders via API + dashboard</td><td>Stuck orphan orders</td></tr>
+  <tr><td>Kill switch</td><td>Blocks new API orders instantly</td><td>Orders fire when switch on</td></tr>
+</table>
+<p><strong>Exit to 3c:</strong> ≥20 approved API trades with zero unreconciled errors.</p>
+
+<h3>3c — Supervised full automation</h3>
+<table>
+  <tr><th>Gate</th><th>Go</th><th>No-Go</th></tr>
+  <tr><td>Override</td><td>DO NOT TRADE halts new orders</td><td>Automation ignores override</td></tr>
+  <tr><td>Cancel all</td><td>Working stops/targets cancellable in one action</td><td>Orphan protective orders</td></tr>
+  <tr><td>Monitoring</td><td>Real-time order/position view in dashboard</td><td>Blind period after placement</td></tr>
+  <tr><td>Auth ops</td><td>Midnight / 2hr idle token handling automated (E*TRADE) or gateway stable (IBKR)</td><td>Morning failures with open risk</td></tr>
+  <tr><td>Rollback</td><td>Revert to 3b in &lt;5 min</td><td>No downgrade path</td></tr>
+</table>
+
+<h3>Universal Stop Everything (all phases)</h3>
+<ul class="checklist">
+  <li>Kill switch ON</li>
+  <li>Cancel all working broker orders (Phase 3b/3c)</li>
+  <li>Log incident + last known positions/cash</li>
+  <li>Do not resume until root cause documented</li>
+</ul>
+
+<div class="page-break"></div>
+
+<!-- ========== API OPERATOR ADDENDUM ========== -->
+<h2>2. API Operator Addendum (3a · 3b · 3c)</h2>
+<p><strong>Scope:</strong> One dedicated strategy account. Broker = source of truth. Journal = intent + reconciliation.</p>
+
+<h3>A. Authentication checklist</h3>
+
+<h3>E*TRADE (OAuth 1.0a)</h3>
+<table>
+  <tr><th>Step</th><th>Action</th><th>Pass</th></tr>
+  <tr><td>A1</td><td>Register app; sandbox tested</td><td>Sandbox balance/positions pull OK</td></tr>
+  <tr><td>A2</td><td>Production keys stored securely</td><td>Not in git; secrets manager only</td></tr>
+  <tr><td>A3</td><td>User authorizes app (browser)</td><td>Access token obtained</td></tr>
+  <tr><td>A4</td><td>Same-day session</td><td>Renew if &gt;2h idle (Renew Access Token API)</td></tr>
+  <tr><td>A5</td><td>Before midnight ET</td><td>Full re-auth required daily at midnight ET</td></tr>
+  <tr><td>A6</td><td>End of session / incident</td><td>Revoke access token</td></tr>
+  <tr><td>A7</td><td>Pre-flight each run</td><td>List Accounts → 200 OK</td></tr>
+</table>
+<p class="small"><strong>Daily (E*TRADE):</strong> Morning authorize if expired. Sync every 90 min or before any 3b place. EOD: optional revoke.</p>
+
+<h3>IBKR (Client Portal Gateway) — if chosen later</h3>
+<table>
+  <tr><th>Step</th><th>Action</th><th>Pass</th></tr>
+  <tr><td>B1</td><td>Gateway installed &amp; running</td><td>localhost:5000 reachable</td></tr>
+  <tr><td>B2</td><td>Login (live or DU paper)</td><td>Client login succeeds</td></tr>
+  <tr><td>B3</td><td>Portfolio session</td><td>/portfolio/accounts returns account</td></tr>
+  <tr><td>B4</td><td>Brokerage session (3b+)</td><td>/iserver/auth/status authenticated</td></tr>
+  <tr><td>B5</td><td>Order reply messages</td><td>Fat-finger prompts handled</td></tr>
+  <tr><td>B6</td><td>~1am local maintenance</td><td>No orders during outage window</td></tr>
+</table>
+
+<h3>B. Sync fields (3a — broker → journal)</h3>
+<p>Run <strong>EOD</strong> and <strong>pre-market</strong>; intraday after any manual broker action.</p>
+<table>
+  <tr><th>Field</th><th>Use</th></tr>
+  <tr><td>Account ID</td><td>Lock to single strategy account</td></tr>
+  <tr><td>Cash available / net account value</td><td>Deploy sizing, dashboard header</td></tr>
+  <tr><td>Unsettled cash</td><td>Block deploy if insufficient settled funds</td></tr>
+  <tr><td>Open positions</td><td>Symbol, qty, avg cost, market value</td></tr>
+  <tr><td>Open orders</td><td>Entry / stop / target working?</td></tr>
+  <tr><td>Transactions / trades</td><td>Auto-log buys/sells; epoch → local time</td></tr>
+  <tr><td>Fill price, qty, commission</td><td>P&amp;L; replace modeled fees with actual</td></tr>
+  <tr><td>Order ID + status</td><td>Link journal ↔ broker</td></tr>
+</table>
+<p><strong>Reconciliation:</strong> Positions ≠ journal → MISMATCH flag, resolve same day. Never delete broker data.</p>
+
+<h3>C. Order lifecycle</h3>
+<p><strong>C1 Proposal:</strong> Research → Risk gates → Proposal → APPROVE | REJECT | DO NOT TRADE</p>
+<p><strong>C2 Entry (3b/3c):</strong> E*TRADE: Preview → Place → poll fill → place STOP + LIMIT separately (no API bracket create). IBKR: bracket array in one POST.</p>
+<p><strong>C3 While open:</strong> Poll orders/positions. Partial fill → resize exits. Kill switch → no new entries; 3c cancels all working orders.</p>
+<p><strong>C4 Exit:</strong> Stop or target fills → cancel sibling. Manual sell → journal MANUAL OVERRIDE.</p>
+<p><strong>C5 Emergency:</strong> DO NOT TRADE → Kill ON → Cancel all → verify → reconcile before resume.</p>
+<p><strong>C6 Post-trade:</strong> Transaction in API → journal SYNCED. Update cash from balance API (read only).</p>
+
+<h3>D. Minimum log (every API touch)</h3>
+<p>Timestamp (UTC + ET) · Phase · Action · Proposal/journal ID · Broker order ID(s) · Result · Operator note if manual</p>
+
+<div class="page-break"></div>
+
+<!-- ========== ETRADE DEVELOPER PREP ========== -->
+<h2>3. E*TRADE Developer Prep (Steps A–D)</h2>
+
+<h3>Official links — bookmark before 3a</h3>
+<table>
+  <tr><th>Resource</th><th>URL</th></tr>
+  <tr><td>Getting Started</td><td>developer.etrade.com/getting-started</td></tr>
+  <tr><td>Developer Guides (OAuth + Sandbox)</td><td>developer.etrade.com/getting-started/developer-guides</td></tr>
+  <tr><td>Sample apps (Python/Java/Node)</td><td>developer.etrade.com/home</td></tr>
+  <tr><td>Sandbox key generator (logged in)</td><td>us.etrade.com/etx/ris/apikey</td></tr>
+  <tr><td>Sandbox API base</td><td>https://apisb.etrade.com/v1/...</td></tr>
+  <tr><td>Production API base</td><td>https://api.etrade.com/v1/...</td></tr>
+</table>
+
+<p><strong>Key types:</strong> Request <strong>Individual</strong> key (your account only). Vendor key = multi-user + Legal demo — not needed.</p>
+<p><strong>Sandbox:</strong> No real trades. Canned sample data. Tests OAuth + parsing only.</p>
+
+<h3>Step A — Sandbox (≈15 min · do anytime, even now)</h3>
+<ul class="checklist">
+  <li>Log in to E*TRADE account (funding not required for sandbox)</li>
+  <li>Open us.etrade.com/etx/ris/apikey → generate Sandbox consumer key + secret</li>
+  <li>Store key/secret in password manager (not email, not repo)</li>
+  <li>Download sample app from developer.etrade.com/home (Python recommended)</li>
+  <li>Run OAuth against sandbox → confirm access token</li>
+  <li>Call sandbox List Accounts → confirm JSON parses</li>
+</ul>
+
+<h3>Step B — Live / production key (~4–8 weeks before Phase 3a)</h3>
+<ul class="checklist">
+  <li>Complete API User Intent Survey (personal automation, own account)</li>
+  <li>Sign API Developer Agreement on Getting Started page</li>
+  <li>Receive Individual Live consumer key + secret (immediate on page)</li>
+  <li>Sign Market Data Agreement (required for quote API)</li>
+  <li>Calendar: annual Market Data Attestation required thereafter</li>
+</ul>
+
+<h3>Step C — Before first production sync (3a)</h3>
+<ul class="checklist">
+  <li>OAuth: manual verification code OR request callback URL via secure message (Technical Issues → E*TRADE API)</li>
+  <li>Document token rules: renew if &gt;2h idle; full re-login after midnight ET</li>
+  <li>Point sync at dedicated strategy account only</li>
+  <li>First production calls read-only: List Accounts → Balance → Positions → Transactions</li>
+</ul>
+
+<h3>Step D — Build-side prep (when agent implements 3a)</h3>
+<ul class="checklist">
+  <li>Secure storage: consumer key, consumer secret, token secret</li>
+  <li>OAuth HMAC-SHA1 signing (test vectors in Developer Guides)</li>
+  <li>Config: sandbox vs production base URL</li>
+  <li>Sync job uses fields from API Addendum Section B</li>
+</ul>
+
+<h3>Suggested timeline</h3>
+<table>
+  <tr><th>When</th><th>Action</th></tr>
+  <tr><td>Now (Aug–Sep 2026)</td><td>Sandbox key + optional sample OAuth test</td></tr>
+  <tr><td>Sep 2026</td><td>Dashboard PAPER daily — no broker API</td></tr>
+  <tr><td>Oct 2026</td><td>Fund dedicated ~$15K; manual live; cash account recommended</td></tr>
+  <tr><td>~Jan 2027 (before 3a)</td><td>Live Individual survey + agreement; read-only sync</td></tr>
+  <tr><td>Before 3b</td><td>Sandbox + cautious live Preview/Place tests</td></tr>
+</table>
+
+<div class="page-break"></div>
+
+<!-- ========== QUICK REFERENCE ========== -->
+<h2>4. Quick Reference</h2>
+
+<h3>Daily paper routine (September)</h3>
+<ol>
+  <li><strong>EOD:</strong> Review picks; log NO TRADE or would-have entries (limits, stops, targets).</li>
+  <li><strong>Pre-market:</strong> Refresh watchlist; note gaps vs Plan.</li>
+  <li><strong>Pre-purchase:</strong> Deploy size, risk gate, GO/NO-GO before any would-be buy.</li>
+  <li><strong>Weekly:</strong> Compare paper results to Plan tab (hit rate, hold time, gross).</li>
+</ol>
+
+<h3>Manual trade pattern (Q4) — bracket equivalent</h3>
+<ol>
+  <li>Limit buy at planned entry.</li>
+  <li><strong>On fill:</strong> place GTC stop + GTC limit target for filled quantity.</li>
+  <li>Partial fill → stop/target for filled shares only.</li>
+  <li>One exit fills → cancel the other (OCO).</li>
+</ol>
+<p>E*TRADE website supports brackets manually. API v0 requires separate stop + limit orders after fill.</p>
+
+<h3>PDT vs settlement (account type)</h3>
+<table>
+  <tr><th>Topic</th><th>Cash account</th><th>Margin account</th></tr>
+  <tr><td>PDT rule</td><td>Does not apply</td><td>Applies if day trading same symbol same day</td></tr>
+  <tr><td>Same-day reuse of sale cash</td><td>Often blocked (T+1 settlement)</td><td>Buying power may allow; PDT if round-tripping</td></tr>
+  <tr><td>$25K relevance</td><td>Not for PDT</td><td>Needed to day trade freely if flagged PDT</td></tr>
+  <tr><td>Your swing strategy</td><td><strong>Recommended for Q4</strong></td><td>Only if you need margin features</td></tr>
+</table>
+<p><strong>+$10K injection (~month 6):</strong> Adds deploy capital; does not require day trading. PDT optimization is unnecessary for multi-day holds.</p>
+
+<h3>Account type: Cash ↔ Margin on E*TRADE</h3>
+<table>
+  <tr><th>Direction</th><th>Possible?</th><th>How</th></tr>
+  <tr><td>Cash → Margin</td><td><strong>Yes</strong></td><td>Submit Margin Account Upgrade (in account settings or margin application PDF). Approval required; min ~$2K equity.</td></tr>
+  <tr><td>Margin → Cash</td><td><strong>Sometimes</strong> — not a one-click toggle</td><td>Contact E*TRADE; typically require zero margin debit, no short positions, settled balances. They remove margin feature on request.</td></tr>
+</table>
+<p><strong>Recommendation:</strong> Open dedicated strategy account as <strong>cash</strong> for Q4. Upgrade to margin later only if you deliberately need it (e.g. PDT headroom with $25K+). Reverting to cash is possible but slower — plan account type up front.</p>
+
+<h3>September dashboard update (Mac)</h3>
+<pre style="font-size:9pt;background:#f5f5f5;padding:0.5em;border:1px solid #ccc;">cd ~/Home-Repository
+git pull origin main
+./scripts/hard_restart_dashboard_mac.sh
+# Cmd+Shift+R in browser — expect v0.9.3</pre>
+
+<hr>
+<p class="small" style="text-align:center;">End of Operator Runbook · Investment Agent · Generated August 2026</p>
+
+</body>
+</html>
