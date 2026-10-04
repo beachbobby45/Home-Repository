@@ -31,6 +31,7 @@
   </header>
 
   <div id="trading-mode-banner" class="banner paper app-banner-compact">Loading trading mode…</div>
+  <div id="day-gate-banner" class="banner caution-day app-banner-compact" hidden></div>
   <div id="exit-alert-banner" class="banner exit-alert app-banner-compact" hidden></div>
   <div id="no-trade-banner" class="banner no-trade app-banner-compact" hidden></div>
   <div id="caution-banner" class="banner caution-day app-banner-compact" hidden></div>
@@ -547,6 +548,19 @@
             <button class="btn secondary btn-sm" type="button" id="save-trading-mode">Save</button>
             <span class="brief" id="trading-mode-status"></span>
           </div>
+          <div class="journal-mode-row">
+            <label for="day-gate-mode">Day gate</label>
+            <select id="day-gate-mode" title="Preserve = MA≥60 + bull gate. Produce = MA≥55, bull gate soft (paper calibration).">
+              <option value="preserve">PRESERVE (strict)</option>
+              <option value="produce">PRODUCE (MA≥55)</option>
+            </select>
+            <button class="btn secondary btn-sm" type="button" id="save-day-gate-mode">Save</button>
+            <span class="brief" id="day-gate-mode-status"></span>
+          </div>
+          <p class="brief" id="day-gate-mode-help">
+            Preserve: trade only when Market Activity ≥60 and SPY 20d &gt; 0.
+            Produce: paper calibration — entries allowed when MA ≥55; confirmation on #1 still required; bull gate not required.
+          </p>
           <div class="journal-day-log-actions">
             <span class="brief journal-day-log-label">Daily attendance (September paper):</span>
             <button class="btn secondary btn-sm" type="button" id="log-no-trade-day">Log NO TRADE day</button>
@@ -1393,13 +1407,26 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         return;
       }
       const score = ma.score ?? 0;
+      const produce = ma.day_gate_mode === "produce" || ma.produce_active;
+      const produceMin = ma.produce_trade_min ?? 55;
+      const tradeMin = ma.trade_min ?? 60;
       const cls = !ma.allow_trade ? "no-trade" : score >= 70 ? "trade-ok" : "trade-caution";
       const band = ma.band_label || ma.band || "—";
-      const gateNote = ma.allow_trade
-        ? (score >= 70 ? " · GO day (≥70)" : " · CAUTION day (60–69, confirm ≥70)")
-        : " · NO TRADE (<60 or bull gate off)";
+      let gateNote;
+      if (!ma.allow_trade) {
+        gateNote = produce
+          ? ` · NO TRADE (need ≥${produceMin} in PRODUCE)`
+          : ` · NO TRADE (<${tradeMin} or bull gate off)`;
+      } else if (produce && score < tradeMin) {
+        gateNote = ` · PRODUCE unlock (≥${produceMin})`;
+      } else {
+        gateNote = score >= 70 ? " · GO day (≥70)" : ` · CAUTION day (${tradeMin}–69, confirm ≥70)`;
+      }
+      const modeChip = produce
+        ? `<span class="ma-bull">Day gate: PRODUCE</span>`
+        : `<span class="ma-bull">Day gate: PRESERVE</span>`;
       const bull = ma.bull_gate_ok === false
-        ? `<span class="ma-bull off">Bull gate off${ma.spy_20d_return_pct != null ? ` (SPY 20d ${Number(ma.spy_20d_return_pct).toFixed(2)}%)` : ""}</span>`
+        ? `<span class="ma-bull off">Bull gate ${produce ? "soft" : "off"}${ma.spy_20d_return_pct != null ? ` (SPY 20d ${Number(ma.spy_20d_return_pct).toFixed(2)}%)` : ""}</span>`
         : "";
       const exit = ma.exit_alert
         ? `<span class="ma-exit">Exit alert — sell at market if holding</span>`
@@ -1408,7 +1435,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         <div class="market-activity-head">
           <span class="market-activity-title">Market Activity</span>
           <span class="market-activity-score ${cls}">${score}/100 · ${band}${gateNote}</span>
-          ${bull}${exit}
+          ${modeChip}${bull}${exit}
         </div>
         <div class="brief ma-summary">${ma.summary || ""}</div>`;
     }
@@ -1664,11 +1691,33 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
     }
 
+    function updateDayGateBanner(mode, tradingMode) {
+      const banner = document.getElementById("day-gate-banner");
+      if (!banner) return;
+      if (mode === "produce") {
+        banner.hidden = false;
+        banner.className = "banner caution-day app-banner-compact";
+        const liveNote =
+          tradingMode === "live"
+            ? " LIVE journal is on — keep human approval on every fill."
+            : " Prefer PAPER journal while calibrating.";
+        banner.textContent =
+          "PRODUCE day gate — entries allowed when Market Activity ≥55 (bull gate soft). #1 confirmation still required."
+          + liveNote;
+      } else {
+        banner.hidden = true;
+        banner.textContent = "";
+      }
+    }
+
     async function loadSummary() {
       try {
         const s = await api("/api/summary");
         updateTradingModeBanner(s.trading_mode || "paper");
+        updateDayGateBanner(s.day_gate_mode || "preserve", s.trading_mode || "paper");
         document.getElementById("trading-mode").value = s.trading_mode || "paper";
+        const dayGateSelect = document.getElementById("day-gate-mode");
+        if (dayGateSelect) dayGateSelect.value = s.day_gate_mode || "preserve";
         document.getElementById("goal-pct").textContent = fmtPct(s.goal_pct);
         document.getElementById("goal-bar").style.width = Math.min(100, s.goal_pct) + "%";
         document.getElementById("goal-label").textContent =
@@ -3413,6 +3462,39 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         await refreshAll();
       } catch (e) {
         status.textContent = "";
+        toast(e.message);
+      }
+    });
+    on("save-day-gate-mode", "click", async () => {
+      const select = document.getElementById("day-gate-mode");
+      const mode = select?.value || "preserve";
+      const status = document.getElementById("day-gate-mode-status");
+      if (mode === "produce") {
+        const ok = window.confirm(
+          "Enable PRODUCE day gate?\n\n"
+          + "• Market Activity ≥55 unlocks the day (was ≥60)\n"
+          + "• Bull gate (SPY 20d > 0) is NOT required\n"
+          + "• #1 confirmation is still required before buying\n"
+          + "• Intended for PAPER calibration first\n\nContinue?"
+        );
+        if (!ok) {
+          await loadSummary();
+          return;
+        }
+      }
+      try {
+        const r = await api("/api/settings/day-gate-mode", {
+          method: "PUT",
+          body: JSON.stringify({ mode }),
+        });
+        status.textContent =
+          r.mode === "produce"
+            ? `PRODUCE saved (MA ≥${r.produce_trade_min}).`
+            : `PRESERVE saved (MA ≥${r.trade_min} + bull gate).`;
+        toast(r.mode === "produce" ? "PRODUCE day gate enabled" : "PRESERVE day gate enabled");
+        await refreshAll();
+      } catch (e) {
+        if (status) status.textContent = "";
         toast(e.message);
       }
     });

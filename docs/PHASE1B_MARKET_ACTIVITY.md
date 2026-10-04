@@ -42,7 +42,9 @@ Human                          → execute E*TRADE + journal
 | 40–59 | Below average | **NO TRADE** |
 | <40 | Negative | **NO TRADE**; exit if holding |
 
-**Bull gate:** SPY 20-day return > 0 required for any TRADE band.
+**Bull gate:** SPY 20-day return > 0 required for any TRADE band **in Preserve mode** (default).
+
+**Produce mode (paper calibration):** setting `day_gate_mode=produce` allows entries when score **≥55**; bull gate is **not** required. Confirmation on #1 is still required by the trading-day panel. Switch on Account tab → Day gate.
 
 **Intraday flip:** Two consecutive reads **below 55** → NO TRADE + exit alert if holding.
 

@@ -50,6 +50,12 @@ TRADING_MODE_LIVE = "live"
 VALID_TRADING_MODES = frozenset({TRADING_MODE_PAPER, TRADING_MODE_LIVE})
 SWEEP_SCHEDULE_KEY = "sweep_schedule"
 
+# Day authorization policy (separate from paper/live journal tagging).
+DAY_GATE_MODE_KEY = "day_gate_mode"
+DAY_GATE_PRESERVE = "preserve"  # MA ≥60 + bull gate (strict capital protection)
+DAY_GATE_PRODUCE = "produce"  # MA ≥55, bull gate not required (paper calibration)
+VALID_DAY_GATE_MODES = frozenset({DAY_GATE_PRESERVE, DAY_GATE_PRODUCE})
+
 
 @dataclass(frozen=True)
 class DashboardSummary:
@@ -79,6 +85,7 @@ class DashboardSummary:
     growth_plan: list[dict]
     strategy_rules: dict
     trading_mode: str
+    day_gate_mode: str
 
 
 def _month_key(dt: datetime | None = None) -> str:
@@ -148,6 +155,21 @@ def set_trading_mode(conn: sqlite3.Connection, mode: str) -> str:
     if normalized not in VALID_TRADING_MODES:
         raise ValueError(f"trading_mode must be one of: {', '.join(sorted(VALID_TRADING_MODES))}")
     set_setting(conn, TRADING_MODE_KEY, normalized)
+    return normalized
+
+
+def get_day_gate_mode(conn: sqlite3.Connection) -> str:
+    raw = get_setting(conn, DAY_GATE_MODE_KEY, DAY_GATE_PRESERVE).lower().strip()
+    return raw if raw in VALID_DAY_GATE_MODES else DAY_GATE_PRESERVE
+
+
+def set_day_gate_mode(conn: sqlite3.Connection, mode: str) -> str:
+    normalized = mode.lower().strip()
+    if normalized not in VALID_DAY_GATE_MODES:
+        raise ValueError(
+            f"day_gate_mode must be one of: {', '.join(sorted(VALID_DAY_GATE_MODES))}"
+        )
+    set_setting(conn, DAY_GATE_MODE_KEY, normalized)
     return normalized
 
 
@@ -389,6 +411,7 @@ def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
             "milestone_at_balance": DAILY_TARGET_MILESTONE_AT,
         },
         trading_mode=get_trading_mode(conn),
+        day_gate_mode=get_day_gate_mode(conn),
     )
 
 
@@ -421,4 +444,5 @@ def summary_to_dict(summary: DashboardSummary) -> dict:
         "growth_plan": summary.growth_plan,
         "strategy": summary.strategy_rules,
         "trading_mode": summary.trading_mode,
+        "day_gate_mode": summary.day_gate_mode,
     }
