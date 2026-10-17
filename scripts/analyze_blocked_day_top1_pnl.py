@@ -340,7 +340,17 @@ def analyze_day(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Blocked-day #1 P&L (5m proven fills)")
     parser.add_argument("--days", type=int, default=30)
-    parser.add_argument("--deploy", type=float, default=DEPLOY_DEFAULT)
+    parser.add_argument("--deploy", type=float, default=DEPLOY_DEFAULT,
+                        help="Starting capital / fixed daily deploy unless --compound")
+    parser.add_argument(
+        "--compound",
+        action="store_true",
+        help=(
+            "Each day deploy = prior ending capital (start + settled P&L). "
+            "Resizes shares and Growth Plan sell target; re-walks 5m bars. "
+            "Do not scale fixed-$10k nets — target price changes."
+        ),
+    )
     parser.add_argument("--db", type=Path, default=None)
     parser.add_argument("--json-out", type=Path, default=None)
     parser.add_argument(
@@ -365,27 +375,40 @@ def main() -> int:
             return 3
 
         bars_cache: dict[str, dict[str, list[dict]]] = {}
-        rows = [
-            analyze_day(
-                conn,
-                d,
-                deploy=args.deploy,
-                bars_by_ticker=bars_cache,
-                lookback_days=args.lookback_days,
-            )
-            for d in trading_days
-        ]
+        starting = float(args.deploy)
+        capital = starting
+        rows: list[dict] = []
+        curve: list[dict] = []
 
-        # Capital: start with deploy; only one trade/day; P&L settles overnight into cash.
-        # Next day still sizes the plan at fixed $10k deploy (cash above that stays idle).
-        capital = float(args.deploy)
-        curve = []
-        for r in rows:
+        # Sequential: compound must resize plan each day from settled capital.
+        for d in trading_days:
+            day_deploy = capital if args.compound else starting
+            if day_deploy < 50:
+                r = {
+                    "session_date_et": d,
+                    "top1_source": "skipped",
+                    "ticker": None,
+                    "scenario": "capital_too_low",
+                    "counts_toward_pnl": True,
+                    "net_pnl": 0.0,
+                    "deploy": day_deploy,
+                    "limitation": f"Capital ${day_deploy:.2f} too low to trade",
+                }
+            else:
+                r = analyze_day(
+                    conn,
+                    d,
+                    deploy=day_deploy,
+                    bars_by_ticker=bars_cache,
+                    lookback_days=args.lookback_days,
+                )
+            rows.append(r)
             if r.get("counts_toward_pnl") and r.get("net_pnl") is not None:
                 capital = round(capital + float(r["net_pnl"]), 2)
             curve.append(
                 {
                     "date": r["session_date_et"],
+                    "deploy": r.get("deploy"),
                     "capital": capital,
                     "net": r.get("net_pnl"),
                     "scenario": r.get("scenario"),
@@ -398,8 +421,19 @@ def main() -> int:
         op_n = conn.execute("SELECT COUNT(*) AS n FROM operator_day_log").fetchone()["n"]
         ohlcv_days = conn.execute("SELECT COUNT(DISTINCT date) AS n FROM ohlcv_daily").fetchone()["n"]
 
+        growth_pct = ((capital / starting) - 1.0) * 100.0 if starting else 0.0
+
         print("=== RULES ===")
-        print(f"Deploy per day: ${args.deploy:,.2f} (one stock; sale settles overnight)")
+        if args.compound:
+            print(
+                f"Deploy: COMPOUND — start ${starting:,.2f}, each day deploy = "
+                f"prior ending capital (one stock; sale settles overnight)"
+            )
+        else:
+            print(
+                f"Deploy per day: FIXED ${starting:,.2f} "
+                f"(one stock; sale settles overnight; surplus cash idle)"
+            )
         print("Fill proof: 5-minute bars only (option B)")
         print(f"Limit deadline: {LIMIT_FILL_DEADLINE.strftime('%H:%M')} ET")
         print("Same 5m bar stop+target → count stop (conservative)")
@@ -412,7 +446,7 @@ def main() -> int:
         print()
 
         print(
-            f"{'DATE':<12} {'TCKR':<6} {'SRC':<22} {'MA':>4} {'GO':>3} "
+            f"{'DATE':<12} {'TCKR':<6} {'DEPLOY':>10} {'MA':>4} {'GO':>3} "
             f"{'BUY':>8} {'SELL':>8} {'SCENARIO':<28} {'NET':>9}"
         )
         for r in rows:
@@ -423,9 +457,9 @@ def main() -> int:
                 net_s = "EXCL"
             print(
                 f"{r['session_date_et']:<12} {(r.get('ticker') or '—'):<6} "
-                f"{r['top1_source']:<22} "
-                f"{(r['ma_score'] if r['ma_score'] is not None else '—'):>4} "
-                f"{('Y' if r['allow_trade'] else 'N') if r['allow_trade'] is not None else '—':>3} "
+                f"{(r.get('deploy') or 0):>10.2f} "
+                f"{(r['ma_score'] if r.get('ma_score') is not None else '—'):>4} "
+                f"{('Y' if r['allow_trade'] else 'N') if r.get('allow_trade') is not None else '—':>3} "
                 f"{(r.get('limit_buy') or 0):>8.2f} {(r.get('limit_sell') or 0):>8.2f} "
                 f"{(r.get('scenario') or 'NO_DATA'):<28} {net_s:>9}"
             )
@@ -439,24 +473,30 @@ def main() -> int:
 
         print()
         print("=== SUMMARY (5m-proven only) ===")
+        print(f"Mode: {'COMPOUND deploy' if args.compound else 'FIXED $deploy'}")
         print(f"Days counted in P&L:     {len(counted)}")
         print(f"  Target exits:          {len(targets)}")
         print(f"  Stop exits:            {len(stops)}")
         print(f"  EOD close exits:       {len(eods)}")
         print(f"  No fill by 11:30:      {len(no_fill)}")
         print(f"Days excluded (no data): {len(excluded)}")
-        print(f"Starting capital: ${args.deploy:,.2f}")
+        print(f"Starting capital: ${starting:,.2f}")
         print(f"Ending capital:   ${capital:,.2f}")
-        print(f"Net change:       ${capital - args.deploy:,.2f}")
+        print(f"Net change:       ${capital - starting:,.2f}")
+        print(f"Growth:           {growth_pct:+.2f}%")
         print()
         print("Capital curve:")
         for c in curve:
             flag = "" if c["counts_toward_pnl"] else " (excluded)"
-            print(f"  {c['date']}  ${c['capital']:,.2f}{flag}")
+            dep = c.get("deploy")
+            dep_s = f"  deploy=${dep:,.2f}" if dep is not None else ""
+            print(f"  {c['date']}  ${c['capital']:,.2f}{dep_s}{flag}")
 
         payload = {
             "rules": {
-                "deploy": args.deploy,
+                "starting_capital": starting,
+                "compound": bool(args.compound),
+                "deploy_mode": "compound_prior_capital" if args.compound else "fixed",
                 "one_stock_per_day": True,
                 "settlement": "sale proceeds available next session (T+1 cash)",
                 "fill_proof": "5m_bars",
@@ -473,8 +513,14 @@ def main() -> int:
             "days": rows,
             "capital_curve": curve,
             "ending_capital": capital,
+            "growth_pct": round(growth_pct, 4),
         }
-        out = args.json_out or (Path(db_path).parent / "blocked_day_top1_pnl_last30.json")
+        default_name = (
+            "blocked_day_top1_pnl_last30_compound.json"
+            if args.compound
+            else "blocked_day_top1_pnl_last30.json"
+        )
+        out = args.json_out or (Path(db_path).parent / default_name)
         out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"\nWrote JSON: {out}")
     finally:
