@@ -399,10 +399,239 @@ CREATE TABLE IF NOT EXISTS ai_explanation_cache (
 
 CREATE INDEX IF NOT EXISTS idx_ai_cache_session
   ON ai_explanation_cache(session_date_et, model_version);
+
+CREATE TABLE IF NOT EXISTS broker_accounts (
+  id INTEGER PRIMARY KEY,
+  broker TEXT NOT NULL DEFAULT 'robinhood',
+  external_account_id TEXT NOT NULL,
+  label TEXT,
+  is_paper INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  UNIQUE(broker, external_account_id)
+);
+
+CREATE TABLE IF NOT EXISTS broker_balances (
+  id INTEGER PRIMARY KEY,
+  broker_account_id INTEGER NOT NULL,
+  captured_at TEXT NOT NULL,
+  session_date_et TEXT NOT NULL,
+  equity REAL NOT NULL,
+  cash REAL NOT NULL,
+  buying_power REAL,
+  raw_json TEXT,
+  FOREIGN KEY (broker_account_id) REFERENCES broker_accounts(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_broker_balances_session
+  ON broker_balances(session_date_et DESC, captured_at DESC);
+
+CREATE TABLE IF NOT EXISTS broker_positions (
+  id INTEGER PRIMARY KEY,
+  broker_account_id INTEGER NOT NULL,
+  captured_at TEXT NOT NULL,
+  session_date_et TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  qty REAL NOT NULL,
+  avg_cost REAL,
+  market_value REAL,
+  raw_json TEXT,
+  FOREIGN KEY (broker_account_id) REFERENCES broker_accounts(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_broker_positions_session
+  ON broker_positions(session_date_et, ticker);
+
+CREATE TABLE IF NOT EXISTS broker_orders (
+  id INTEGER PRIMARY KEY,
+  broker_account_id INTEGER NOT NULL,
+  external_order_id TEXT NOT NULL,
+  session_date_et TEXT,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL,
+  order_type TEXT,
+  status TEXT NOT NULL,
+  limit_price REAL,
+  stop_price REAL,
+  qty REAL,
+  filled_qty REAL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  raw_json TEXT,
+  UNIQUE(broker_account_id, external_order_id),
+  FOREIGN KEY (broker_account_id) REFERENCES broker_accounts(id)
+);
+
+CREATE TABLE IF NOT EXISTS broker_fills (
+  id INTEGER PRIMARY KEY,
+  broker_account_id INTEGER NOT NULL,
+  external_fill_id TEXT NOT NULL,
+  external_order_id TEXT,
+  session_date_et TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL,
+  qty REAL NOT NULL,
+  price REAL NOT NULL,
+  fee REAL NOT NULL DEFAULT 0,
+  filled_at TEXT NOT NULL,
+  raw_json TEXT,
+  UNIQUE(broker_account_id, external_fill_id),
+  FOREIGN KEY (broker_account_id) REFERENCES broker_accounts(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_broker_fills_session
+  ON broker_fills(session_date_et, ticker);
+
+CREATE TABLE IF NOT EXISTS armed_plans (
+  id INTEGER PRIMARY KEY,
+  plan_uuid TEXT NOT NULL UNIQUE,
+  session_date_et TEXT NOT NULL,
+  allocation_mode TEXT NOT NULL DEFAULT 'single_top1',
+  status TEXT NOT NULL,
+  day_gate_mode TEXT,
+  allow_trade INTEGER,
+  ma_score INTEGER,
+  equity_snapshot REAL,
+  pdt_cap INTEGER,
+  pdt_used INTEGER,
+  arm_deadline_et TEXT,
+  fill_deadline_et TEXT NOT NULL DEFAULT '11:30',
+  payload_json TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_armed_plans_session
+  ON armed_plans(session_date_et, status);
+
+CREATE TABLE IF NOT EXISTS pdt_day_trades (
+  id INTEGER PRIMARY KEY,
+  session_date_et TEXT NOT NULL UNIQUE,
+  week_start_et TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  equity_at_trade REAL NOT NULL,
+  cap_at_trade INTEGER NOT NULL,
+  broker_fill_id TEXT,
+  notes TEXT,
+  recorded_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pdt_day_trades_week
+  ON pdt_day_trades(week_start_et);
 """
 
 MIGRATION_SQL = """
 -- Phase 7 watchlist columns (idempotent via try/ignore in Python)
+"""
+
+BROKER_EXECUTION_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS broker_accounts (
+  id INTEGER PRIMARY KEY,
+  broker TEXT NOT NULL DEFAULT 'robinhood',
+  external_account_id TEXT NOT NULL,
+  label TEXT,
+  is_paper INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  UNIQUE(broker, external_account_id)
+);
+CREATE TABLE IF NOT EXISTS broker_balances (
+  id INTEGER PRIMARY KEY,
+  broker_account_id INTEGER NOT NULL,
+  captured_at TEXT NOT NULL,
+  session_date_et TEXT NOT NULL,
+  equity REAL NOT NULL,
+  cash REAL NOT NULL,
+  buying_power REAL,
+  raw_json TEXT,
+  FOREIGN KEY (broker_account_id) REFERENCES broker_accounts(id)
+);
+CREATE INDEX IF NOT EXISTS idx_broker_balances_session
+  ON broker_balances(session_date_et DESC, captured_at DESC);
+CREATE TABLE IF NOT EXISTS broker_positions (
+  id INTEGER PRIMARY KEY,
+  broker_account_id INTEGER NOT NULL,
+  captured_at TEXT NOT NULL,
+  session_date_et TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  qty REAL NOT NULL,
+  avg_cost REAL,
+  market_value REAL,
+  raw_json TEXT,
+  FOREIGN KEY (broker_account_id) REFERENCES broker_accounts(id)
+);
+CREATE INDEX IF NOT EXISTS idx_broker_positions_session
+  ON broker_positions(session_date_et, ticker);
+CREATE TABLE IF NOT EXISTS broker_orders (
+  id INTEGER PRIMARY KEY,
+  broker_account_id INTEGER NOT NULL,
+  external_order_id TEXT NOT NULL,
+  session_date_et TEXT,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL,
+  order_type TEXT,
+  status TEXT NOT NULL,
+  limit_price REAL,
+  stop_price REAL,
+  qty REAL,
+  filled_qty REAL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  raw_json TEXT,
+  UNIQUE(broker_account_id, external_order_id),
+  FOREIGN KEY (broker_account_id) REFERENCES broker_accounts(id)
+);
+CREATE TABLE IF NOT EXISTS broker_fills (
+  id INTEGER PRIMARY KEY,
+  broker_account_id INTEGER NOT NULL,
+  external_fill_id TEXT NOT NULL,
+  external_order_id TEXT,
+  session_date_et TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL,
+  qty REAL NOT NULL,
+  price REAL NOT NULL,
+  fee REAL NOT NULL DEFAULT 0,
+  filled_at TEXT NOT NULL,
+  raw_json TEXT,
+  UNIQUE(broker_account_id, external_fill_id),
+  FOREIGN KEY (broker_account_id) REFERENCES broker_accounts(id)
+);
+CREATE INDEX IF NOT EXISTS idx_broker_fills_session
+  ON broker_fills(session_date_et, ticker);
+CREATE TABLE IF NOT EXISTS armed_plans (
+  id INTEGER PRIMARY KEY,
+  plan_uuid TEXT NOT NULL UNIQUE,
+  session_date_et TEXT NOT NULL,
+  allocation_mode TEXT NOT NULL DEFAULT 'single_top1',
+  status TEXT NOT NULL,
+  day_gate_mode TEXT,
+  allow_trade INTEGER,
+  ma_score INTEGER,
+  equity_snapshot REAL,
+  pdt_cap INTEGER,
+  pdt_used INTEGER,
+  arm_deadline_et TEXT,
+  fill_deadline_et TEXT NOT NULL DEFAULT '11:30',
+  payload_json TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_armed_plans_session
+  ON armed_plans(session_date_et, status);
+CREATE TABLE IF NOT EXISTS pdt_day_trades (
+  id INTEGER PRIMARY KEY,
+  session_date_et TEXT NOT NULL UNIQUE,
+  week_start_et TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  equity_at_trade REAL NOT NULL,
+  cap_at_trade INTEGER NOT NULL,
+  broker_fill_id TEXT,
+  notes TEXT,
+  recorded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pdt_day_trades_week
+  ON pdt_day_trades(week_start_et);
 """
 
 
@@ -519,6 +748,8 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
               ON operator_day_log(session_date_et DESC);
             """
         )
+    if "pdt_day_trades" not in all_tables or "armed_plans" not in all_tables:
+        conn.executescript(BROKER_EXECUTION_TABLES_SQL)
     tables = {
         row[0]
         for row in conn.execute(
