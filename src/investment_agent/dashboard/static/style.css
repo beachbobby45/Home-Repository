@@ -2674,6 +2674,14 @@ body.automation-stopped .auto-hero {
   margin-top: 0.5rem;
 }
 
+.audit-row-test td {
+  color: var(--muted);
+}
+
+.audit-row-test strong {
+  color: #fcd34d;
+}
+
 .manual-tools-details > summary {
   cursor: pointer;
   font-weight: 600;

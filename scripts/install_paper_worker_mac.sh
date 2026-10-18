@@ -64,6 +64,20 @@ cat > "$PLIST_PATH" <<EOF
 </plist>
 EOF
 
+# Point Account / Capital Builder at the $5k paper book
+PYTHONPATH="$ROOT/src" "$PYTHON" - <<'PY'
+from investment_agent.db import connect, init_db
+from investment_agent.execution.ops_audit import set_ledger_source
+from investment_agent.execution.paper_ledger import PAPER_STARTING_CASH, ensure_paper_accounts
+db = init_db()
+conn = connect(db)
+ensure_paper_accounts(conn, starting_cash=PAPER_STARTING_CASH)
+set_ledger_source(conn, "paper")
+conn.commit()
+conn.close()
+print("ledger_source=paper starting_cash=5000")
+PY
+
 launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
 launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
 

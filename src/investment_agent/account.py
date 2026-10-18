@@ -360,8 +360,32 @@ def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
     sweep = compute_period_end_sweep(period_realized, tax_rate=tax_rate)
     vix = latest_vix(conn)
     regime = latest_regime(conn)
-    daily_target = daily_profit_target(tradable)
     today_net = compute_today_realized_net(conn)
+
+    # Paper ledger is the Account $ source until Robinhood is wired as truth.
+    from investment_agent.execution.ops_audit import (
+        LEDGER_SOURCE_PAPER,
+        get_ledger_source,
+    )
+    from investment_agent.execution.paper_ledger import (
+        ACCOUNT_GATE,
+        PAPER_STARTING_CASH,
+        ensure_paper_accounts,
+        get_paper_balance,
+        get_session_log,
+    )
+    from investment_agent.trading_day import today_et_str
+
+    ledger_source = get_ledger_source(conn)
+    if ledger_source == LEDGER_SOURCE_PAPER:
+        ensure_paper_accounts(conn, starting_cash=PAPER_STARTING_CASH)
+        bal = get_paper_balance(conn, ACCOUNT_GATE)
+        tradable = float(bal["equity"])
+        day_log = get_session_log(conn, today_et_str(), ACCOUNT_GATE)
+        if day_log and day_log.get("net_pnl") is not None:
+            today_net = float(day_log["net_pnl"])
+
+    daily_target = daily_profit_target(tradable)
     today_progress = (today_net / daily_target * 100.0) if daily_target > 0 else 0.0
 
     return DashboardSummary(
@@ -415,10 +439,26 @@ def build_dashboard_summary(conn: sqlite3.Connection) -> DashboardSummary:
     )
 
 
-def summary_to_dict(summary: DashboardSummary) -> dict:
+def summary_to_dict(summary: DashboardSummary, conn: sqlite3.Connection | None = None) -> dict:
+    from investment_agent.execution.ops_audit import get_ledger_source
+    from investment_agent.execution.paper_ledger import (
+        ACCOUNT_GATE,
+        PAPER_STARTING_CASH,
+        get_paper_balance,
+    )
+
+    ledger_source = get_ledger_source(conn) if conn is not None else "paper"
+    paper_bal = None
+    if conn is not None and ledger_source == "paper":
+        try:
+            paper_bal = get_paper_balance(conn, ACCOUNT_GATE)
+        except Exception:  # noqa: BLE001
+            paper_bal = None
     return {
         "tradable_cash": summary.tradable_cash,
-        "original_basis": summary.original_basis,
+        "original_basis": (
+            PAPER_STARTING_CASH if ledger_source == "paper" else summary.original_basis
+        ),
         "goal_pct": summary.goal_pct,
         "goal_target": summary.goal_target,
         "month_key": summary.month_key,
@@ -445,4 +485,7 @@ def summary_to_dict(summary: DashboardSummary) -> dict:
         "strategy": summary.strategy_rules,
         "trading_mode": summary.trading_mode,
         "day_gate_mode": summary.day_gate_mode,
+        "ledger_source": ledger_source,
+        "paper_starting_cash": PAPER_STARTING_CASH,
+        "paper_balance": paper_bal,
     }

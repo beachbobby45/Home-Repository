@@ -10,6 +10,11 @@ from zoneinfo import ZoneInfo
 from investment_agent.account import get_day_gate_mode
 from investment_agent.backtest import _group_bars_by_date
 from investment_agent.execution.armed_plan import PlanStatus, set_armed_plan_status
+from investment_agent.execution.ops_audit import (
+    LEDGER_SOURCE_PAPER,
+    get_ledger_source,
+    set_ledger_source,
+)
 from investment_agent.execution.paper_ledger import (
     ACCOUNT_ALL,
     ACCOUNT_GATE,
@@ -288,6 +293,9 @@ def run_paper_tick(
 ) -> dict[str, Any]:
     """One worker cycle for the paper books."""
     ensure_paper_accounts(conn, starting_cash=starting_cash)
+    # Paper worker owns Account $ display until RH is wired.
+    if get_ledger_source(conn) != LEDGER_SOURCE_PAPER:
+        set_ledger_source(conn, LEDGER_SOURCE_PAPER)
     day = (session_date_et or today_et_str())[:10]
     settle_due_cash(conn, session_date_et=day)
 

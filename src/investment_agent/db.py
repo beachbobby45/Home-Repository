@@ -754,6 +754,10 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         from investment_agent.execution.paper_ledger import PAPER_TABLES_SQL
 
         conn.executescript(PAPER_TABLES_SQL)
+    if "ops_audit_log" not in all_tables:
+        from investment_agent.execution.ops_audit import OPS_AUDIT_SQL
+
+        conn.executescript(OPS_AUDIT_SQL)
     tables = {
         row[0]
         for row in conn.execute(

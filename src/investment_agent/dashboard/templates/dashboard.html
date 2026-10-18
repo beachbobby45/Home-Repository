@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261018paper" />
+  <link rel="stylesheet" href="/static/style.css?v=20261018audit" />
 </head>
 <body>
   <header class="app-header">
@@ -514,10 +514,41 @@
 
     <!-- ═══ ACCOUNT ═══ -->
     <div id="view-account" class="app-view">
+      <section class="view-section">
+        <header class="view-head">
+          <h2>Ledger &amp; balance</h2>
+          <p class="brief" id="ledger-source-note">Paper book starts at $5,000. TEST audit rows never change this balance.</p>
+        </header>
+        <div class="card auto-pnl-strip" id="account-ledger-strip">
+          <div class="auto-pnl-item"><span class="status-label">Ledger source</span><strong id="acct-ledger-source">paper</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Starting</span><strong id="acct-paper-start">$5,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Paper equity</span><strong id="acct-paper-equity">$5,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Settled</span><strong id="acct-paper-settled">$5,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Unsettled</span><strong id="acct-paper-unsettled">$0</strong></div>
+        </div>
+      </section>
+
+      <section class="view-section">
+        <header class="view-head">
+          <h2>Ops audit</h2>
+          <p class="brief">TEST = verification only (no W/L). PAPER = paper trades. Later LIVE will mirror Robinhood.</p>
+        </header>
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data-table" id="ops-audit-table">
+              <thead><tr>
+                <th>When</th><th>Kind</th><th>Title</th><th>Affects P&amp;L</th><th>Detail</th>
+              </tr></thead>
+              <tbody id="ops-audit-body"><tr><td colspan="5" class="empty">Loading audit…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section class="view-section capital-builder-section">
         <header class="view-head">
           <h2>Capital Builder</h2>
-          <p class="brief">Phase 1 milestone — guidance only, not a trading quota.</p>
+          <p class="brief">Phase 1 milestone — guidance only, not a trading quota. Equity follows paper ledger while source=paper.</p>
         </header>
         <div class="card capital-builder-panel" id="capital-builder-panel">
           <div class="cb-milestone">
@@ -1232,30 +1263,13 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       bindExtendedFillToggle(el, pick, td);
     }
 
-    function updateStatusBar(td, summary) {
-      const verdictEl = document.getElementById("status-verdict-text");
-      const dailyEl = document.getElementById("status-daily-text");
-      const cashEl = document.getElementById("status-cash-text");
-      const goalEl = document.getElementById("status-goal-text");
-      if (td && verdictEl) {
-        verdictEl.textContent = (td.verdict || "—").replace("_", " ");
-        document.getElementById("status-verdict-chip")?.classList.toggle("status-go", td.verdict === "GO");
-        document.getElementById("status-verdict-chip")?.classList.toggle("status-caution", td.verdict === "CAUTION");
-        document.getElementById("status-verdict-chip")?.classList.toggle("status-nogo", td.verdict === "NO_GO");
-      }
-      const weeklyEl = document.getElementById("status-weekly-text");
-      const weeklyChip = document.getElementById("status-weekly-chip");
-      if (td?.phase1b?.weekly_progress && weeklyEl) {
-        weeklyEl.textContent = td.phase1b.weekly_progress.label || "—";
-        weeklyChip?.classList.toggle("status-weekly-met", !!td.phase1b.weekly_progress.weekly_target_met);
-      }
-      if (summary && dailyEl) {
-        const todayNet = summary.today_realized_net ?? 0;
-        const target = summary.daily_target ?? 200;
-        dailyEl.textContent = `$${fmt(todayNet)} / $${fmt(target)}`;
-        if (cashEl) cashEl.textContent = "$" + fmt(summary.tradable_cash);
-        if (goalEl) goalEl.textContent = fmtPct(summary.goal_pct);
-      }
+    function updateStatusBar(td, _summary) {
+      // Top status chips are owned by loadPaperAutomation (paper equity / fills / pass).
+      // Only sync GO/CAUTION/NO_GO styling from trading-day verdict.
+      if (!td) return;
+      document.getElementById("status-verdict-chip")?.classList.toggle("status-go", td.verdict === "GO");
+      document.getElementById("status-verdict-chip")?.classList.toggle("status-caution", td.verdict === "CAUTION");
+      document.getElementById("status-verdict-chip")?.classList.toggle("status-nogo", td.verdict === "NO_GO");
     }
 
     function switchDashboardView(view) {
@@ -1884,6 +1898,33 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
     }
 
+    function renderOpsAudit(events) {
+      const body = document.getElementById("ops-audit-body");
+      if (!body) return;
+      if (!events?.length) {
+        body.innerHTML = '<tr><td colspan="5" class="empty">No audit events yet.</td></tr>';
+        return;
+      }
+      body.innerHTML = events.map((e) => `
+        <tr class="${e.kind === "TEST" ? "audit-row-test" : ""}">
+          <td>${e.created_at || "—"}</td>
+          <td><strong>${e.kind || "—"}</strong></td>
+          <td>${e.title || "—"}</td>
+          <td>${e.affects_pnl ? "Yes" : "No"}</td>
+          <td class="brief">${e.detail || ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadOpsAudit() {
+      try {
+        const data = await api("/api/audit?limit=50");
+        renderOpsAudit(data.events || []);
+      } catch (_) {
+        renderOpsAudit([]);
+      }
+    }
+
     async function loadSummary() {
       try {
         const s = await api("/api/summary");
@@ -1897,6 +1938,21 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         document.getElementById("goal-label").textContent =
           `$${fmt(s.tradable_cash)} of $${fmt(s.goal_target)} goal`;
         document.getElementById("tradable-cash").textContent = "$" + fmt(s.tradable_cash);
+        const ls = s.ledger_source || "paper";
+        const setAcct = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        setAcct("acct-ledger-source", ls);
+        setAcct("acct-paper-start", "$" + fmt(s.paper_starting_cash ?? 5000));
+        if (s.paper_balance) {
+          setAcct("acct-paper-equity", "$" + fmt(s.paper_balance.equity));
+          setAcct("acct-paper-settled", "$" + fmt(s.paper_balance.settled_cash));
+          setAcct("acct-paper-unsettled", "$" + fmt(s.paper_balance.unsettled_cash));
+        }
+        const note = document.getElementById("ledger-source-note");
+        if (note) {
+          note.textContent = ls === "paper"
+            ? "Paper book starts at $5,000 and updates from paper fills. TEST audit rows never change this balance. When Robinhood is connected, this becomes a read-only mirror of RH."
+            : "Ledger source is Robinhood — dashboard balance/audit are mirrors of the broker (source of truth).";
+        }
         document.getElementById("original-basis").textContent = "$" + fmt(s.original_basis);
 
         const dailyTarget = s.daily_target ?? 200;
@@ -3228,6 +3284,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadPaperAutomation(),
         loadTradingDay(),
         loadSummary(),
+        loadOpsAudit(),
         loadCapitalBuilder(),
         loadScenario(),
         loadTenYearPlan(),

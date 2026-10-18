@@ -149,6 +149,12 @@ from investment_agent.execution.armed_plan import (
 from investment_agent.execution.propose import propose_armed_plan, pdt_status_payload
 from investment_agent.execution.paper_runner import paper_status_payload, run_paper_tick
 from investment_agent.execution.paper_ledger import list_session_logs, paper_scoreboard
+from investment_agent.execution.ops_audit import (
+    KIND_TEST,
+    get_ledger_source,
+    list_audit_events,
+    log_test_suite_results,
+)
 from investment_agent.trade_proposal import (
     REJECTION_REASONS,
     approve_proposal,
@@ -558,7 +564,7 @@ def api_historical_pull(
 @app.get("/api/summary")
 def api_summary(conn=Depends(_db)) -> dict[str, Any]:
     summary = build_dashboard_summary(conn)
-    return summary_to_dict(summary)
+    return summary_to_dict(summary, conn)
 
 
 @app.get("/api/trading-day/status")
@@ -924,6 +930,51 @@ def api_paper_tick(
     )
     conn.commit()
     return result
+
+
+class AuditTestSuiteBody(BaseModel):
+    suite_name: str = "local"
+    passed: int = 0
+    failed: int = 0
+    total: int = 0
+    notes: str | None = None
+    cases: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@app.get("/api/audit")
+def api_audit_list(
+    kind: str | None = None,
+    limit: int = 100,
+    conn=Depends(_db),
+) -> dict[str, Any]:
+    """Ops audit log. TEST rows never affect P&L."""
+    rows = list_audit_events(conn, kind=kind, limit=limit)
+    return {
+        "ok": True,
+        "ledger_source": get_ledger_source(conn),
+        "count": len(rows),
+        "events": rows,
+    }
+
+
+@app.post("/api/audit/test-suite")
+def api_audit_test_suite(
+    body: AuditTestSuiteBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Record a pytest/smoke run as TEST (excluded from Account W/L)."""
+    event_id = log_test_suite_results(
+        conn,
+        suite_name=body.suite_name,
+        passed=body.passed,
+        failed=body.failed,
+        total=body.total,
+        details=body.cases,
+        notes=body.notes,
+    )
+    conn.commit()
+    return {"ok": True, "id": event_id, "kind": KIND_TEST, "affects_pnl": False}
 
 
 @app.get("/api/capital-builder/progress")

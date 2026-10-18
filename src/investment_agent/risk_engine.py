@@ -126,6 +126,66 @@ def build_portfolio_snapshot(
     date_key: str | None = None,
 ) -> PortfolioSnapshot:
     when = date_key or today_pt_str()
+    from investment_agent.execution.ops_audit import (
+        LEDGER_SOURCE_PAPER,
+        get_ledger_source,
+    )
+    from investment_agent.execution.paper_ledger import (
+        ACCOUNT_GATE,
+        PAPER_STARTING_CASH,
+        ensure_paper_accounts,
+        get_paper_balance,
+        get_session_log,
+        list_session_logs,
+    )
+
+    if get_ledger_source(conn) == LEDGER_SOURCE_PAPER:
+        ensure_paper_accounts(conn, starting_cash=PAPER_STARTING_CASH)
+        bal = get_paper_balance(conn, ACCOUNT_GATE)
+        tradable = float(bal["settled_cash"])
+        current_equity = float(bal["equity"])
+        open_positions = []
+        today_log = get_session_log(conn, when, ACCOUNT_GATE)
+        today_net = float(today_log["net_pnl"]) if today_log and today_log.get("net_pnl") is not None else 0.0
+        week_logs = list_session_logs(conn, account_name=ACCOUNT_GATE, since=when[:8] + "01", limit=40)
+        # Approximate weekly: sum nets in last 7 calendar days from logs we have
+        from datetime import date, timedelta
+
+        try:
+            anchor = date.fromisoformat(when[:10])
+        except ValueError:
+            anchor = date.today()
+        week_start = (anchor - timedelta(days=anchor.weekday())).isoformat()
+        weekly_net = sum(
+            float(r["net_pnl"])
+            for r in week_logs
+            if r.get("net_pnl") is not None and r["session_date_et"] >= week_start
+        )
+        buys_today = 1 if today_log and today_log.get("filled") else 0
+        # Paper high-water tracked separately so journal $15k basis does not dominate
+        hw_key = "paper_phase1_high_water"
+        raw_hw = get_setting(conn, hw_key, str(PAPER_STARTING_CASH))
+        try:
+            high_water = max(float(raw_hw), current_equity, PAPER_STARTING_CASH)
+        except ValueError:
+            high_water = max(current_equity, PAPER_STARTING_CASH)
+        if high_water > float(raw_hw or 0):
+            set_setting(conn, hw_key, f"{high_water:.2f}")
+        drawdown = 0.0
+        if high_water > 0:
+            drawdown = max(0.0, (high_water - current_equity) / high_water * 100.0)
+        return PortfolioSnapshot(
+            tradable_cash=round(tradable, 2),
+            open_positions=open_positions,
+            today_realized_net=round(today_net, 2),
+            weekly_realized_net=round(weekly_net, 2),
+            buys_today=buys_today,
+            high_water_mark=round(high_water, 2),
+            current_equity=round(current_equity, 2),
+            drawdown_pct=round(drawdown, 2),
+            kill_switch_active=is_kill_switch_active(conn),
+        )
+
     journal_cash = journal_cash_balance(conn)
     sweeps = cumulative_sweeps(conn)
     tradable = journal_cash - sweeps
