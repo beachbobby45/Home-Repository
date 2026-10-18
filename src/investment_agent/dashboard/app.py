@@ -139,6 +139,14 @@ from investment_agent.risk_engine import (
     set_kill_switch,
     auto_engaged_kill_switch,
 )
+from investment_agent.broker.client import StubBrokerClient, fixture_paper_snapshot
+from investment_agent.broker.sync import latest_broker_balance, sync_from_client
+from investment_agent.execution.armed_plan import (
+    PlanStatus,
+    get_armed_plan_for_session,
+    set_armed_plan_status,
+)
+from investment_agent.execution.propose import propose_armed_plan, pdt_status_payload
 from investment_agent.trade_proposal import (
     REJECTION_REASONS,
     approve_proposal,
@@ -255,6 +263,17 @@ class PinPickBody(BaseModel):
 
 class KillSwitchBody(BaseModel):
     active: bool
+
+
+class ArmedPlanProposeBody(BaseModel):
+    replace_existing: bool = True
+    session_date_et: str | None = None
+
+
+class BrokerSyncFixtureBody(BaseModel):
+    equity: float = 5_000.0
+    cash: float = 5_000.0
+    account_id: str = "rh-paper-fixture-001"
 
 
 class ProposalRejectBody(BaseModel):
@@ -765,6 +784,98 @@ def api_risk_kill_switch(
         "kill_switch_active": is_kill_switch_active(conn),
         "status": portfolio_status_dict(snapshot),
     }
+
+
+@app.get("/api/broker/status")
+def api_broker_status(conn=Depends(_db)) -> dict[str, Any]:
+    """Robinhood mirror + PDT slots (ledger cash when synced)."""
+    pdt = pdt_status_payload(conn)
+    plan = get_armed_plan_for_session(conn, pdt["session_date_et"])
+    return {
+        "ok": True,
+        "pdt": pdt,
+        "armed_plan": plan.to_payload() if plan else None,
+        "kill_switch_active": is_kill_switch_active(conn),
+        "latest_balance": latest_broker_balance(conn),
+    }
+
+
+@app.post("/api/broker/sync/fixture")
+def api_broker_sync_fixture(
+    body: BrokerSyncFixtureBody | None = None,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Dry-run sync using a fixture snapshot until RH credentials are wired."""
+    opts = body or BrokerSyncFixtureBody()
+    client = StubBrokerClient(
+        fixture_paper_snapshot(
+            equity=opts.equity,
+            cash=opts.cash,
+            account_id=opts.account_id,
+        )
+    )
+    result = sync_from_client(conn, client)
+    conn.commit()
+    return result
+
+
+@app.get("/api/execution/pdt")
+def api_execution_pdt(conn=Depends(_db)) -> dict[str, Any]:
+    return pdt_status_payload(conn)
+
+
+@app.get("/api/execution/armed-plan")
+def api_execution_armed_plan(conn=Depends(_db)) -> dict[str, Any]:
+    day = today_et_str()
+    plan = get_armed_plan_for_session(conn, day)
+    return {
+        "session_date_et": day,
+        "plan": plan.to_payload() if plan else None,
+        "pdt": pdt_status_payload(conn, day),
+    }
+
+
+@app.post("/api/execution/armed-plan/propose")
+def api_execution_armed_plan_propose(
+    body: ArmedPlanProposeBody | None = None,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    opts = body or ArmedPlanProposeBody()
+    result = propose_armed_plan(
+        conn,
+        session_date_et=opts.session_date_et,
+        replace_existing=opts.replace_existing,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=409, detail=result.get("error") or "Propose failed")
+    conn.commit()
+    return result
+
+
+@app.post("/api/execution/armed-plan/arm")
+def api_execution_armed_plan_arm(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Mark today's proposed plan as armed (no broker submit yet)."""
+    if is_kill_switch_active(conn):
+        raise HTTPException(status_code=409, detail="Kill switch active — cannot arm")
+    day = today_et_str()
+    plan = get_armed_plan_for_session(conn, day)
+    if not plan:
+        raise HTTPException(status_code=404, detail="No armed plan for today — propose first")
+    pdt = pdt_status_payload(conn, day)
+    if not pdt.get("allowed"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"PDT blocked: {pdt.get('reason')} (used {pdt.get('used')}/{pdt.get('cap')})",
+        )
+    set_armed_plan_status(conn, plan.plan_uuid, PlanStatus.ARMED)
+    conn.commit()
+    refreshed = get_armed_plan_for_session(conn, day)
+    return {"ok": True, "plan": refreshed.to_payload() if refreshed else None, "pdt": pdt}
 
 
 @app.get("/api/capital-builder/progress")

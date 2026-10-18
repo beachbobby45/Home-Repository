@@ -9,7 +9,6 @@ from investment_agent.execution.pdt_guard import (
     can_open_day_trade,
     record_day_trade,
 )
-
 __all__ = [
     "ArmedPlan",
     "AllocationMode",
