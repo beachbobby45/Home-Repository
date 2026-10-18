@@ -778,7 +778,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.7 · Plan single path</strong> (Begin → Growth → Remaining by calendar year)</p>
+          <p class="brief">Latest release: <strong>v0.9.8 · Plan funded + Δ End</strong> (Begin/Remaining = funded path; Δ End vs $5K-only)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -880,7 +880,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (["0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
+            if (["0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
               setupHelp.textContent = "You are on the current release (Plan = one funded path: Begin → Remaining by calendar year). Hard-refresh (Cmd+Shift+R) if Plan still shows Year 1 / $15K.";
               setupHelp.className = "brief setup-version-help setup-version-ok";
             } else {
@@ -3102,32 +3102,42 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
       const tbody = document.getElementById("plan-table-body");
       if (!years.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty">No projection data</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="empty">No projection data</td></tr>';
         return;
       }
       tbody.innerHTML = years.map((row) => {
+        // Funded path = your plan (Begin/Remaining). Base path only used for Δ End.
         const p = row.injection || {};
+        const base = row.base || {};
         const begin = Number(p.start_balance || 0);
         const growth = Number(p.gross_production || 0);
         const sweep = Number(p.annual_sweep || 0);
         const remaining = Number(p.end_balance || 0);
         const depositsShow = Number(p.capital_injection || 0);
-        const yearEnd = remaining + sweep; // pre-sweep end
+        const yearEnd = remaining + sweep;
         const growthPct = begin > 0 ? (growth / begin) * 100 : 0;
         const growthCls = growth >= 0 ? "metric positive" : "metric negative";
+        const delta = Number(row.advantage_end_balance != null
+          ? row.advantage_end_balance
+          : (remaining - Number(base.end_balance || 0)));
+        const deltaCls = delta >= 0 ? "plan-advantage" : "metric negative";
         const goalMilestone = (p.goal_pct || 0) >= 100 ? " plan-row-goal" : "";
         const depCell = depositsShow > 0 ? `$${fmt(depositsShow)}` : "—";
         const growthSign = growth >= 0 ? "+" : "";
         const pctSign = growthPct >= 0 ? "+" : "";
+        const deltaSign = delta >= 0 ? "+" : "";
+        const deploy = `${p.trade_deploy_label || "—"} · $${fmt(p.trade_net_target)}/tr`;
         return `<tr class="${goalMilestone}">
           <td><strong>${row.year}</strong></td>
           <td>$${fmt(begin)}</td>
-          <td>${depCell}</td>
+          <td><strong>$${fmt(remaining)}</strong></td>
           <td class="${growthCls}">${growthSign}$${fmt(growth)}</td>
           <td class="${growthCls}">${pctSign}${growthPct.toFixed(1)}%</td>
           <td>$${fmt(yearEnd)}</td>
           <td>$${fmt(sweep)}</td>
-          <td><strong>$${fmt(remaining)}</strong></td>
+          <td>${deploy}</td>
+          <td>${depCell}</td>
+          <td class="${deltaCls}">${deltaSign}$${fmt(Math.abs(delta))}</td>
           <td class="brief">${p.notes || "—"}</td>
         </tr>`;
       }).join("");
