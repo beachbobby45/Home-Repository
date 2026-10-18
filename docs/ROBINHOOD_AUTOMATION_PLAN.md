@@ -117,7 +117,8 @@ $5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 202
 - Harden dashboard KeepAlive (health check, log truncation, restart already partially done).  
 - Separate **execution worker** process from UI server so UI blips ≠ missed exits.  
 - Schema: `broker_accounts`, `broker_balances`, `broker_positions`, `broker_orders`, `broker_fills`, `armed_plans`, `pdt_day_trades`.  
-- Config: `.env.robinhood.paper` / `.env.robinhood.live` (never mixed).
+- Config: separate env profiles for **internal paper ledger** vs **live RH** (never mixed).  
+  Note: Robinhood has **no stock paper/demo account** (only options Simulated Returns). Pre-live testing stays on our internal paper + Yahoo 5m bars; see `docs/PAPER_GO_CHECKLIST.md` §E.
 
 **Test**
 - Unit: weekly ops counter (week boundaries, no-fill ≠ day trade).  

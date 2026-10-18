@@ -85,7 +85,8 @@ Judge whether the **edge hypothesis**, **risk controls**, **capital ladder**, an
 | 60 sessions | **$5k** fixed deploy, trade every fill day (≤5/week capable) | ≈ **+$933** (**+18.7%**) |
 | 60 sessions | $5k with old **≤3/week PDT cap** (superseded) | ≈ **+$951** (**+19.0%**) — similar; cap barely changed totals |
 
-Source: operator’s local SQLite history + Yahoo 5-minute bars; scripted counterfactual on ranked #1. **Not** live broker fills.
+Source: operator’s local SQLite history + Yahoo 5-minute bars; scripted counterfactual on ranked #1. **Not** live broker fills.  
+Robinhood has **no stock paper account** (Simulated Returns = options scenarios only), so forward paper stays on the **internal ledger**; written go checklist: `docs/PAPER_GO_CHECKLIST.md`.
 
 **Why a reviewer might care:** Edge, if real, is process + selectivity (many no-fills) + asymmetric target vs stop—not “win every day.” Weekly $450 (3 × $150) remains a **design goal**, not a historical minimum.
 
