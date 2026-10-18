@@ -16,7 +16,7 @@ Build a **travel-safe, settlement-aware** system where:
 3. A **local always-on Mac worker** (LaunchAgent) enforces ops caps and **settled buying power** checks.  
 4. **Exits (target + stop) live on Robinhood** as resting orders after fill — not dependent on Cursor chat or Tony being at a keyboard.  
 5. Cursor continues **Morning Prep / ranking / confirmation / oversight**; it is **not** the sole sell trigger.  
-6. Capital ladder: **$5k → +$5k each profitable ~30-session cycle → $20k invested**, deposits only if the cycle grew.
+6. Capital ladder: **$5k on 2026-12-01 (CASH) → +$5k every ~30 sessions → $20k invested** (dates: 2027-01-13 / 2027-02-25 / 2027-04-09); deposits **evidence-gated**, never automatic.
 
 **Regulatory note (Jun 4, 2026):** FINRA replaced PDT with intraday margin standards ([Notice 26-10](https://www.finra.org/rules-guidance/notices/26-10)); Robinhood removed day-trade count restrictions ([Day trading](https://robinhood.com/us/en/support/articles/day-trading/)). Binding ops constraint is now **settled cash (T+1)** for unlevered accounts ([Settlement](https://robinhood.com/us/en/support/articles/settlement-and-buying-power/)), not 3 trades/week under $25k.
 
@@ -239,16 +239,19 @@ $5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 202
 
 ## 7. Suggested calendar (evidence-gated — see strategy brief §5)
 
+Assumption: ~30 trading sessions ≈ ~6 calendar weeks (≤5 sessions/wk; US holidays skipped).
+
 | When | Focus |
 |------|--------|
 | **Now** | Confirm RH day-trade settings in-app; Phase A + B reliability + RH sync |
 | **Now (parallel)** | **P0 controls:** gate ON vs OFF + random-pick control on historical window |
-| **Next ~40–60 sessions** | **P1 forward paper** with pre-registered pass/fail; log every signal + gate verdict; dual arms |
-| **After paper pass** | Live **$5k** only (Phase C/D exits proven); hard −10% drawdown stop |
-| **After §5.4 scale gate** | Deposit #2 (+$5k) — **not** after one green 30-session cycle alone |
-| **Later** | Deposits #3–#4 only under continued evidence; Top2 study before any split |
+| **2026-10-20 → ~2026-11-28** | **P1 forward paper** (~40–60 sessions); pre-registered pass/fail; dual arms |
+| **2026-12-01** (earliest) | **Deposit #1** — live **$5,000 CASH / unlevered** after paper pass; hard −10% stop |
+| **2027-01-13** (earliest) | **Deposit #2** (+$5k → $10k) — ~30 sessions after #1; §5.4 written go |
+| **2027-02-25** (earliest) | **Deposit #3** (+$5k → $15k) — ~30 sessions after #2; evidence + written go |
+| **2027-04-09** (earliest) | **Deposit #4** (+$5k → $20k invested) — ~30 sessions after #3; optional if edge holds |
 
-Slip phases rather than skip exit criteria. Old “Nov→Apr $20k ladder on cycle profit” is superseded by brief §5.
+Slip phases rather than skip exit criteria. Calendar dates are earliest sketches — **never auto-deposit**.
 
 ---
 

@@ -30,7 +30,7 @@ def test_funding_ladder_increases_balance_vs_base():
         months=24,
         injections=DEFAULT_FUNDING_INJECTIONS,
     )
-    # First deposit lands at week 11 (~month 3)
+    # First deposit lands at week 6 (~30 sessions / ~1.5 months after RH #1)
     inj_pts = [p for p in injected if p.injection_total > 0]
     assert inj_pts
     assert sum(p.injection_total for p in inj_pts) == 15_000.0

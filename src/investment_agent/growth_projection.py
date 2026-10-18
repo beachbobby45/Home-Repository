@@ -77,11 +77,13 @@ class YearPlanRow:
 
 
 # Staged +$5K deposits after first $5K live (funding_plan.py earliest sketches).
-# Offsets from RH Deposit #1 (~2026-12-01): #2 ~Feb 16, #3 ~Mar 30, #4 ~May 11.
+# Cadence: ~30 trading sessions (~6 calendar weeks) between deposits.
+# Offsets from RH Deposit #1 (2026-12-01 / plan week 0):
+#   #2 ~2027-01-13 (week 6), #3 ~2027-02-25 (week 12), #4 ~2027-04-09 (week 18).
 DEFAULT_FUNDING_INJECTIONS: tuple[CapitalInjection, ...] = (
-    CapitalInjection(week_offset=11, amount=5_000.0, label="Deposit #2 (+$5K)"),
-    CapitalInjection(week_offset=17, amount=5_000.0, label="Deposit #3 (+$5K)"),
-    CapitalInjection(week_offset=23, amount=5_000.0, label="Deposit #4 (+$5K → $20K)"),
+    CapitalInjection(week_offset=6, amount=5_000.0, label="Deposit #2 (+$5K · ~2027-01-13)"),
+    CapitalInjection(week_offset=12, amount=5_000.0, label="Deposit #3 (+$5K · ~2027-02-25)"),
+    CapitalInjection(week_offset=18, amount=5_000.0, label="Deposit #4 (+$5K → $20K · ~2027-04-09)"),
 )
 
 # Backward-compatible alias: first scheduled deposit (tests / callers expecting one).
@@ -474,9 +476,10 @@ def default_growth_scenarios(
             injection_pts,
             name="Growth plan (funded → $20K)",
             description=(
-                f"Same as growth plan with staged +$5K deposits to "
+                f"Same as growth plan with +$5K every ~30 sessions to "
                 f"${PLAN_FUNDED_TARGET:,.0f} invested "
-                f"({hit_pct:.1f}% hit · annual 35% sweep · evidence-gated)."
+                f"(#2 wk6 / #3 wk12 / #4 wk18 · {hit_pct:.1f}% hit · "
+                f"annual 35% sweep · evidence-gated)."
             ),
         ),
     }

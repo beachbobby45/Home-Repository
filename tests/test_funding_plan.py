@@ -52,6 +52,18 @@ class FundingPlanTests(unittest.TestCase):
         rh = next(r for r in rows if r["id"] == "rh_live_1")
         self.assertEqual(rh["cash_in"], 5_000)
         self.assertEqual(rh["date"], "2026-12-01")
+        self.assertEqual(rh["invested_after"], 5_000)
+        d2 = next(r for r in rows if r["id"] == "deposit_2")
+        d3 = next(r for r in rows if r["id"] == "deposit_3")
+        d4 = next(r for r in rows if r["id"] == "deposit_4")
+        self.assertEqual(d2["date"], "2027-01-13")
+        self.assertEqual(d2["invested_after"], 10_000)
+        self.assertEqual(d3["date"], "2027-02-25")
+        self.assertEqual(d3["invested_after"], 15_000)
+        self.assertEqual(d4["date"], "2027-04-09")
+        self.assertEqual(d4["invested_after"], 20_000)
+        self.assertIn("~30 sessions", d2["gate"])
+        self.assertIn("CASH", rh["gate"])
 
     def test_payload_and_capital_builder_use_5k_band(self) -> None:
         fp = build_funding_plan_payload(self.conn)
