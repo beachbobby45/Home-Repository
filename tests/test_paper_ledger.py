@@ -102,12 +102,9 @@ class PaperLedgerTests(unittest.TestCase):
 class PaperApiTests(unittest.TestCase):
     def test_paper_status_endpoint(self) -> None:
         import sqlite3
-        import sys
 
         from fastapi.testclient import TestClient
 
-        ROOT = Path(__file__).resolve().parents[1]
-        sys.path.insert(0, str(ROOT / "src"))
         from investment_agent.dashboard.app import app
 
         with tempfile.TemporaryDirectory() as tmp:

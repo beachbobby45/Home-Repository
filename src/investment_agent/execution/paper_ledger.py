@@ -414,6 +414,9 @@ def paper_scoreboard(
     """Pass/fail snapshot for the Oct–Nov paper window."""
     ensure_paper_accounts(conn)
     until = until or date.today().isoformat()
+    if until < since:
+        # Before window start (e.g. Sunday Oct 18 before Mon Oct 20) — empty window
+        until = since
     arms: dict[str, Any] = {}
     for name in PAPER_ACCOUNTS:
         logs = [

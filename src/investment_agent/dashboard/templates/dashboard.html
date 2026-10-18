@@ -4,18 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260816a" />
+  <link rel="stylesheet" href="/static/style.css?v=20261018paper" />
 </head>
 <body>
   <header class="app-header">
     <div class="app-header-inner">
       <div class="app-brand">
         <h1>AI Investment Agent <span class="ui-version" id="app-version-badge" title="Release {{ app_release }}">v{{ app_version }} · {{ app_release }}</span></h1>
-        <p class="subtitle">E*TRADE manual · Growth Plan · $5M goal</p>
+        <p class="subtitle">Paper automation · observe results · emergency stop · path to Robinhood live</p>
       </div>
       <div class="app-header-actions">
-        <button class="btn btn-sm" type="button" id="refresh-trading-day" title="Step 3 — refresh live prices before you buy">Refresh live before buy</button>
-        <button class="btn secondary btn-sm" type="button" id="pin-top-pick">Pin #1</button>
+        <span class="mode-pill" id="execution-mode-pill" title="Current execution mode">PAPER</span>
+        <button class="btn btn-stop" type="button" id="stop-process-btn" title="Emergency: block all new automated entries">STOP PROCESS</button>
+        <button class="btn secondary btn-sm" type="button" id="resume-process-btn" title="Clear kill switch — allow automation again" hidden>Resume</button>
         <button class="btn secondary btn-sm" type="button" id="refresh-all">Refresh all</button>
       </div>
     </div>
@@ -39,15 +40,15 @@
   <div id="regime-banner" class="banner ok app-banner-compact">Loading regime…</div>
 
   <div class="status-bar" id="status-bar">
-    <div class="status-chip" id="status-verdict-chip"><span class="status-label">Session</span><span id="status-verdict-text">—</span></div>
-    <div class="status-chip status-chip-accent"><span class="status-label">Today</span><span id="status-daily-text">—</span></div>
-    <div class="status-chip" id="status-weekly-chip"><span class="status-label">Week</span><span id="status-weekly-text">—</span></div>
-    <div class="status-chip"><span class="status-label">Cash</span><span id="status-cash-text">—</span></div>
-    <div class="status-chip"><span class="status-label">Goal</span><span id="status-goal-text">—</span></div>
+    <div class="status-chip" id="status-verdict-chip"><span class="status-label">Automation</span><span id="status-verdict-text">—</span></div>
+    <div class="status-chip status-chip-accent"><span class="status-label">Paper equity</span><span id="status-daily-text">—</span></div>
+    <div class="status-chip" id="status-weekly-chip"><span class="status-label">Fills</span><span id="status-weekly-text">—</span></div>
+    <div class="status-chip"><span class="status-label">Settled</span><span id="status-cash-text">—</span></div>
+    <div class="status-chip"><span class="status-label">Pass</span><span id="status-goal-text">—</span></div>
   </div>
 
   <nav class="app-nav" aria-label="Dashboard views">
-    <button type="button" class="app-nav-btn active" data-view="trade"><span class="nav-icon">◎</span> Trade</button>
+    <button type="button" class="app-nav-btn active" data-view="trade"><span class="nav-icon">◎</span> Ops</button>
     <button type="button" class="app-nav-btn" data-view="screen"><span class="nav-icon">▦</span> Screen</button>
     <button type="button" class="app-nav-btn" data-view="review"><span class="nav-icon">▤</span> Review</button>
     <button type="button" class="app-nav-btn" data-view="account"><span class="nav-icon">◫</span> Account</button>
@@ -57,37 +58,64 @@
 
   <main class="app-main">
 
-    <!-- ═══ TRADE — primary view ═══ -->
+    <!-- ═══ OPS — automation-first primary view ═══ -->
     <div id="view-trade" class="app-view active">
 
-      <header class="trade-page-head">
-        <h2 class="trade-page-title">What to trade today</h2>
-        <p class="brief">Three steps each day — metrics after close, picks before open, live check before you buy.</p>
+      <header class="trade-page-head auto-ops-head">
+        <div>
+          <h2 class="trade-page-title">Automation ops</h2>
+          <p class="brief">Mac LaunchAgents pick, paper-buy, and paper-sell. You observe results and can emergency-stop.</p>
+        </div>
+        <div class="auto-ops-head-meta">
+          <span class="brief" id="paper-session-label">Session —</span>
+          <span class="brief" id="paper-kill-label">Kill switch: OFF</span>
+        </div>
       </header>
 
-      <section class="daily-rhythm card" id="daily-rhythm-panel">
-        <h2 class="daily-rhythm-title">Daily rhythm</h2>
-        <ol class="rhythm-steps" id="rhythm-steps"></ol>
+      <section class="card auto-hero" id="auto-hero">
+        <div class="auto-hero-grid">
+          <div class="auto-hero-main">
+            <div class="auto-hero-kicker">What automation selected</div>
+            <div class="auto-hero-ticker" id="auto-selected-ticker">—</div>
+            <div class="auto-hero-status" id="auto-selected-status">Waiting for next session…</div>
+            <div class="auto-hero-why brief" id="auto-selected-why"></div>
+          </div>
+          <div class="auto-hero-levels" id="auto-selected-levels">
+            <div class="auto-level"><span>Buy</span><strong id="auto-lvl-buy">—</strong></div>
+            <div class="auto-level"><span>Target</span><strong id="auto-lvl-sell">—</strong></div>
+            <div class="auto-level"><span>Stop</span><strong id="auto-lvl-stop">—</strong></div>
+            <div class="auto-level"><span>Shares</span><strong id="auto-lvl-shares">—</strong></div>
+          </div>
+        </div>
       </section>
 
-      <section class="card proposals-panel" id="proposals-panel">
-        <header class="panel-head proposals-panel-head">
-          <div>
-            <h2>Trade proposals</h2>
-            <p class="brief">Step 2b — generate up to 5 scored proposals; approve before logging a BUY in the journal.</p>
-            <p class="brief" id="ai-status-note">AI: loading…</p>
-          </div>
-          <button class="btn btn-sm" type="button" id="generate-proposals">Generate proposals</button>
+      <section class="card auto-pnl-strip" id="auto-pnl-strip">
+        <div class="auto-pnl-item"><span class="status-label">Gate book</span><strong id="paper-gate-equity">$5,000</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">All-signals book</span><strong id="paper-all-equity">$5,000</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">Today (gate)</span><strong id="paper-today-net">$0</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">Window fills</span><strong id="paper-window-fills">0</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">Scoreboard</span><strong id="paper-pass-flag">Not yet</strong></div>
+      </section>
+
+      <section class="card" id="paper-tx-panel">
+        <header class="panel-head">
+          <h2>Paper transactions</h2>
+          <p class="brief">Internal ledger (not Robinhood). Gate-approved is the live-like book.</p>
         </header>
-        <div id="proposals-body" class="proposals-list">
-          <div class="pick-empty">No proposals yet — run Generate after morning screener.</div>
+        <div class="table-wrap">
+          <table class="data-table" id="paper-tx-table">
+            <thead><tr>
+              <th>Date</th><th>Book</th><th>Ticker</th><th>Status</th><th>Exit</th><th>Net</th><th>Detail</th>
+            </tr></thead>
+            <tbody id="paper-tx-body"><tr><td colspan="7" class="empty">No paper sessions yet — first trading day is Mon Oct 20.</td></tr></tbody>
+          </table>
         </div>
       </section>
 
       <section class="card" id="candidates-panel">
         <header class="panel-head">
-          <h2>Today&apos;s candidates</h2>
-          <p class="brief">After Step 2 — buy size, sell target, and stop per symbol (Growth Plan).</p>
+          <h2>Top 10 ranked (read-only)</h2>
+          <p class="brief">Automation uses #1 when the gate allows. Levels shown for context — not for manual clicking.</p>
         </header>
         <div class="table-wrap">
           <table class="data-table" id="candidates-table">
@@ -95,7 +123,7 @@
               <th>#</th><th>Ticker</th><th>Hit%</th><th>Limit buy</th><th>Shares</th><th>Size</th>
               <th>Limit sell</th><th>Stop</th><th>Live S3</th>
             </tr></thead>
-            <tbody id="candidates-body"><tr><td colspan="9" class="empty">Run Step 2 to populate.</td></tr></tbody>
+            <tbody id="candidates-body"><tr><td colspan="9" class="empty">Ranks appear after morning prep (4:00 AM PT).</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -119,84 +147,111 @@
         </details>
       </div>
 
-      <div class="card risk-panel" id="risk-panel">
-        <header class="panel-head risk-panel-head">
-          <div>
-            <h2 class="risk-title">Risk Engine</h2>
-            <p class="brief" id="risk-headline">Portfolio limits — sovereign gate before every entry</p>
-          </div>
-          <label class="kill-switch-toggle" title="Block all new entries until cleared">
-            <input type="checkbox" id="kill-switch-input" />
-            <span>Kill switch</span>
-          </label>
-        </header>
-        <div class="risk-metrics" id="risk-metrics">Loading…</div>
-      </div>
+      <details class="card manual-tools-details" id="manual-tools-details">
+        <summary class="checks-summary">Advanced — manual tools &amp; legacy trade workflow</summary>
+        <p class="brief">Not required for paper automation. Kept for diagnosis and optional manual checks.</p>
+        <div class="actions" style="margin:0.5rem 0 1rem">
+          <button class="btn btn-sm" type="button" id="refresh-trading-day">Refresh live before buy</button>
+          <button class="btn secondary btn-sm" type="button" id="pin-top-pick">Pin #1</button>
+        </div>
 
-      <div class="picks-grid">
-        <article class="pick-card pick-card-primary">
-          <header class="pick-card-head">
-            <span class="pick-num">1</span>
+        <section class="daily-rhythm card" id="daily-rhythm-panel">
+          <h2 class="daily-rhythm-title">Daily rhythm</h2>
+          <ol class="rhythm-steps" id="rhythm-steps"></ol>
+        </section>
+
+        <section class="card proposals-panel" id="proposals-panel">
+          <header class="panel-head proposals-panel-head">
             <div>
-              <h2 class="pick-title">Top pick — buy this first</h2>
-              <p class="pick-sub brief">Limit buy in the expected pullback · TRADABLE for today&apos;s $ goal only</p>
+              <h2>Trade proposals</h2>
+              <p class="brief">Optional scored proposals (paper path does not require Approve).</p>
+              <p class="brief" id="ai-status-note">AI: loading…</p>
             </div>
+            <button class="btn btn-sm" type="button" id="generate-proposals">Generate proposals</button>
           </header>
-          <div class="pick-card-body" id="top-pick-body">Loading…</div>
-        </article>
+          <div id="proposals-body" class="proposals-list">
+            <div class="pick-empty">No proposals yet.</div>
+          </div>
+        </section>
 
-        <article class="pick-card pick-card-secondary" id="second-pick-block">
-          <header class="pick-card-head">
-            <span class="pick-num pick-num-alt">2</span>
+        <div class="card risk-panel" id="risk-panel">
+          <header class="panel-head risk-panel-head">
             <div>
-              <h2 class="pick-title">Backup pick</h2>
-              <p class="pick-sub brief">If #1 fails or for optional 2nd trade after a win</p>
+              <h2 class="risk-title">Risk Engine</h2>
+              <p class="brief" id="risk-headline">Portfolio limits — sovereign gate before every entry</p>
             </div>
+            <label class="kill-switch-toggle" title="Block all new entries until cleared">
+              <input type="checkbox" id="kill-switch-input" />
+              <span>Kill switch</span>
+            </label>
           </header>
-          <div class="pick-card-body" id="second-pick-body"><div class="pick-empty">Loading backup pick…</div></div>
-        </article>
-      </div>
+          <div class="risk-metrics" id="risk-metrics">Loading…</div>
+        </div>
 
-      <div class="trade-math-panel card" id="trade-math-panel" hidden>
-        <div class="trade-math-title">Trade math <span class="brief" id="trade-math-goal"></span></div>
-        <div class="trade-math-grid">
-          <div class="trade-math-box buy">
-            <div class="trade-math-label">Limit buy</div>
-            <div class="trade-math-value" id="math-buy">—</div>
-            <div class="trade-math-sub" id="math-shares">—</div>
-            <div class="trade-math-sub" id="math-limit-note">—</div>
-          </div>
-          <div class="trade-math-box stop">
-            <div class="trade-math-label">Stop (−0.75%)</div>
-            <div class="trade-math-value" id="math-stop">—</div>
-            <div class="trade-math-sub" id="math-stop-net">—</div>
-          </div>
-          <div class="trade-math-box sell">
-            <div class="trade-math-label">Sell for goal</div>
-            <div class="trade-math-value" id="math-sell">—</div>
-            <div class="trade-math-sub" id="math-sell-net">—</div>
+        <div class="picks-grid">
+          <article class="pick-card pick-card-primary">
+            <header class="pick-card-head">
+              <span class="pick-num">1</span>
+              <div>
+                <h2 class="pick-title">Top pick detail</h2>
+                <p class="pick-sub brief">Same #1 the automation uses</p>
+              </div>
+            </header>
+            <div class="pick-card-body" id="top-pick-body">Loading…</div>
+          </article>
+          <article class="pick-card pick-card-secondary" id="second-pick-block">
+            <header class="pick-card-head">
+              <span class="pick-num pick-num-alt">2</span>
+              <div>
+                <h2 class="pick-title">Backup pick</h2>
+                <p class="pick-sub brief">Context only under single_top1</p>
+              </div>
+            </header>
+            <div class="pick-card-body" id="second-pick-body"><div class="pick-empty">Loading backup pick…</div></div>
+          </article>
+        </div>
+
+        <div class="trade-math-panel card" id="trade-math-panel" hidden>
+          <div class="trade-math-title">Trade math <span class="brief" id="trade-math-goal"></span></div>
+          <div class="trade-math-grid">
+            <div class="trade-math-box buy">
+              <div class="trade-math-label">Limit buy</div>
+              <div class="trade-math-value" id="math-buy">—</div>
+              <div class="trade-math-sub" id="math-shares">—</div>
+              <div class="trade-math-sub" id="math-limit-note">—</div>
+            </div>
+            <div class="trade-math-box stop">
+              <div class="trade-math-label">Stop (−0.75%)</div>
+              <div class="trade-math-value" id="math-stop">—</div>
+              <div class="trade-math-sub" id="math-stop-net">—</div>
+            </div>
+            <div class="trade-math-box sell">
+              <div class="trade-math-label">Sell for goal</div>
+              <div class="trade-math-value" id="math-sell">—</div>
+              <div class="trade-math-sub" id="math-sell-net">—</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <section class="validate-panel card rhythm-step3-panel">
-        <header class="panel-head">
-          <h2>Step 3 — Confirm before you buy</h2>
-          <p class="brief">Click <strong>Refresh live before buy</strong> above, then place the <strong>limit buy</strong> in E*TRADE (not market).</p>
-        </header>
-        <form id="planned-trade-form" class="planned-trade-form planned-trade-form-hero">
-          <label class="plan-field"><span>Ticker</span><input type="text" id="plan-ticker" placeholder="NFLX" /></label>
-          <label class="plan-field"><span>Limit buy ($)</span><input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Pullback limit" /></label>
-          <label class="plan-field"><span>Shares</span><input type="number" id="plan-shares" step="1" min="1" placeholder="Auto" /></label>
-          <button class="btn plan-submit" type="submit">Validate trade</button>
-        </form>
-        <div id="planned-trade-result" class="planned-trade-result"></div>
-      </section>
+        <section class="validate-panel card rhythm-step3-panel">
+          <header class="panel-head">
+            <h2>Manual validate</h2>
+            <p class="brief">Optional — paper worker does not use this form.</p>
+          </header>
+          <form id="planned-trade-form" class="planned-trade-form planned-trade-form-hero">
+            <label class="plan-field"><span>Ticker</span><input type="text" id="plan-ticker" placeholder="NFLX" /></label>
+            <label class="plan-field"><span>Limit buy ($)</span><input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Pullback limit" /></label>
+            <label class="plan-field"><span>Shares</span><input type="number" id="plan-shares" step="1" min="1" placeholder="Auto" /></label>
+            <button class="btn plan-submit" type="submit">Validate trade</button>
+          </form>
+          <div id="planned-trade-result" class="planned-trade-result"></div>
+        </section>
 
-      <details class="checks-panel card">
-        <summary class="checks-summary">Go / no-go checks &amp; rotation hints</summary>
-        <ul class="check-list" id="trading-checks"></ul>
-        <p class="brief rotation-hint" id="rotation-hint"></p>
+        <div class="checks-panel card">
+          <h3 class="checks-summary">Go / no-go checks</h3>
+          <ul class="check-list" id="trading-checks"></ul>
+          <p class="brief rotation-hint" id="rotation-hint"></p>
+        </div>
       </details>
     </div>
 
@@ -1652,6 +1707,123 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
     }
 
+    function syncStopProcessUi(active) {
+      const stopBtn = document.getElementById("stop-process-btn");
+      const resumeBtn = document.getElementById("resume-process-btn");
+      const killLabel = document.getElementById("paper-kill-label");
+      const pill = document.getElementById("execution-mode-pill");
+      if (stopBtn) {
+        stopBtn.classList.toggle("is-stopped", !!active);
+        stopBtn.textContent = active ? "STOPPED" : "STOP PROCESS";
+        stopBtn.disabled = !!active;
+      }
+      if (resumeBtn) resumeBtn.hidden = !active;
+      if (killLabel) killLabel.textContent = active ? "Kill switch: ON" : "Kill switch: OFF";
+      if (pill) {
+        pill.textContent = active ? "STOPPED" : "PAPER";
+        pill.classList.toggle("mode-pill-stopped", !!active);
+      }
+      document.body.classList.toggle("automation-stopped", !!active);
+    }
+
+    function renderPaperAutomation(paper, td) {
+      const gate = paper?.balances?.gate_approved || {};
+      const all = paper?.balances?.all_signals || {};
+      const todayGate = paper?.today?.gate_approved || {};
+      const sb = paper?.scoreboard || {};
+      const arm = sb.arms?.gate_approved || {};
+      const pick = td?.top_pick;
+
+      const setTxt = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = v;
+      };
+
+      setTxt("paper-session-label", `Session ${paper?.session_date_et || "—"} ET`);
+      setTxt("paper-gate-equity", gate.equity != null ? `$${fmt(gate.equity)}` : "—");
+      setTxt("paper-all-equity", all.equity != null ? `$${fmt(all.equity)}` : "—");
+      setTxt(
+        "paper-today-net",
+        todayGate.net_pnl != null ? `$${fmt(todayGate.net_pnl)}` : "$0"
+      );
+      setTxt("paper-window-fills", String(arm.fills ?? 0));
+      setTxt("paper-pass-flag", sb.paper_pass ? "PASS" : "Not yet");
+
+      // Status bar (automation-focused)
+      setTxt("status-verdict-text", todayGate.status || paper?.execution_mode || "paper");
+      setTxt("status-daily-text", gate.equity != null ? `$${fmt(gate.equity)}` : "—");
+      setTxt("status-weekly-text", `${arm.fills ?? 0} fills`);
+      setTxt("status-cash-text", gate.settled_cash != null ? `$${fmt(gate.settled_cash)}` : "—");
+      setTxt("status-goal-text", sb.paper_pass ? "Yes" : "No");
+
+      const ticker = todayGate.ticker || pick?.ticker;
+      setTxt("auto-selected-ticker", ticker || "—");
+      const statusBits = [
+        todayGate.status || "no_session",
+        todayGate.scenario || "",
+        todayGate.allow_trade === false ? "gate blocked" : "",
+        todayGate.allow_trade === true ? "gate open" : "",
+      ].filter(Boolean);
+      setTxt("auto-selected-status", statusBits.join(" · ") || "Waiting for next session…");
+
+      const whyParts = [];
+      if (pick?.ticker) whyParts.push(`Ranked #1: ${pick.ticker}`);
+      if (todayGate.ma_score != null) whyParts.push(`MA score ${todayGate.ma_score}`);
+      if (todayGate.day_gate_mode) whyParts.push(`Day gate mode: ${todayGate.day_gate_mode}`);
+      if (todayGate.detail) whyParts.push(todayGate.detail);
+      else if (!ticker) whyParts.push("No top pick yet — morning prep runs 4:00 AM PT on trading days.");
+      setTxt("auto-selected-why", whyParts.join(" — "));
+
+      const buy = pick?.limit_buy_price ?? pick?.recommended_entry ?? todayGate.entry_price;
+      const sell = pick?.limit_sell_price ?? pick?.target_price ?? todayGate.exit_price;
+      const stop = pick?.stop_price;
+      const shares = todayGate.shares ?? pick?.recommended_shares;
+      setTxt("auto-lvl-buy", buy != null ? `$${fmt(buy)}` : "—");
+      setTxt("auto-lvl-sell", sell != null ? `$${fmt(sell)}` : "—");
+      setTxt("auto-lvl-stop", stop != null ? `$${fmt(stop)}` : "—");
+      setTxt("auto-lvl-shares", shares != null ? String(shares) : "—");
+
+      syncStopProcessUi(!!paper?.kill_switch_active);
+    }
+
+    function renderPaperTransactions(sessions) {
+      const body = document.getElementById("paper-tx-body");
+      if (!body) return;
+      if (!sessions?.length) {
+        body.innerHTML =
+          '<tr><td colspan="7" class="empty">No paper sessions yet — first trading day Mon Oct 20.</td></tr>';
+        return;
+      }
+      body.innerHTML = sessions.map((r) => `
+        <tr>
+          <td>${r.session_date_et || "—"}</td>
+          <td>${r.account_name || "—"}</td>
+          <td><strong>${r.ticker || "—"}</strong></td>
+          <td>${r.status || "—"}</td>
+          <td>${r.exit_reason || r.scenario || "—"}</td>
+          <td>${r.net_pnl != null ? "$" + fmt(r.net_pnl) : "—"}</td>
+          <td class="brief">${r.detail || ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadPaperAutomation() {
+      try {
+        const [paper, sessions, td] = await Promise.all([
+          api("/api/paper/status"),
+          api("/api/paper/sessions?limit=40"),
+          api("/api/trading-day/status").catch(() => null),
+        ]);
+        renderPaperAutomation(paper, td);
+        renderPaperTransactions(sessions.sessions || []);
+        return paper;
+      } catch (err) {
+        const el = document.getElementById("auto-selected-status");
+        if (el) el.textContent = err.message || "Paper status failed";
+        return null;
+      }
+    }
+
     async function updateKillSwitch(active, sourceInput) {
       const inputs = [
         document.getElementById("kill-switch-input"),
@@ -1667,9 +1839,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         });
         inputs.forEach((el) => { el.checked = active; });
         document.getElementById("cb-kill-switch-label").textContent = active ? "ON" : "OFF";
-        toast(active ? "Kill switch ON — no new entries" : "Kill switch cleared");
+        syncStopProcessUi(active);
+        toast(active ? "STOP PROCESS — automation blocked" : "Automation resumed");
         await loadTradingDay();
         await loadCapitalBuilder();
+        await loadPaperAutomation();
       } catch (err) {
         inputs.forEach((el) => { el.checked = !active; });
         toast(err.message || "Kill switch update failed", 6000);
@@ -3051,6 +3225,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
 
     async function refreshAll() {
       await Promise.allSettled([
+        loadPaperAutomation(),
         loadTradingDay(),
         loadSummary(),
         loadCapitalBuilder(),
@@ -3373,6 +3548,15 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
 
     document.getElementById("cb-kill-switch-input")?.addEventListener("change", (e) => {
       updateKillSwitch(e.target.checked, e.target);
+    });
+
+    document.getElementById("stop-process-btn")?.addEventListener("click", () => {
+      if (!confirm("STOP PROCESS — block all new automated entries until you Resume?")) return;
+      updateKillSwitch(true, null);
+    });
+
+    document.getElementById("resume-process-btn")?.addEventListener("click", () => {
+      updateKillSwitch(false, null);
     });
 
     ["plan-ticker", "plan-price", "plan-shares"].forEach((id) => {
