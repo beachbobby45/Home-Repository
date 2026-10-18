@@ -420,7 +420,7 @@ def api_scenario_visualizer(
 
 @app.get("/api/growth-plan/ten-year")
 def api_growth_plan_ten_year() -> dict[str, Any]:
-    """Year 1–10 projection: $15K base vs +$10K injection at ~month 6."""
+    """Year 1–10 projection: $5K base vs staged funding ladder to $20K invested."""
     return build_ten_year_growth_plan()
 
 

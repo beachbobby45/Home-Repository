@@ -52,6 +52,14 @@ def test_editable_tax_rate():
     assert sweep.tax_sweep == 300.0
 
 
+def test_split_lot_weekly_at_5k():
+    detail = capital_tier_detail(5_000)
+    assert detail["daily_production_target"] == 75.0
+    assert detail["weekly_production_target"] == 225.0
+    assert weekly_production_target(5_000) == 225.0
+    assert daily_profit_target(5_000) == 75.0
+
+
 def test_split_lot_weekly_at_10k():
     detail = capital_tier_detail(10_000)
     assert detail["daily_production_target"] == 150.0

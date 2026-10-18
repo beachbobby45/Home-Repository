@@ -725,7 +725,7 @@
       <section class="view-section">
         <header class="view-head">
           <h2>10-year growth plan</h2>
-          <p class="brief">Planning view — $15K start, annual 35% sweep, +$10K capital at ~month 6 (Year 1).</p>
+          <p class="brief">Planning view — $5K start (paper / RH #1), annual 35% sweep, staged +$5K deposits to $20K invested (evidence-gated).</p>
         </header>
         <div class="plan-quick-links card">
           <span class="brief">Related:</span>
@@ -735,10 +735,10 @@
           <button type="button" class="btn secondary btn-sm plan-link-btn" data-goto="sweep-section">Period-end sweep</button>
         </div>
         <div class="grid grid-4 plan-kpi-grid" id="plan-kpi-grid">
-          <div class="card kpi-card"><h2>Base → $5M</h2><div class="metric small" id="plan-months-base">—</div></div>
-          <div class="card kpi-card"><h2>+$10K → $5M</h2><div class="metric small" id="plan-months-inj">—</div></div>
-          <div class="card kpi-card"><h2>Year 10 (base)</h2><div class="metric small" id="plan-y10-base">—</div></div>
-          <div class="card kpi-card"><h2>Year 10 (+$10K)</h2><div class="metric small" id="plan-y10-inj">—</div></div>
+          <div class="card kpi-card"><h2>$5K only → $5M</h2><div class="metric small" id="plan-months-base">—</div></div>
+          <div class="card kpi-card"><h2>Funded $20K → $5M</h2><div class="metric small" id="plan-months-inj">—</div></div>
+          <div class="card kpi-card"><h2>Year 10 ($5K)</h2><div class="metric small" id="plan-y10-base">—</div></div>
+          <div class="card kpi-card"><h2>Year 10 (funded)</h2><div class="metric small" id="plan-y10-inj">—</div></div>
         </div>
         <div class="card" id="plan-assumptions">Loading assumptions…</div>
         <div class="card table-card">
@@ -748,8 +748,8 @@
               <thead>
                 <tr>
                   <th>Year</th>
-                  <th colspan="4" class="plan-col-group">Base ($15K start)</th>
-                  <th colspan="4" class="plan-col-group plan-col-injection">With +$10K @ mo ~6</th>
+                  <th colspan="4" class="plan-col-group">Base ($5K only)</th>
+                  <th colspan="4" class="plan-col-group plan-col-injection">Funded → $20K invested</th>
                   <th colspan="2">Compare</th>
                 </tr>
                 <tr>
@@ -761,7 +761,7 @@
                   <th>End balance</th>
                   <th>Goal %</th>
                   <th>Deploy · net/trade</th>
-                  <th>Injection</th>
+                  <th>Deposits</th>
                   <th>Δ balance</th>
                   <th>Notes</th>
                 </tr>
@@ -771,8 +771,8 @@
           </div>
         </div>
         <p class="brief plan-disclaimer">
-          Model only — 60.6% dollar hit rate, 2.9 tradeable days/week, tier-scaled net/trade, one #1 pick per day
-          (2nd trade exceptional days). Not a guarantee; journal actuals live under Account.
+          Model only — $5K start · $75 net/trade at $5K tier · 60.6% dollar hit rate · 2.9 tradeable days/week
+          (≤5 sessions/wk post-PDT) · staged deposits stay evidence-gated. Not a guarantee; Account shows live paper / funding status.
         </p>
       </section>
     </div>
@@ -784,7 +784,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.1 · $15K · Annual Sweep</strong> ($15K basis, annual 35% sweep, growth scenarios)</p>
+          <p class="brief">Latest release: <strong>v0.9.4 · $5K Plan</strong> ($5K start, staged funding to $20K, annual 35% sweep, growth scenarios)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -886,8 +886,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (v.version === "0.9.1") {
-              setupHelp.textContent = "You are on the current release ($15K basis · annual sweep). Hard-refresh (Cmd+Shift+R) if Cash still shows $10,000.";
+            if (v.version === "0.9.4" || v.version === "0.9.3") {
+              setupHelp.textContent = "You are on the current release ($5K plan · staged funding to $20K · annual sweep). Hard-refresh (Cmd+Shift+R) if Plan still shows $15K start.";
               setupHelp.className = "brief setup-version-help setup-version-ok";
             } else {
               setupHelp.textContent = "Your dashboard is behind. Double-click Update and Open Dashboard.command in Finder (no Terminal typing).";
@@ -3066,11 +3066,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     async function loadTenYearPlan() {
       const data = await api("/api/growth-plan/ten-year");
       const a = data.assumptions || {};
+      const sched = (a.injection_schedule || [])
+        .map((x) => `wk ${x.week_offset}: +$${fmt(x.amount)}`)
+        .join(" · ") || (a.injection_week != null ? `from week ${a.injection_week}` : "—");
       document.getElementById("plan-assumptions").innerHTML = [
         `<strong>Assumptions</strong> (planning model — see Plan tab disclaimer)`,
-        `$${fmt(data.starting_basis)} start · ${a.hit_rate_pct}% hit · ${a.tradeable_days_per_week} tradeable days/wk`,
-        `Annual ${a.sweep_rate_pct}% sweep · ${a.capital_injection || "—"} ($${fmt(a.injection_amount || 0)} at week ${a.injection_week || "—"})`,
-        `${a.one_trade_per_day ? "One #1 pick/day" : ""} · ${a.second_trade || ""}`,
+        `$${fmt(data.starting_basis)} start · ${a.hit_rate_pct}% hit · ${a.tradeable_days_per_week} tradeable days/wk · ≤${a.sessions_per_week_cap || 5} sessions/wk`,
+        `Annual ${a.sweep_rate_pct}% sweep · ${a.capital_injection || "—"} ($${fmt(a.injection_amount || 0)} total · ${sched})`,
+        `${a.settlement || "Cash / unlevered · T+1"} · ${a.one_trade_per_day ? "One #1 pick/day" : ""} · ${a.second_trade || ""}`,
       ].join("<br>");
       document.getElementById("plan-summary").textContent = data.summary || "";
       const mtg = data.months_to_goal || {};
@@ -3119,8 +3122,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       stats.innerHTML = `
         <div class="card"><h2>Current</h2><div class="metric small">$${fmt(s.current_balance)}</div></div>
         <div class="card"><h2>Goal %</h2><div class="metric small">${fmtPct(s.current_goal_pct)}</div></div>
-        <div class="card"><h2>Growth plan</h2><div class="metric small">${s.scenarios?.growth_plan_annual?.months_to_goal != null ? s.scenarios.growth_plan_annual.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
-        <div class="card"><h2>+$10K @ 6 mo</h2><div class="metric small">${s.scenarios?.growth_plan_injection?.months_to_goal != null ? s.scenarios.growth_plan_injection.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
+        <div class="card"><h2>$5K plan</h2><div class="metric small">${s.scenarios?.growth_plan_annual?.months_to_goal != null ? s.scenarios.growth_plan_annual.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
+        <div class="card"><h2>Funded → $20K</h2><div class="metric small">${s.scenarios?.growth_plan_injection?.months_to_goal != null ? s.scenarios.growth_plan_injection.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
       `;
       renderScenarioChart(s);
       const tbody = document.getElementById("scenario-table");
@@ -3137,8 +3140,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       leg.innerHTML = `
         <span class="legend-item"><span class="swatch actual"></span> Actual (journal)</span>
         <span class="legend-item"><span class="swatch pace"></span> Journal pace</span>
-        <span class="legend-item"><span class="swatch growth"></span> Growth plan (annual)</span>
-        <span class="legend-item"><span class="swatch injection"></span> +$10K @ 6 mo</span>
+        <span class="legend-item"><span class="swatch growth"></span> $5K plan (annual)</span>
+        <span class="legend-item"><span class="swatch injection"></span> Funded → $20K</span>
       `;
     }
 

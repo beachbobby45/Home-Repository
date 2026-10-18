@@ -33,7 +33,9 @@ LOT_DAILY_BASE = 150.0
 LOT_DAILY_STEP = 50.0
 
 # Tier threshold (equity) → virtual lot sizes (sum equals threshold at milestones)
+# $5K first tranche matches paper / RH Deposit #1 (post-PDT plan).
 TIER_LOT_STRUCTURES: dict[int, tuple[int, ...]] = {
+    5_000: (5_000,),
     10_000: (10_000,),
     15_000: (15_000,),
     20_000: (10_000, 10_000),
@@ -147,8 +149,13 @@ def tradable_after_sweep(
 
 
 def lot_daily_production(lot_size: float) -> float:
-    """Daily net production rate for one virtual lot (e.g. $10K lot → $150)."""
-    size = max(float(lot_size), LOT_BASE_SIZE)
+    """Daily net production rate for one virtual lot (e.g. $10K lot → $150, $5K → $75)."""
+    size = max(float(lot_size), 0.0)
+    if size <= 0:
+        return 0.0
+    # Below $10K: scale so the % move for a full target stays comparable ($5K → $75).
+    if size < LOT_BASE_SIZE:
+        return round(LOT_DAILY_BASE * (size / LOT_BASE_SIZE), 2)
     steps = (size - LOT_BASE_SIZE) / LOT_SIZE_STEP
     return round(LOT_DAILY_BASE + steps * LOT_DAILY_STEP, 2)
 
@@ -243,11 +250,11 @@ def daily_profit_target(
 
 def growth_plan_milestones(
     *,
-    basis: float = ORIGINAL_BASIS,
+    basis: float = 5_000.0,
     step_balance: float = DAILY_TARGET_EVERY,
     max_balance: float = 50_000.0,
 ) -> list[dict]:
-    """Capital Builder tier table for dashboard growth reference."""
+    """Capital Builder tier table for dashboard growth reference ($5K → up)."""
     _ = step_balance
     rows: list[dict] = []
     for threshold in sorted(TIER_LOT_STRUCTURES.keys()):

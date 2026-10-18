@@ -1,4 +1,8 @@
-"""Tier-based growth plan projection for scenario visualizer."""
+"""Tier-based growth plan projection for scenario visualizer / Plan tab.
+
+Planning basis is the post-PDT $5K paper → staged RH funding path
+(not the legacy $15K journal ORIGINAL_BASIS).
+"""
 
 from __future__ import annotations
 
@@ -11,7 +15,6 @@ from investment_agent.finance import (
     DEFAULT_MGMT_SWEEP_RATE,
     DEFAULT_TAX_RESERVE_RATE,
     GOAL_ACCOUNT_VALUE,
-    ORIGINAL_BASIS,
     SWEEP_SCHEDULE_ANNUAL,
     SWEEP_SCHEDULE_MONTHLY,
     TIER_LOT_STRUCTURES,
@@ -27,6 +30,10 @@ DEFAULT_TRADEABLE_DAYS_PER_WEEK = 2.9
 WEEKS_PER_YEAR = 52
 WEEKS_PER_MONTH = WEEKS_PER_YEAR / 12.0
 _MAX_TIER_THRESHOLD = max(TIER_LOT_STRUCTURES.keys())
+
+# Plan tab / scenario planning start — matches paper ledger & RH Deposit #1
+PLAN_STARTING_BASIS = 5_000.0
+PLAN_FUNDED_TARGET = 20_000.0  # four × $5k invested under funding plan
 
 
 def projection_daily_target(balance: float) -> float:
@@ -69,11 +76,16 @@ class YearPlanRow:
     notes: str = ""
 
 
-DEFAULT_INJECTION = CapitalInjection(
-    week_offset=26,
-    amount=10_000.0,
-    label="+$10K @ month ~6",
+# Staged +$5K deposits after first $5K live (funding_plan.py earliest sketches).
+# Offsets from RH Deposit #1 (~2026-12-01): #2 ~Feb 16, #3 ~Mar 30, #4 ~May 11.
+DEFAULT_FUNDING_INJECTIONS: tuple[CapitalInjection, ...] = (
+    CapitalInjection(week_offset=11, amount=5_000.0, label="Deposit #2 (+$5K)"),
+    CapitalInjection(week_offset=17, amount=5_000.0, label="Deposit #3 (+$5K)"),
+    CapitalInjection(week_offset=23, amount=5_000.0, label="Deposit #4 (+$5K → $20K)"),
 )
+
+# Backward-compatible alias: first scheduled deposit (tests / callers expecting one).
+DEFAULT_INJECTION = DEFAULT_FUNDING_INJECTIONS[0]
 
 
 def _tier_labels_at_balance(balance: float) -> tuple[str, float, int]:
@@ -87,7 +99,7 @@ def _tier_labels_at_balance(balance: float) -> tuple[str, float, int]:
 
 def _simulate_yearly_plan(
     *,
-    starting_balance: float = ORIGINAL_BASIS,
+    starting_balance: float = PLAN_STARTING_BASIS,
     years: int = 10,
     hit_rate: float = DEFAULT_HIT_RATE,
     tradeable_days_per_week: float = DEFAULT_TRADEABLE_DAYS_PER_WEEK,
@@ -137,7 +149,7 @@ def _simulate_yearly_plan(
                 notes = f"$5M goal crossed (~month {week // int(round(WEEKS_PER_MONTH))})"
                 goal_crossed = True
             if year_injection > 0:
-                notes = (notes + " · " if notes else "") + f"Capital injection ${year_injection:,.0f}"
+                notes = (notes + " · " if notes else "") + f"Capital in ${year_injection:,.0f}"
             rows.append(
                 YearPlanRow(
                     year=calendar_year,
@@ -168,14 +180,16 @@ def build_ten_year_growth_plan(
     years: int = 10,
     hit_rate: float = DEFAULT_HIT_RATE,
     tradeable_days_per_week: float = DEFAULT_TRADEABLE_DAYS_PER_WEEK,
-    injection: CapitalInjection | None = DEFAULT_INJECTION,
+    starting_balance: float = PLAN_STARTING_BASIS,
+    injections: tuple[CapitalInjection, ...] | None = None,
     goal: float = GOAL_ACCOUNT_VALUE,
 ) -> dict:
     """
-    Side-by-side Year 1–10 table: $15K base vs +$10K injection at ~month 6.
+    Side-by-side Year 1–10 table: $5K base vs funded ladder to $20K invested.
     """
-    inj_tuple = (injection,) if injection else ()
+    inj_tuple = DEFAULT_FUNDING_INJECTIONS if injections is None else injections
     base_rows = _simulate_yearly_plan(
+        starting_balance=starting_balance,
         years=years,
         hit_rate=hit_rate,
         tradeable_days_per_week=tradeable_days_per_week,
@@ -183,6 +197,7 @@ def build_ten_year_growth_plan(
         goal=goal,
     )
     inj_rows = _simulate_yearly_plan(
+        starting_balance=starting_balance,
         years=years,
         hit_rate=hit_rate,
         tradeable_days_per_week=tradeable_days_per_week,
@@ -209,22 +224,38 @@ def build_ten_year_growth_plan(
         )
 
     hit_pct = hit_rate * 100
-    inj_label = injection.label if injection else "None"
-    inj_amount = injection.amount if injection else 0.0
+    inj_total = sum(i.amount for i in inj_tuple)
+    inj_label = (
+        f"+${inj_total:,.0f} staged to ${PLAN_FUNDED_TARGET:,.0f}"
+        if inj_tuple
+        else "None"
+    )
+    inj_schedule = [
+        {
+            "week_offset": i.week_offset,
+            "amount": i.amount,
+            "label": i.label,
+        }
+        for i in inj_tuple
+    ]
 
     return {
         "goal": goal,
-        "starting_basis": ORIGINAL_BASIS,
+        "starting_basis": starting_balance,
+        "funded_target": PLAN_FUNDED_TARGET,
         "assumptions": {
             "hit_rate_pct": round(hit_pct, 1),
             "tradeable_days_per_week": tradeable_days_per_week,
             "sweep_schedule": SWEEP_SCHEDULE_ANNUAL,
             "sweep_rate_pct": round((DEFAULT_MGMT_SWEEP_RATE + DEFAULT_TAX_RESERVE_RATE) * 100, 0),
             "capital_injection": inj_label,
-            "injection_amount": inj_amount,
-            "injection_week": injection.week_offset if injection else None,
+            "injection_amount": inj_total,
+            "injection_week": inj_tuple[0].week_offset if inj_tuple else None,
+            "injection_schedule": inj_schedule,
+            "sessions_per_week_cap": 5,
             "one_trade_per_day": True,
             "second_trade": "Exceptional days only (#1 win + market GO)",
+            "settlement": "Cash / unlevered · T+1 redeploy",
         },
         "months_to_goal": {
             "base": _months_to_goal(base_rows),
@@ -232,10 +263,11 @@ def build_ten_year_growth_plan(
         },
         "years": comparison,
         "summary": (
-            f"${ORIGINAL_BASIS:,.0f} start · {hit_pct:.1f}% hit · "
-            f"{tradeable_days_per_week:.1f} tradeable days/wk · 35% annual sweep. "
-            f"With {inj_label}: ~{_months_to_goal(inj_rows) or '>120'} months to $5M vs "
-            f"~{_months_to_goal(base_rows) or '>120'} base."
+            f"${starting_balance:,.0f} start · {hit_pct:.1f}% hit · "
+            f"{tradeable_days_per_week:.1f} tradeable days/wk · ≤5 sessions/wk · "
+            f"35% annual sweep. With {inj_label}: "
+            f"~{_months_to_goal(inj_rows) or '>120'} months to $5M vs "
+            f"~{_months_to_goal(base_rows) or '>120'} base ($5K only)."
         ),
     }
 
@@ -272,7 +304,7 @@ def _annual_sweep_key(year_index: int, start_year: int = 1) -> str:
 
 def project_growth_plan(
     *,
-    starting_balance: float = ORIGINAL_BASIS,
+    starting_balance: float = PLAN_STARTING_BASIS,
     months: int = 120,
     hit_rate: float = DEFAULT_HIT_RATE,
     tradeable_days_per_week: float = DEFAULT_TRADEABLE_DAYS_PER_WEEK,
@@ -409,37 +441,42 @@ def default_growth_scenarios(
     months: int = 120,
     hit_rate: float = DEFAULT_HIT_RATE,
     tradeable_days_per_week: float = DEFAULT_TRADEABLE_DAYS_PER_WEEK,
+    starting_balance: float = PLAN_STARTING_BASIS,
 ) -> dict[str, dict]:
-    """Base $15K annual-sweep plan and +$10K injection at week 26 (~6 months)."""
+    """Base $5K annual-sweep plan and staged funding ladder to $20K invested."""
     base_pts = project_growth_plan(
+        starting_balance=starting_balance,
         months=months,
         hit_rate=hit_rate,
         tradeable_days_per_week=tradeable_days_per_week,
         sweep_schedule=SWEEP_SCHEDULE_ANNUAL,
     )
     injection_pts = project_growth_plan(
+        starting_balance=starting_balance,
         months=months,
         hit_rate=hit_rate,
         tradeable_days_per_week=tradeable_days_per_week,
         sweep_schedule=SWEEP_SCHEDULE_ANNUAL,
-        injections=(CapitalInjection(week_offset=26, amount=10_000.0, label="+$10K @ ~6 mo"),),
+        injections=DEFAULT_FUNDING_INJECTIONS,
     )
     hit_pct = hit_rate * 100
     return {
         "growth_plan_annual": projection_to_scenario_dict(
             base_pts,
-            name="Growth plan (annual sweep)",
+            name="Growth plan ($5K · annual sweep)",
             description=(
-                f"${ORIGINAL_BASIS:,.0f} start · {hit_pct:.1f}% hit · "
-                f"{tradeable_days_per_week:.1f} tradeable days/wk · 35% annual sweep."
+                f"${starting_balance:,.0f} start · {hit_pct:.1f}% hit · "
+                f"{tradeable_days_per_week:.1f} tradeable days/wk · ≤5 sessions/wk · "
+                f"35% annual sweep."
             ),
         ),
         "growth_plan_injection": projection_to_scenario_dict(
             injection_pts,
-            name="Growth plan (+$10K @ 6 mo)",
+            name="Growth plan (funded → $20K)",
             description=(
-                f"Same as growth plan with +$10,000 capital injection at week 26 "
-                f"({hit_pct:.1f}% hit · annual 35% sweep)."
+                f"Same as growth plan with staged +$5K deposits to "
+                f"${PLAN_FUNDED_TARGET:,.0f} invested "
+                f"({hit_pct:.1f}% hit · annual 35% sweep · evidence-gated)."
             ),
         ),
     }
@@ -447,10 +484,13 @@ def default_growth_scenarios(
 
 __all__ = [
     "CapitalInjection",
+    "DEFAULT_FUNDING_INJECTIONS",
     "DEFAULT_HIT_RATE",
     "DEFAULT_INJECTION",
     "DEFAULT_TRADEABLE_DAYS_PER_WEEK",
     "GrowthProjectionPoint",
+    "PLAN_FUNDED_TARGET",
+    "PLAN_STARTING_BASIS",
     "YearPlanRow",
     "build_ten_year_growth_plan",
     "default_growth_scenarios",
