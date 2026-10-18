@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261018audit" />
+  <link rel="stylesheet" href="/static/style.css?v=20261018fund" />
 </head>
 <body>
   <header class="app-header">
@@ -528,6 +528,32 @@
         </div>
       </section>
 
+      <section class="view-section" id="funding-plan-section">
+        <header class="view-head">
+          <h2>Funding &amp; RH transition plan</h2>
+          <p class="brief" id="funding-plan-note">$5,000 paper now → Robinhood live after paper pass → staged +$5,000 deposits (gated).</p>
+        </header>
+        <div class="card">
+          <div class="auto-pnl-strip" id="funding-plan-highlights">
+            <div class="auto-pnl-item"><span class="status-label">Phase band</span><strong id="funding-phase-label">$5,000 → $20,000</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">RH live (earliest)</span><strong id="funding-rh-date">2026-12-01</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">RH deposit #1</span><strong id="funding-rh-amt">+$5,000</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">Next +$5k</span><strong id="funding-next">Gated</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">Paper pass</span><strong id="funding-paper-pass">Not yet</strong></div>
+          </div>
+          <div class="table-wrap" style="margin-top:1rem">
+            <table class="data-table" id="funding-plan-table">
+              <thead><tr>
+                <th>Date</th><th>Stage</th><th>Cash in</th><th>Invested after</th><th>Status</th><th>Gate</th>
+              </tr></thead>
+              <tbody id="funding-plan-body">
+                <tr><td colspan="6" class="empty">Loading funding plan…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section class="view-section">
         <header class="view-head">
           <h2>Ops audit</h2>
@@ -548,12 +574,12 @@
       <section class="view-section capital-builder-section">
         <header class="view-head">
           <h2>Capital Builder</h2>
-          <p class="brief">Phase 1 milestone — guidance only, not a trading quota. Equity follows paper ledger while source=paper.</p>
+          <p class="brief">Paper / staged plan: <strong>$5,000 → $20,000</strong> invested. Equity follows paper ledger until RH is source of truth.</p>
         </header>
         <div class="card capital-builder-panel" id="capital-builder-panel">
           <div class="cb-milestone">
             <div class="cb-milestone-head">
-              <span class="cb-milestone-label" id="cb-phase-label">Phase 1: $15,000 → $30,000</span>
+              <span class="cb-milestone-label" id="cb-phase-label">Plan: $5,000 → $20,000</span>
               <span class="cb-milestone-badge brief" id="cb-milestone-badge"></span>
             </div>
             <div class="metric" id="cb-current-equity">—</div>
@@ -1675,7 +1701,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const panel = document.getElementById("capital-builder-panel");
       panel?.classList.toggle("kill-switch-on", !!cb.kill_switch_active);
       document.getElementById("cb-phase-label").textContent =
-        `Phase 1: $${fmt(cb.phase1_start)} → $${fmt(cb.phase1_target)}`;
+        `Plan: $${fmt(cb.phase1_start)} → $${fmt(cb.phase1_target)}`;
       const badge = document.getElementById("cb-milestone-badge");
       if (badge) {
         badge.textContent = cb.milestone_reached ? "Milestone reached" : "";
@@ -1922,6 +1948,51 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         renderOpsAudit(data.events || []);
       } catch (_) {
         renderOpsAudit([]);
+      }
+    }
+
+    function renderFundingPlan(fp) {
+      if (!fp) return;
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt("funding-phase-label", fp.phase_label || "$5,000 → $20,000");
+      setTxt("funding-rh-date", fp.rh_transition?.earliest_date || "—");
+      setTxt("funding-rh-amt", fp.rh_transition?.amount != null ? `+$${fmt(fp.rh_transition.amount)}` : "+$5,000");
+      const next = fp.next_funding;
+      setTxt(
+        "funding-next",
+        next
+          ? `${next.date}: +$${fmt(next.cash_in)} (${next.stage})`
+          : "None scheduled"
+      );
+      setTxt("funding-paper-pass", fp.scoreboard?.paper_pass ? "PASS" : "Not yet");
+      const note = document.getElementById("funding-plan-note");
+      if (note) note.textContent = fp.notes || note.textContent;
+      const body = document.getElementById("funding-plan-body");
+      if (!body) return;
+      const stages = fp.stages || [];
+      if (!stages.length) {
+        body.innerHTML = '<tr><td colspan="6" class="empty">No funding stages.</td></tr>';
+        return;
+      }
+      body.innerHTML = stages.map((r) => `
+        <tr>
+          <td>${r.date || "—"}</td>
+          <td><strong>${r.stage || "—"}</strong></td>
+          <td>${r.cash_in ? "+$" + fmt(r.cash_in) : "—"}</td>
+          <td>${r.invested_after != null ? "$" + fmt(r.invested_after) : "—"}</td>
+          <td>${r.status_hint || "—"}</td>
+          <td class="brief">${r.gate || ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadFundingPlan() {
+      try {
+        const fp = await api("/api/funding-plan");
+        renderFundingPlan(fp);
+        return fp;
+      } catch (_) {
+        return null;
       }
     }
 
@@ -3285,6 +3356,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         loadTradingDay(),
         loadSummary(),
         loadOpsAudit(),
+        loadFundingPlan(),
         loadCapitalBuilder(),
         loadScenario(),
         loadTenYearPlan(),

@@ -155,6 +155,7 @@ from investment_agent.execution.ops_audit import (
     list_audit_events,
     log_test_suite_results,
 )
+from investment_agent.funding_plan import build_funding_plan_payload
 from investment_agent.trade_proposal import (
     REJECTION_REASONS,
     approve_proposal,
@@ -939,6 +940,12 @@ class AuditTestSuiteBody(BaseModel):
     total: int = 0
     notes: str | None = None
     cases: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@app.get("/api/funding-plan")
+def api_funding_plan(conn=Depends(_db)) -> dict[str, Any]:
+    """Paper → RH transition + staged $5k deposit schedule (gated dates)."""
+    return build_funding_plan_payload(conn)
 
 
 @app.get("/api/audit")

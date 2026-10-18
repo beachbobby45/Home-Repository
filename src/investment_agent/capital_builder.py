@@ -13,8 +13,11 @@ from investment_agent.finance import (
 from investment_agent.journal import today_pt_str
 from investment_agent.risk_engine import build_portfolio_snapshot
 
-PHASE1_START = ORIGINAL_BASIS
+PHASE1_START = ORIGINAL_BASIS  # legacy $15k journal path
 PHASE1_TARGET = 30_000.0
+# Paper / staged RH funding band (Tony Oct 2026 plan)
+PAPER_PHASE_START = 5_000.0
+PAPER_PHASE_TARGET = 20_000.0
 SOFT_TARGET_NOTE = (
     "Guidance only — up to 3 winning trades/week at tier net/trade; "
     "default is one #1 pick per day. A second trade only on exceptional days "
@@ -22,19 +25,44 @@ SOFT_TARGET_NOTE = (
 )
 
 
-def phase1_journey_progress_pct(current_equity: float) -> float:
-    """Percent complete along the $15K→$30K path (0–100)."""
-    span = PHASE1_TARGET - PHASE1_START
+def _phase_bounds(conn: sqlite3.Connection | None) -> tuple[float, float]:
+    if conn is None:
+        return PHASE1_START, PHASE1_TARGET
+    from investment_agent.execution.ops_audit import (
+        LEDGER_SOURCE_PAPER,
+        get_ledger_source,
+    )
+
+    if get_ledger_source(conn) == LEDGER_SOURCE_PAPER:
+        return PAPER_PHASE_START, PAPER_PHASE_TARGET
+    return PHASE1_START, PHASE1_TARGET
+
+
+def phase1_journey_progress_pct(
+    current_equity: float,
+    *,
+    start: float | None = None,
+    target: float | None = None,
+) -> float:
+    """Percent complete along the phase path (0–100)."""
+    lo = PHASE1_START if start is None else start
+    hi = PHASE1_TARGET if target is None else target
+    span = hi - lo
     if span <= 0:
         return 0.0
-    return max(0.0, min(100.0, (current_equity - PHASE1_START) / span * 100.0))
+    return max(0.0, min(100.0, (current_equity - lo) / span * 100.0))
 
 
-def phase1_of_target_pct(current_equity: float) -> float:
-    """Current equity as percentage of the $30K Phase 1 target."""
-    if PHASE1_TARGET <= 0:
+def phase1_of_target_pct(
+    current_equity: float,
+    *,
+    target: float | None = None,
+) -> float:
+    """Current equity as percentage of the phase target."""
+    hi = PHASE1_TARGET if target is None else target
+    if hi <= 0:
         return 0.0
-    return max(0.0, (current_equity / PHASE1_TARGET) * 100.0)
+    return max(0.0, (current_equity / hi) * 100.0)
 
 
 def weekly_production_progress_pct(weekly_net: float, weekly_target: float) -> float:
@@ -77,18 +105,21 @@ def build_capital_builder_progress(
     when = date_key or today_pt_str()
     snapshot = build_portfolio_snapshot(conn, date_key=when)
     equity = snapshot.current_equity
+    phase_start, phase_target = _phase_bounds(conn)
     tier = capital_tier_detail(equity)
     weekly_target = tier["weekly_production_target"]
     weekly_net = snapshot.weekly_realized_net
     weekly_pct = round(weekly_production_progress_pct(weekly_net, weekly_target), 1)
 
     return CapitalBuilderProgress(
-        phase1_start=PHASE1_START,
-        phase1_target=PHASE1_TARGET,
+        phase1_start=phase_start,
+        phase1_target=phase_target,
         current_equity=equity,
         tradable_cash=snapshot.tradable_cash,
-        journey_progress_pct=round(phase1_journey_progress_pct(equity), 1),
-        of_target_pct=round(phase1_of_target_pct(equity), 1),
+        journey_progress_pct=round(
+            phase1_journey_progress_pct(equity, start=phase_start, target=phase_target), 1
+        ),
+        of_target_pct=round(phase1_of_target_pct(equity, target=phase_target), 1),
         tier_threshold=float(tier["tier_threshold"]),
         lot_structure=list(tier["lot_structure"]),
         structure_label=tier["structure_label"],
@@ -100,7 +131,7 @@ def build_capital_builder_progress(
         high_water_mark=snapshot.high_water_mark,
         drawdown_pct=snapshot.drawdown_pct,
         kill_switch_active=snapshot.kill_switch_active,
-        milestone_reached=equity >= PHASE1_TARGET,
+        milestone_reached=equity >= phase_target,
         weekly_soft_target=weekly_target,
         weekly_soft_progress_pct=weekly_pct,
     )
@@ -136,6 +167,8 @@ def progress_to_dict(progress: CapitalBuilderProgress) -> dict:
 __all__ = [
     "PHASE1_START",
     "PHASE1_TARGET",
+    "PAPER_PHASE_START",
+    "PAPER_PHASE_TARGET",
     "SOFT_TARGET_NOTE",
     "CapitalBuilderProgress",
     "build_capital_builder_progress",
