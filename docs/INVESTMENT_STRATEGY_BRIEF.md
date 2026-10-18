@@ -106,8 +106,8 @@ Source: operator’s local SQLite history + Yahoo 5-minute bars; scripted counte
 | Selection | Default **#1 only** (`single_top1`); dual #1+#2 only after a future study |
 | Broker | Robinhood; RH = source of truth for cash/P&L |
 | Software | Local Mac dashboard + LaunchAgent worker; Cursor for research/oversight |
-| Capital plan | Four × $5k deposits → **$20k invested**, gated on cycle profit |
-| Horizon (plan) | Cycle 1 target start **~Nov 2, 2026**; ladder through **~Apr 2027** |
+| Capital plan | Paper first → live **$5k** → scale to **$20k** only under §5 evidence gates |
+| Horizon (plan) | P0/P1 immediately; live $5k only after paper pass |
 
 ### Out of scope (near term)
 - Short selling, options, crypto, **borrowed margin / leverage**  
