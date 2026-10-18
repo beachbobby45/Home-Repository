@@ -1,15 +1,32 @@
-"""5-minute bar fill/exit simulation for the paper ledger (same rules as blocked-day analysis)."""
+"""5-minute bar fill/exit simulation for the paper ledger.
+
+Fill modes:
+  - touch: bar extreme reaches the limit (legacy / optimistic)
+  - trade_through: price must trade strictly through the limit (stricter; scoreboard default)
+"""
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
-from investment_agent.backtest import _bar_exit_price
 from investment_agent.pullback_entry import LIMIT_FILL_DEADLINE
 
 ET = ZoneInfo("America/New_York")
+
+FillMode = Literal["touch", "trade_through"]
+FILL_MODE_TOUCH = "touch"
+FILL_MODE_TRADE_THROUGH = "trade_through"
+VALID_FILL_MODES = frozenset({FILL_MODE_TOUCH, FILL_MODE_TRADE_THROUGH})
+
+
+def resolve_fill_mode(explicit: str | None = None) -> FillMode:
+    raw = (explicit or os.getenv("PAPER_FILL_MODE", FILL_MODE_TRADE_THROUGH)).strip().lower()
+    if raw not in VALID_FILL_MODES:
+        return FILL_MODE_TRADE_THROUGH  # type: ignore[return-value]
+    return raw  # type: ignore[return-value]
 
 
 def _bar_time_et(bar: dict) -> datetime | None:
@@ -25,6 +42,36 @@ def _bar_time_et(bar: dict) -> datetime | None:
     return dt.astimezone(ET)
 
 
+def _entry_hit(bar: dict, buy: float, mode: FillMode) -> bool:
+    low = float(bar["low"])
+    if mode == FILL_MODE_TRADE_THROUGH:
+        return low < buy
+    return low <= buy
+
+
+def _bar_exit_price(
+    *,
+    target: float,
+    stop: float,
+    bar: dict,
+    mode: FillMode,
+) -> tuple[float | None, str | None]:
+    h, l = float(bar["high"]), float(bar["low"])
+    if mode == FILL_MODE_TRADE_THROUGH:
+        hit_stop = l < stop
+        hit_target = h > target
+    else:
+        hit_stop = l <= stop
+        hit_target = h >= target
+    if hit_stop and hit_target:
+        return stop, "stop"
+    if hit_stop:
+        return stop, "stop"
+    if hit_target:
+        return target, "target"
+    return None, None
+
+
 def simulate_round_trip_5m(
     day_bars: list[dict],
     *,
@@ -35,18 +82,17 @@ def simulate_round_trip_5m(
     buy_fee: float,
     sell_fee: float,
     as_of_et: datetime | None = None,
+    fill_mode: str | None = None,
 ) -> dict[str, Any]:
-    """Walk 5m bars for fill by 11:30 ET then target/stop/EOD.
-
-    If ``as_of_et`` is set (live paper during the session), only bars at/before
-    that time are considered — unfinished days may return ``open_waiting``.
-    """
+    """Walk 5m bars for fill by 11:30 ET then target/stop/EOD."""
+    mode = resolve_fill_mode(fill_mode)
     if not day_bars:
         return {
             "scenario": "no_5m_bars",
             "filled": False,
             "net_pnl": None,
             "complete": True,
+            "fill_mode": mode,
             "detail": "No 5m bars for this ticker/date",
         }
 
@@ -63,6 +109,7 @@ def simulate_round_trip_5m(
                 "filled": False,
                 "net_pnl": None,
                 "complete": False,
+                "fill_mode": mode,
                 "detail": "No 5m bars yet today",
             }
 
@@ -74,13 +121,13 @@ def simulate_round_trip_5m(
             continue
         if t.time() > LIMIT_FILL_DEADLINE:
             break
-        if float(bar["low"]) <= buy:
+        if _entry_hit(bar, buy, mode):
             fill_bar = bar
             fill_ts = t.isoformat()
             break
 
+    verb = "traded through" if mode == FILL_MODE_TRADE_THROUGH else "touched"
     if fill_bar is None:
-        # Past deadline with full day → no fill; still during morning → waiting
         last_t = _bar_time_et(bars[-1]) if bars else None
         if as_of_et is not None and (
             last_t is None or last_t.time() <= LIMIT_FILL_DEADLINE
@@ -90,14 +137,16 @@ def simulate_round_trip_5m(
                 "filled": False,
                 "net_pnl": None,
                 "complete": False,
-                "detail": f"Limit ${buy:.2f} not touched yet (deadline 11:30 ET)",
+                "fill_mode": mode,
+                "detail": f"Limit ${buy:.2f} not {verb} yet (deadline 11:30 ET)",
             }
         return {
             "scenario": "no_fill_by_1130",
             "filled": False,
             "net_pnl": 0.0,
             "complete": True,
-            "detail": f"Limit ${buy:.2f} not touched by 11:30 ET",
+            "fill_mode": mode,
+            "detail": f"Limit ${buy:.2f} not {verb} by 11:30 ET ({mode})",
         }
 
     started = False
@@ -110,40 +159,41 @@ def simulate_round_trip_5m(
                 started = True
             else:
                 continue
-            exit_px, reason = _bar_exit_price(target=sell, stop=stop, bar=bar)
+            exit_px, reason = _bar_exit_price(target=sell, stop=stop, bar=bar, mode=mode)
             if exit_px is not None and reason is not None:
                 net = round(shares * (exit_px - buy) - buy_fee - sell_fee, 2)
                 return {
                     "scenario": f"exit_{reason}_same_bar_as_fill",
                     "filled": True,
                     "complete": True,
+                    "fill_mode": mode,
                     "fill_ts": fill_ts,
                     "exit_ts": t.isoformat(),
                     "exit_price": exit_px,
                     "exit_reason": reason,
                     "entry_price": buy,
                     "net_pnl": net,
-                    "detail": f"Filled then {reason} on same 5m bar",
+                    "detail": f"Filled ({mode}) then {reason} on same 5m bar",
                 }
             continue
 
-        exit_px, reason = _bar_exit_price(target=sell, stop=stop, bar=bar)
+        exit_px, reason = _bar_exit_price(target=sell, stop=stop, bar=bar, mode=mode)
         if exit_px is not None and reason is not None:
             net = round(shares * (exit_px - buy) - buy_fee - sell_fee, 2)
             return {
                 "scenario": f"exit_{reason}",
                 "filled": True,
                 "complete": True,
+                "fill_mode": mode,
                 "fill_ts": fill_ts,
                 "exit_ts": t.isoformat(),
                 "exit_price": exit_px,
                 "exit_reason": reason,
                 "entry_price": buy,
                 "net_pnl": net,
-                "detail": f"Filled {fill_ts}; exited {reason} @ {exit_px:.2f}",
+                "detail": f"Filled {fill_ts} ({mode}); exited {reason} @ {exit_px:.2f}",
             }
 
-    # Filled but no exit yet
     if as_of_et is not None:
         last = bars[-1]
         last_t = _bar_time_et(last)
@@ -152,6 +202,7 @@ def simulate_round_trip_5m(
                 "scenario": "open_waiting_exit",
                 "filled": True,
                 "complete": False,
+                "fill_mode": mode,
                 "fill_ts": fill_ts,
                 "entry_price": buy,
                 "exit_price": None,
@@ -168,11 +219,12 @@ def simulate_round_trip_5m(
         "scenario": "exit_eod_close",
         "filled": True,
         "complete": True,
+        "fill_mode": mode,
         "fill_ts": fill_ts,
         "exit_ts": last_t.isoformat() if last_t else None,
         "exit_price": close_px,
         "exit_reason": "eod_close",
         "entry_price": buy,
         "net_pnl": net,
-        "detail": "Filled; EOD close exit",
+        "detail": f"Filled ({mode}); EOD close exit",
     }

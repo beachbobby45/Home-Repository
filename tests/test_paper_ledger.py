@@ -78,6 +78,8 @@ class PaperLedgerTests(unittest.TestCase):
             {"ts": "2026-10-16T09:35:00-04:00", "open": 100, "high": 100.5, "low": 99.0, "close": 99.5},
             {"ts": "2026-10-16T10:00:00-04:00", "open": 99.5, "high": 102.0, "low": 99.4, "close": 101.5},
         ]
+        # Explicit touch keeps legacy assertion; default fill_mode is trade_through
+        # (also fills here because low 99.0 < buy 99.5).
         sim = simulate_round_trip_5m(
             bars,
             buy=99.5,
@@ -87,6 +89,7 @@ class PaperLedgerTests(unittest.TestCase):
             buy_fee=7,
             sell_fee=7,
             as_of_et=None,
+            fill_mode="touch",
         )
         self.assertTrue(sim["filled"])
         self.assertTrue(sim["complete"])

@@ -104,6 +104,62 @@ def log_audit_event(
     return int(cur.lastrowid)
 
 
+PAPER_DAY_AUDIT_SOURCE = "paper_runner"
+
+
+def paper_day_audit_exists(
+    conn: sqlite3.Connection,
+    session_date_et: str,
+    *,
+    source: str = PAPER_DAY_AUDIT_SOURCE,
+) -> bool:
+    ensure_ops_audit_schema(conn)
+    row = conn.execute(
+        """
+        SELECT id FROM ops_audit_log
+        WHERE kind = ? AND session_date_et = ? AND source = ?
+        LIMIT 1
+        """,
+        (KIND_PAPER, session_date_et[:10], source),
+    ).fetchone()
+    return row is not None
+
+
+def log_paper_day_complete(
+    conn: sqlite3.Connection,
+    *,
+    session_date_et: str,
+    gate_log: dict[str, Any] | None,
+    arms: list[dict[str, Any]] | None = None,
+) -> int | None:
+    """Idempotent PAPER audit when a paper day reaches a final gate status."""
+    day = session_date_et[:10]
+    if paper_day_audit_exists(conn, day):
+        return None
+    status = (gate_log or {}).get("status") or "unknown"
+    ticker = (gate_log or {}).get("ticker")
+    net = (gate_log or {}).get("net_pnl")
+    title = f"PAPER day complete: {day} — {status}"
+    detail_parts = [f"status={status}"]
+    if ticker:
+        detail_parts.append(f"ticker={ticker}")
+    if net is not None:
+        detail_parts.append(f"net_pnl={net}")
+    return log_audit_event(
+        conn,
+        kind=KIND_PAPER,
+        title=title,
+        detail="; ".join(detail_parts),
+        payload={
+            "session_date_et": day,
+            "gate": gate_log,
+            "arms": arms or [],
+        },
+        session_date_et=day,
+        source=PAPER_DAY_AUDIT_SOURCE,
+    )
+
+
 def list_audit_events(
     conn: sqlite3.Connection,
     *,

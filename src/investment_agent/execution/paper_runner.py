@@ -13,6 +13,7 @@ from investment_agent.execution.armed_plan import PlanStatus, set_armed_plan_sta
 from investment_agent.execution.ops_audit import (
     LEDGER_SOURCE_PAPER,
     get_ledger_source,
+    log_paper_day_complete,
     set_ledger_source,
 )
 from investment_agent.execution.paper_ledger import (
@@ -28,7 +29,7 @@ from investment_agent.execution.paper_ledger import (
     settle_due_cash,
     upsert_session_log,
 )
-from investment_agent.execution.paper_sim import simulate_round_trip_5m
+from investment_agent.execution.paper_sim import resolve_fill_mode, simulate_round_trip_5m
 from investment_agent.execution.pdt_guard import can_open_day_trade, record_day_trade
 from investment_agent.execution.propose import propose_armed_plan
 from investment_agent.finance import DEFAULT_BUY_FEE, DEFAULT_SELL_FEE
@@ -37,6 +38,10 @@ from investment_agent.risk_engine import is_kill_switch_active
 from investment_agent.trading_day import today_et_str
 
 ET = ZoneInfo("America/New_York")
+
+_FINAL_STATUSES = frozenset(
+    {"complete", "skipped_gate", "skipped_cap", "skipped_cash", "no_signal"}
+)
 
 
 def _resize_shares_for_cash(deploy_target: float, limit_buy: float, settled: float) -> tuple[int, float]:
@@ -185,6 +190,7 @@ def _process_arm(
         return {"account_name": account_name, "log": row}
 
     sim_as_of = None if force_complete else as_of_et
+    fill_mode = resolve_fill_mode()
     sim = simulate_round_trip_5m(
         day_bars,
         buy=float(signal["limit_buy"]),
@@ -194,6 +200,7 @@ def _process_arm(
         buy_fee=DEFAULT_BUY_FEE,
         sell_fee=DEFAULT_SELL_FEE,
         as_of_et=sim_as_of,
+        fill_mode=fill_mode,
     )
 
     if not sim.get("complete"):
@@ -342,6 +349,21 @@ def run_paper_tick(
             )
         )
 
+    # Idempotent PAPER audit once the gate arm reaches a final status for the day
+    gate_log = get_session_log(conn, day, ACCOUNT_GATE) or {}
+    audit_id = None
+    if gate_log.get("status") in _FINAL_STATUSES:
+        audit_id = log_paper_day_complete(
+            conn,
+            session_date_et=day,
+            gate_log=gate_log,
+            arms=[{
+                "account_name": r.get("account_name"),
+                "status": (r.get("log") or {}).get("status"),
+                "skipped": r.get("skipped"),
+            } for r in results],
+        )
+
     return {
         "ok": True,
         "session_date_et": day,
@@ -354,6 +376,8 @@ def run_paper_tick(
         "arms": results,
         "balances": {n: get_paper_balance(conn, n) for n in PAPER_ACCOUNTS},
         "scoreboard": paper_scoreboard(conn),
+        "paper_audit_id": audit_id,
+        "fill_mode": resolve_fill_mode(),
     }
 
 
@@ -364,6 +388,7 @@ def paper_status_payload(conn: sqlite3.Connection) -> dict[str, Any]:
         "ok": True,
         "execution_mode": "paper",
         "session_date_et": day,
+        "fill_mode": resolve_fill_mode(),
         "balances": {n: get_paper_balance(conn, n) for n in PAPER_ACCOUNTS},
         "today": {
             n: get_session_log(conn, day, n) for n in PAPER_ACCOUNTS

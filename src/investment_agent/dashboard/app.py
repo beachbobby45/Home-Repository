@@ -149,12 +149,14 @@ from investment_agent.execution.armed_plan import (
 from investment_agent.execution.propose import propose_armed_plan, pdt_status_payload
 from investment_agent.execution.paper_runner import paper_status_payload, run_paper_tick
 from investment_agent.execution.paper_ledger import list_session_logs, paper_scoreboard
+from investment_agent.execution.health_check import run_health_check
 from investment_agent.execution.ops_audit import (
     KIND_TEST,
     get_ledger_source,
     list_audit_events,
     log_test_suite_results,
 )
+from investment_agent.execution.paper_sim import resolve_fill_mode
 from investment_agent.funding_plan import build_funding_plan_payload
 from investment_agent.trade_proposal import (
     REJECTION_REASONS,
@@ -701,6 +703,29 @@ def api_health_db(conn=Depends(_db)) -> dict[str, Any]:
         }
     except sqlite3.OperationalError as exc:
         raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
+@app.get("/api/ops/health")
+def api_ops_health(
+    notify: bool = False,
+    conn=Depends(_db),
+) -> dict[str, Any]:
+    """Paper automation health (LaunchAgents on Mac, equity, rank snapshot).
+
+    By default does not send email (dashboard poll). Pass ``?notify=1`` to ping.
+    """
+    return run_health_check(conn, send_notify=bool(notify))
+
+
+@app.get("/api/health")
+def api_health(conn=Depends(_db)) -> dict[str, Any]:
+    """Lightweight liveness + paper fill mode (ops detail at /api/ops/health)."""
+    return {
+        "ok": True,
+        "service": "investment-agent",
+        "fill_mode": resolve_fill_mode(),
+        "ops_health": "/api/ops/health",
+    }
 
 
 @app.post("/api/trading-day/refresh")

@@ -454,11 +454,28 @@ def paper_scoreboard(
         "positive_expectancy": True,
         "max_drawdown_pct": 10.0,
         "beat_all_signals_optional": True,
+        "beat_random_control": True,
     }
     pass_fills = primary["fills"] >= criteria["min_fills"]
     pass_exp = (primary["expectancy_per_fill"] or 0) > 0
     pass_dd = primary["drawdown_pct_from_start"] <= criteria["max_drawdown_pct"]
-    # Random control not yet automated — flagged separately
+
+    from investment_agent.execution.random_control import get_random_control_summary
+
+    rc = get_random_control_summary(conn)
+    random_control_ok = None if not rc else rc.get("beats_random")
+    notes = (
+        "Primary arm is gate_approved (live-like). all_signals is the shadow book."
+    )
+    if rc is None:
+        notes += " Run scripts/run_random_pick_control.py to populate random_control_ok."
+    elif random_control_ok is True:
+        notes += " Random-pick control: #1 beats random (persisted)."
+    elif random_control_ok is False:
+        notes += " Random-pick control: #1 does not beat random."
+    else:
+        notes += " Random-pick control: inconclusive."
+
     return {
         "window": {"since": since, "until": until},
         "primary_arm": ACCOUNT_GATE,
@@ -468,11 +485,9 @@ def paper_scoreboard(
             "fills_ok": pass_fills,
             "expectancy_ok": pass_exp,
             "drawdown_ok": pass_dd,
-            "random_control_ok": None,
+            "random_control_ok": random_control_ok,
         },
+        "random_control": rc,
         "paper_pass": pass_fills and pass_exp and pass_dd,
-        "notes": (
-            "Random-pick control not included in this scoreboard yet. "
-            "Primary arm is gate_approved (live-like). all_signals is the shadow book."
-        ),
+        "notes": notes,
     }
