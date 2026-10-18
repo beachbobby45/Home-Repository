@@ -55,12 +55,12 @@ def test_broker_sync_fixture_and_status(client) -> None:
     status = http.get("/api/broker/status")
     assert status.status_code == 200
     body = status.json()
-    assert body["pdt"]["cap"] == 3
+    assert body["pdt"]["cap"] == 5
     assert body["pdt"]["equity"] == 5000
     assert body["latest_balance"]["equity"] == 5000
 
 
-def test_pdt_cap_five_when_equity_25k(client) -> None:
+def test_pdt_cap_always_five_regardless_of_equity(client) -> None:
     http, _ = client
     http.post(
         "/api/broker/sync/fixture",
@@ -69,6 +69,13 @@ def test_pdt_cap_five_when_equity_25k(client) -> None:
     pdt = http.get("/api/execution/pdt")
     assert pdt.status_code == 200
     assert pdt.json()["cap"] == 5
+    http.post(
+        "/api/broker/sync/fixture",
+        json={"equity": 5000, "cash": 5000},
+    )
+    pdt_low = http.get("/api/execution/pdt")
+    assert pdt_low.status_code == 200
+    assert pdt_low.json()["cap"] == 5
 
 
 def test_arm_plan_requires_propose_and_pdt(client) -> None:
