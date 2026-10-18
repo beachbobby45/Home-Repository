@@ -724,8 +724,8 @@
     <div id="view-plan" class="app-view">
       <section class="view-section">
         <header class="view-head">
-          <h2>10-year growth plan</h2>
-          <p class="brief">Planning view — $5K start (paper / RH #1 on 2026-12-01), annual 35% sweep, +$5K every ~30 sessions to $20K invested (evidence-gated).</p>
+          <h2>Calendar-year growth plan</h2>
+          <p class="brief">Planning view — calendar years from <strong>2026</strong>: $5K RH CASH on Dec 1, +$15K staged in <strong>2027</strong> → $20K invested, annual 35% sweep (evidence-gated).</p>
         </header>
         <div class="plan-quick-links card">
           <span class="brief">Related:</span>
@@ -737,8 +737,8 @@
         <div class="grid grid-4 plan-kpi-grid" id="plan-kpi-grid">
           <div class="card kpi-card"><h2>$5K only → $5M</h2><div class="metric small" id="plan-months-base">—</div></div>
           <div class="card kpi-card"><h2>Funded $20K → $5M</h2><div class="metric small" id="plan-months-inj">—</div></div>
-          <div class="card kpi-card"><h2>Year 10 ($5K)</h2><div class="metric small" id="plan-y10-base">—</div></div>
-          <div class="card kpi-card"><h2>Year 10 (funded)</h2><div class="metric small" id="plan-y10-inj">—</div></div>
+          <div class="card kpi-card"><h2 id="plan-y10-base-label">2035 ($5K)</h2><div class="metric small" id="plan-y10-base">—</div></div>
+          <div class="card kpi-card"><h2 id="plan-y10-inj-label">2035 (funded)</h2><div class="metric small" id="plan-y10-inj">—</div></div>
         </div>
         <div class="card" id="plan-assumptions">Loading assumptions…</div>
         <div class="card table-card">
@@ -773,6 +773,7 @@
         <p class="brief plan-disclaimer">
           Model only — $5K start · $75 net/trade at $5K tier · 60.6% dollar hit rate · 2.9 tradeable days/week
           (≤5 sessions/wk post-PDT) · staged deposits stay evidence-gated.
+          Rows are <strong>calendar years</strong> (2026 = Dec only after RH #1; 2027 holds the +$15K deposits).
           <strong>Base</strong> and <strong>Funded</strong> are two separate paths: each year’s Begin equals that path’s prior-year End (after the 35% sweep).
           Not a guarantee; Account shows live paper / funding status.
         </p>
@@ -786,7 +787,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.5 · $5K Plan cash dates</strong> ($5K RH CASH Dec 1, +$5K ~every 30 sessions → $20K)</p>
+          <p class="brief">Latest release: <strong>v0.9.6 · Plan calendar years</strong> (2026 Dec $5K · 2027 +$15K → $20K)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -888,8 +889,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (v.version === "0.9.5" || v.version === "0.9.4" || v.version === "0.9.3") {
-              setupHelp.textContent = "You are on the current release ($5K RH CASH Dec 1 · +$5K ~every 30 sessions → $20K). Hard-refresh (Cmd+Shift+R) if Plan still shows $15K start.";
+            if (["0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
+              setupHelp.textContent = "You are on the current release (Plan rows = calendar years 2026…). Hard-refresh (Cmd+Shift+R) if Plan still shows Year 1 / $15K.";
               setupHelp.className = "brief setup-version-help setup-version-ok";
             } else {
               setupHelp.textContent = "Your dashboard is behind. Double-click Update and Open Dashboard.command in Finder (no Terminal typing).";
@@ -3086,15 +3087,25 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       ].join("<br>");
       document.getElementById("plan-summary").textContent = data.summary || "";
       const mtg = data.months_to_goal || {};
+      const gy = data.goal_year || {};
       document.getElementById("plan-months-base").textContent =
-        mtg.base != null ? `${(mtg.base / 12).toFixed(1)} yr (${mtg.base} mo)` : ">10 yr";
+        gy.base != null
+          ? `${gy.base} (${mtg.base != null ? (mtg.base / 12).toFixed(1) + " yr" : "—"})`
+          : (mtg.base != null ? `${(mtg.base / 12).toFixed(1)} yr` : ">2035");
       document.getElementById("plan-months-inj").textContent =
-        mtg.injection != null ? `${(mtg.injection / 12).toFixed(1)} yr (${mtg.injection} mo)` : ">10 yr";
+        gy.injection != null
+          ? `${gy.injection} (${mtg.injection != null ? (mtg.injection / 12).toFixed(1) + " yr" : "—"})`
+          : (mtg.injection != null ? `${(mtg.injection / 12).toFixed(1)} yr` : ">2035");
       const years = data.years || [];
-      const y10 = years.find((r) => r.year === 10) || years[years.length - 1];
-      if (y10) {
-        document.getElementById("plan-y10-base").textContent = "$" + fmt(y10.base?.end_balance);
-        document.getElementById("plan-y10-inj").textContent = "$" + fmt(y10.injection?.end_balance);
+      const yLast = years[years.length - 1];
+      if (yLast) {
+        const yLabel = yLast.year;
+        const baseLbl = document.getElementById("plan-y10-base-label");
+        const injLbl = document.getElementById("plan-y10-inj-label");
+        if (baseLbl) baseLbl.textContent = `${yLabel} ($5K)`;
+        if (injLbl) injLbl.textContent = `${yLabel} (funded)`;
+        document.getElementById("plan-y10-base").textContent = "$" + fmt(yLast.base?.end_balance);
+        document.getElementById("plan-y10-inj").textContent = "$" + fmt(yLast.injection?.end_balance);
       }
       const tbody = document.getElementById("plan-table-body");
       if (!years.length) {
@@ -3109,13 +3120,13 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           ? `$${fmt(inj.capital_injection)}`
           : "—";
         return `<tr class="${goalMilestone}">
-          <td><strong>Year ${row.year}</strong></td>
+          <td><strong>${row.year}</strong></td>
+          <td>$${fmt(b.start_balance)}</td>
           <td>$${fmt(b.end_balance)}</td>
-          <td>${fmtPct(b.goal_pct)}</td>
           <td>$${fmt(b.gross_production)}</td>
           <td>$${fmt(b.annual_sweep)}</td>
+          <td class="plan-inj-cell">$${fmt(inj.start_balance)}</td>
           <td class="plan-inj-cell">$${fmt(inj.end_balance)}</td>
-          <td>${fmtPct(inj.goal_pct)}</td>
           <td>${inj.trade_deploy_label || "—"} · $${fmt(inj.trade_net_target)}/tr</td>
           <td>${injCell}</td>
           <td class="plan-advantage">+$${fmt(row.advantage_end_balance)}</td>

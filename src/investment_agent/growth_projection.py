@@ -34,6 +34,9 @@ _MAX_TIER_THRESHOLD = max(TIER_LOT_STRUCTURES.keys())
 # Plan tab / scenario planning start — matches paper ledger & RH Deposit #1
 PLAN_STARTING_BASIS = 5_000.0
 PLAN_FUNDED_TARGET = 20_000.0  # four × $5k invested under funding plan
+PLAN_START_CALENDAR_YEAR = 2026
+# RH #1 on 2026-12-01 → ~4 trading weeks remain in calendar 2026
+PLAN_START_YEAR_WEEKS = 4
 
 
 def projection_daily_target(balance: float) -> float:
@@ -110,20 +113,33 @@ def _simulate_yearly_plan(
     mgmt_rate: float = DEFAULT_MGMT_SWEEP_RATE,
     injections: tuple[CapitalInjection, ...] = (),
     goal: float = GOAL_ACCOUNT_VALUE,
+    start_calendar_year: int = PLAN_START_CALENDAR_YEAR,
+    start_year_weeks: int = PLAN_START_YEAR_WEEKS,
+    count_opening_deposit: bool = True,
 ) -> list[YearPlanRow]:
-    """Run weekly simulation and emit one row per calendar year."""
+    """
+    Weekly simulation bucketed by calendar year.
+
+    Plan week 1 = first week on/after 2026-12-01. Calendar 2026 is a short
+    stub (~4 weeks); later years are full 52-week blocks. Annual 35% sweep
+    applies at each calendar year-end.
+    """
     injection_map = {inj.week_offset: inj for inj in injections}
     balance = float(starting_balance)
     rows: list[YearPlanRow] = []
-    total_weeks = years * WEEKS_PER_YEAR
+    # Partial start year + (years - 1) full years
+    total_weeks = start_year_weeks + max(years - 1, 0) * WEEKS_PER_YEAR
     ytd_realized = 0.0
     week_in_year = 0
+    weeks_this_year = max(int(start_year_weeks), 1)
     year_gross = 0.0
-    year_injection = 0.0
+    # Opening $5k counts as 2026 capital in (RH Deposit #1)
+    year_injection = float(starting_balance) if count_opening_deposit else 0.0
     year_sweep = 0.0
     year_start = balance
-    calendar_year = 1
+    calendar_year = int(start_calendar_year)
     goal_crossed = False
+    goal_week: int | None = None
 
     for week in range(1, total_weeks + 1):
         daily = projection_daily_target(balance)
@@ -138,7 +154,11 @@ def _simulate_yearly_plan(
             balance += inj.amount
             year_injection += inj.amount
 
-        if week_in_year >= WEEKS_PER_YEAR:
+        if not goal_crossed and balance >= goal:
+            goal_crossed = True
+            goal_week = week
+
+        if week_in_year >= weeks_this_year:
             if sweep_schedule == SWEEP_SCHEDULE_ANNUAL:
                 sweep = compute_period_end_sweep(ytd_realized, tax_rate=tax_rate, mgmt_rate=mgmt_rate)
                 if sweep.applies:
@@ -146,12 +166,13 @@ def _simulate_yearly_plan(
                     year_sweep = sweep.total_sweep
                 ytd_realized = 0.0
             deploy_label, net_trade, tier = _tier_labels_at_balance(balance)
-            notes = ""
-            if not goal_crossed and balance >= goal:
-                notes = f"$5M goal crossed (~month {week // int(round(WEEKS_PER_MONTH))})"
-                goal_crossed = True
+            notes_parts: list[str] = []
+            if calendar_year == start_calendar_year:
+                notes_parts.append("RH #1 Dec 1 · partial year (Dec)")
+            if goal_crossed and goal_week is not None and goal_week > week - week_in_year:
+                notes_parts.append(f"$5M goal crossed in {calendar_year}")
             if year_injection > 0:
-                notes = (notes + " · " if notes else "") + f"Capital in ${year_injection:,.0f}"
+                notes_parts.append(f"Capital in ${year_injection:,.0f}")
             rows.append(
                 YearPlanRow(
                     year=calendar_year,
@@ -164,11 +185,12 @@ def _simulate_yearly_plan(
                     trade_net_target=net_trade,
                     tier_threshold=tier,
                     goal_pct=round(goal_progress_pct(balance, goal=goal), 4),
-                    notes=notes.strip(),
+                    notes=" · ".join(notes_parts),
                 )
             )
             calendar_year += 1
             week_in_year = 0
+            weeks_this_year = WEEKS_PER_YEAR
             year_gross = 0.0
             year_injection = 0.0
             year_sweep = 0.0
@@ -179,7 +201,7 @@ def _simulate_yearly_plan(
 
 def build_ten_year_growth_plan(
     *,
-    years: int = 10,
+    years: int = 12,
     hit_rate: float = DEFAULT_HIT_RATE,
     tradeable_days_per_week: float = DEFAULT_TRADEABLE_DAYS_PER_WEEK,
     starting_balance: float = PLAN_STARTING_BASIS,
@@ -187,7 +209,8 @@ def build_ten_year_growth_plan(
     goal: float = GOAL_ACCOUNT_VALUE,
 ) -> dict:
     """
-    Side-by-side Year 1–10 table: $5K base vs funded ladder to $20K invested.
+    Side-by-side calendar-year table (2026–2037 by default): $5K vs funded → $20K.
+    Twelve rows so both paths show the calendar year $5M is reached.
     """
     inj_tuple = DEFAULT_FUNDING_INJECTIONS if injections is None else injections
     base_rows = _simulate_yearly_plan(
@@ -207,11 +230,21 @@ def build_ten_year_growth_plan(
         goal=goal,
     )
 
-    def _months_to_goal(rows: list[YearPlanRow]) -> int | None:
+    def _goal_calendar_year(rows: list[YearPlanRow]) -> int | None:
         for row in rows:
             if row.end_balance >= goal:
-                return row.year * 12
+                return row.year
         return None
+
+    def _months_to_goal(rows: list[YearPlanRow]) -> int | None:
+        """Approximate months from Dec 2026 plan start to year-end when goal is hit."""
+        gy = _goal_calendar_year(rows)
+        if gy is None:
+            return None
+        if gy <= PLAN_START_CALENDAR_YEAR:
+            return 1
+        # Dec 2026 → end of gy: 1 month in 2026 + 12 × full years after
+        return 1 + (gy - PLAN_START_CALENDAR_YEAR) * 12
 
     comparison: list[dict] = []
     for base, inj in zip(base_rows, inj_rows):
@@ -272,10 +305,17 @@ def build_ten_year_growth_plan(
         },
     ]
 
+    goal_year_base = _goal_calendar_year(base_rows)
+    goal_year_inj = _goal_calendar_year(inj_rows)
+
     return {
         "goal": goal,
         "starting_basis": starting_balance,
         "funded_target": PLAN_FUNDED_TARGET,
+        "calendar_year_start": PLAN_START_CALENDAR_YEAR,
+        "calendar_year_end": (
+            comparison[-1]["year"] if comparison else PLAN_START_CALENDAR_YEAR
+        ),
         "assumptions": {
             "hit_rate_pct": round(hit_pct, 1),
             "tradeable_days_per_week": tradeable_days_per_week,
@@ -289,24 +329,31 @@ def build_ten_year_growth_plan(
             "rh_live_date": "2026-12-01",
             "account_mode": "CASH / unlevered (no borrowed margin)",
             "sessions_per_week_cap": 5,
-            "deposit_cadence": "+$5K every ~30 sessions after RH #1 until $20K invested",
+            "deposit_cadence": (
+                "$5K in Dec 2026 · +$15K staged across 2027 (~every 30 sessions) → $20K"
+            ),
             "one_trade_per_day": True,
             "second_trade": "Exceptional days only (#1 win + market GO)",
             "settlement": "Cash / unlevered · T+1 redeploy",
+            "year_axis": "calendar",
         },
         "months_to_goal": {
             "base": _months_to_goal(base_rows),
             "injection": _months_to_goal(inj_rows),
         },
+        "goal_year": {
+            "base": goal_year_base,
+            "injection": goal_year_inj,
+        },
         "years": comparison,
         "summary": (
-            f"${starting_balance:,.0f} start (RH CASH #1 on 2026-12-01 after paper pass) · "
+            f"Calendar years from {PLAN_START_CALENDAR_YEAR}: "
+            f"${starting_balance:,.0f} RH CASH #1 on 2026-12-01 · "
+            f"+$15K staged in 2027 → $20K invested (gated) · "
             f"{hit_pct:.1f}% hit · {tradeable_days_per_week:.1f} tradeable days/wk · "
             f"≤5 sessions/wk · 35% annual sweep. "
-            f"+$5K ~every 30 sessions → $20K by ~2027-04-09 (gated). "
-            f"With {inj_label}: "
-            f"~{_months_to_goal(inj_rows) or '>120'} months to $5M vs "
-            f"~{_months_to_goal(base_rows) or '>120'} base ($5K only)."
+            f"$5M target: funded ~{goal_year_inj or 'beyond table'} vs "
+            f"base ~{goal_year_base or 'beyond table'}."
         ),
     }
 
@@ -530,6 +577,8 @@ __all__ = [
     "DEFAULT_TRADEABLE_DAYS_PER_WEEK",
     "GrowthProjectionPoint",
     "PLAN_FUNDED_TARGET",
+    "PLAN_START_CALENDAR_YEAR",
+    "PLAN_START_YEAR_WEEKS",
     "PLAN_STARTING_BASIS",
     "YearPlanRow",
     "build_ten_year_growth_plan",
