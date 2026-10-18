@@ -179,6 +179,8 @@ REPO_ROOT = DASHBOARD_DIR.parents[2]
 ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
 OPERATOR_CHECKLIST_PDF = REPO_ROOT / "docs" / "DAILY_OPERATOR_CHECKLIST.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
+templates.env.auto_reload = True
+templates.env.cache = None
 
 app = FastAPI(title="AI Investment Agent Dashboard", version=version_info()["version"])
 
