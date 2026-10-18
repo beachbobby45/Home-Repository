@@ -1,10 +1,17 @@
-"""Pattern Day Trader frequency guard.
+"""Day-trade frequency guard (post–PDT regulatory regime).
 
-Under $25k equity: max 3 filled day trades per calendar week (Mon–Sun ET).
-At/above $25k: max 5 filled day trades per calendar week (Tony plan, 2026-10-17).
+FINRA replaced Pattern Day Trader rules with intraday margin standards
+effective 2026-06-04 (Regulatory Notice 26-10). Robinhood removed day-trade
+count restrictions the same day.
 
-A day trade = buy and sell (or sell short/cover) of the same symbol on the same
-session date. No-fill / cancelled entry does not consume a slot.
+Operator policy (2026-10-18):
+  - Max **5** filled day trades per calendar week (one per weekday).
+  - No $25k / 3-trade regulatory split.
+  - Settled-cash checks live elsewhere (broker sync); this module only
+    tracks filled same-day round-trips for the ops cap.
+
+A day trade = buy and sell of the same symbol on the same session date.
+No-fill / cancelled entry does not consume a slot.
 """
 
 from __future__ import annotations
@@ -15,16 +22,18 @@ from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")
 
+# Legacy name kept for import compatibility; threshold no longer changes the cap.
 PDT_EQUITY_THRESHOLD = 25_000.0
-MAX_DAY_TRADES_BELOW_25K = 3
-MAX_DAY_TRADES_AT_OR_ABOVE_25K = 5
+MAX_DAY_TRADES_PER_WEEK = 5
+# Back-compat aliases
+MAX_DAY_TRADES_BELOW_25K = MAX_DAY_TRADES_PER_WEEK
+MAX_DAY_TRADES_AT_OR_ABOVE_25K = MAX_DAY_TRADES_PER_WEEK
 
 
-def max_day_trades_per_week(equity: float) -> int:
-    """Return weekly day-trade cap from Robinhood equity (source of truth)."""
-    if equity >= PDT_EQUITY_THRESHOLD:
-        return MAX_DAY_TRADES_AT_OR_ABOVE_25K
-    return MAX_DAY_TRADES_BELOW_25K
+def max_day_trades_per_week(equity: float | None = None) -> int:
+    """Return weekly day-trade ops cap (always 5 under current policy)."""
+    _ = equity  # retained for call-site compatibility
+    return MAX_DAY_TRADES_PER_WEEK
 
 
 def week_monday_et(session_date: date | str) -> date:
@@ -65,7 +74,7 @@ def can_open_day_trade(
     equity: float,
     session_date: date | str | None = None,
 ) -> dict:
-    """Whether another same-day round-trip is allowed this week."""
+    """Whether another same-day round-trip is allowed this week (ops cap)."""
     day = session_date or _today_et()
     if isinstance(day, str):
         day_s = day[:10]
@@ -80,7 +89,6 @@ def can_open_day_trade(
     remaining = max(cap - used, 0)
     allowed = used < cap
 
-    # Already recorded a day trade for this session?
     existing = conn.execute(
         "SELECT id FROM pdt_day_trades WHERE session_date_et = ?",
         (day_s,),
@@ -104,6 +112,10 @@ def can_open_day_trade(
         "week_start_et": week_start.isoformat(),
         "session_date_et": day_s,
         "already_recorded_today": existing is not None,
+        "regulatory_note": (
+            "Post-PDT ops cap (max 5/week). FINRA/RH no longer enforce "
+            "3-under-$25k trade counts as of 2026-06-04."
+        ),
     }
 
 
@@ -125,8 +137,6 @@ def record_day_trade(
         day_d = session_date
 
     gate = can_open_day_trade(conn, equity=equity_at_trade, session_date=day_d)
-    # Allow recording the trade that consumes the last slot; reject if already at cap
-    # before this trade (used >= cap) or duplicate session.
     if gate["already_recorded_today"]:
         raise ValueError(f"Day trade already recorded for {day_s}")
     if gate["used"] >= gate["cap"]:

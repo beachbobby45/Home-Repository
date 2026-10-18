@@ -1,6 +1,6 @@
 # Robinhood Automation Build Plan
 
-> **Status:** Approved to build (2026-10-17) — Phase A in progress  
+> **Status:** Approved to build — Phase A/B in progress; **PDT rules refreshed Oct 18, 2026**  
 > **Owner:** Tony + Cursor agent  
 > **Supersedes for execution path:** Product Spec v3 “manual E*TRADE only” *when Tony explicitly enables this track*  
 > **Does not replace:** ranking, Market Activity, pullback entry, Growth Plan targets, Produce/Preserve day gate
@@ -9,46 +9,46 @@
 
 ## 1. Goal
 
-Build a **travel-safe, PDT-aware** system where:
+Build a **travel-safe, settlement-aware** system where:
 
 1. **Robinhood is the source of truth** for cash, positions, fills, and P&L.  
 2. The **dashboard is a mirror** (ingested copy), not the ledger.  
-3. A **local always-on Mac worker** (LaunchAgent) enforces day-trade caps (below).  
+3. A **local always-on Mac worker** (LaunchAgent) enforces ops caps and **settled buying power** checks.  
 4. **Exits (target + stop) live on Robinhood** as resting orders after fill — not dependent on Cursor chat or Tony being at a keyboard.  
 5. Cursor continues **Morning Prep / ranking / confirmation / oversight**; it is **not** the sole sell trigger.  
 6. Capital ladder: **$5k → +$5k each profitable ~30-session cycle → $20k invested**, deposits only if the cycle grew.
 
+**Regulatory note (Jun 4, 2026):** FINRA replaced PDT with intraday margin standards ([Notice 26-10](https://www.finra.org/rules-guidance/notices/26-10)); Robinhood removed day-trade count restrictions ([Day trading](https://robinhood.com/us/en/support/articles/day-trading/)). Binding ops constraint is now **settled cash (T+1)** for unlevered accounts ([Settlement](https://robinhood.com/us/en/support/articles/settlement-and-buying-power/)), not 3 trades/week under $25k.
+
 **Reference backtest (planning only, not a promise):**  
-$5k PDT-capped path over 60 sessions ≈ +19%; staged plan Nov 2026 → ~Apr 2027 toward ~$25–26k account with $20k invested (~+27–29% on invested) if live rhymes with history.
+$5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 2027 toward ~$25–26k account with $20k invested (~+26–30% on invested) if live rhymes with history.
 
 ---
 
-## 1b. Decided: day-trade frequency & allocation (2026-10-17)
+## 1b. Decided: frequency, settlement & allocation (updated 2026-10-18)
 
 | Setting | Rule |
 |---------|------|
-| `max_day_trades_per_week` | **3** while RH equity **&lt; $25,000**; **5** when equity **≥ $25,000** |
+| `max_day_trades_per_week` | **5** (ops policy — one filled round-trip per weekday max). **No** regulatory 3-under-$25k cap. |
+| Settlement | **Cash / unlevered:** arm only if **settled** buying power ≥ deploy; after a same-day sale, next buy waits **T+1** |
+| Leverage | **Off** — never borrow; avoid intraday margin deficit path |
 | `allocation_mode` (default) | **`single_top1`** — one name/day, full deploy to #1 |
-| `allocation_mode` (later) | **`dual_lot_top2`** — optional; size to Growth Plan lots (e.g. $10k+$15k at $25k tier) for #1 and #2 |
-| Unlock dual mode | Only after a dedicated **Top2 lot backtest** (5m fills) and Tony’s written OK |
-
-**Rationale:** All current backtests are #1-only. At $25k the product tier already defines two virtual lots, but dual-name live trading is not proven yet. Cross $25k → keep `#1` and allow **5 sessions/week**; study `#1+#2` before enabling.
+| `allocation_mode` (later) | **`dual_lot_top2`** — only after Top2 backtest + Tony OK |
 
 ### 2027 year sketch (proposed, not guaranteed)
 
 | Period | Mode | Account band (sketch) |
 |--------|------|------------------------|
-| Nov 2026 – Apr 2027 | ≤3 day trades/week; ladder to $20k invested | → **~$25–26k** |
-| May – Dec 2027 | Up to **5** day trades/week; `#1` only initially | **~$32–50k** planning band (conservative→base); optimistic higher |
-
-Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as ~3 production wins/week via lots — frequency unlock ≠ “win every day”).
+| Nov 2026 – Apr 2027 | Up to **5** sessions/week; ladder to $20k invested | → **~$25–26k** |
+| May – Dec 2027 | Up to **5** sessions/week; `#1` only initially | **~$32–50k** planning band |
 
 ---
 
 ## 2. Non-goals (this track)
 
 - Unattended strategy changes or “AI discretion” beyond the locked rules.  
-- More than **3** day trades/week while equity &lt; $25k (or more than **5**/week at/above $25k without an explicit settings override).  
+- More than **5** filled day trades/week without an explicit settings override.  
+- Borrowed margin / leverage.  
 - Enabling `dual_lot_top2` without a completed Top2 backtest.  
 - Dashboard-authored balances that disagree with Robinhood.  
 - Relying on Cursor Cloud chat as a 9:30–16:00 watchdog.
@@ -61,7 +61,8 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 |------|--------|
 | Deploy / sizing | Growth Plan pullback limit; start **$5,000** book |
 | Names per day | **1** under `single_top1` (default); dual only if mode enabled |
-| Day-trade cap | **`max_day_trades_per_week(equity)`** → 3 if &lt;$25k else 5 |
+| Day-trade cap (ops) | **5**/week max filled round-trips |
+| Settled funds | Required before arm (cash / unlevered) |
 | Entry | Limit buy from pullback plan; **fill by 11:30 ET** or cancel |
 | Exit | Growth Plan **limit sell** + **stop**; same-bar ambiguity → stop (backtest convention) |
 | Day gate | Configurable Preserve / Produce; default **do not arm** if `allow_trade` false unless Tony enables “counterfactual arm” flag (off by default for live) |
@@ -202,7 +203,8 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 - Dashboard “Capital ladder” widget: invested, RH equity, cycle P&L, next deposit eligibility, PDT status.  
 - After each ~30 trading sessions: compute cycle P&L from **RH fills only**.  
 - Prompt Tony for +$5k only if cycle profit &gt; 0.  
-- When RH equity ≥ $25k: automatically allow up to **5** day trades/week (`single_top1` remains default).  
+- Ops cap remains **5**/week at all equity levels (post-PDT).  
+- Enforce **settled buying power** before arm.  
 - Gate `dual_lot_top2` behind Top2 backtest + setting.
 
 **Test**
@@ -243,8 +245,8 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 | **~Dec 14, 2026** | End Cycle 1 checkpoint → Deposit #2 if green |
 | **~Jan 28, 2027** | End Cycle 2 → Deposit #3 if green |
 | **~Mar 12, 2027** | End Cycle 3 → Deposit #4 ($20k invested) if green |
-| **~Apr 26, 2027** | End Cycle 4 review (~$25–26k sketch); if equity ≥ $25k → 5 day-trades/week unlocked |
-| **May – Dec 2027** | Operate at 5/week `#1` only; run Top2 study before any split |
+| **~Apr 26, 2027** | End Cycle 4 review (~$25–26k sketch) |
+| **May – Dec 2027** | Continue ≤5/week `#1` only; run Top2 study before any split |
 
 Slip phases rather than skip exit criteria.
 
