@@ -1800,6 +1800,19 @@ textarea {
   font-weight: 600;
 }
 
+/* Same size as other Plan numbers — color only (not .metric 1.5rem) */
+.plan-table .plan-pnl-pos {
+  color: var(--green);
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.plan-table .plan-pnl-neg {
+  color: var(--red);
+  font-size: inherit;
+  font-weight: 600;
+}
+
 .plan-table tr.plan-row-goal td {
   background: rgba(34, 197, 94, 0.12);
 }

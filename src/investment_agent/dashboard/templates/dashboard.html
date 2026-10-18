@@ -3119,7 +3119,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         const depositsShow = Number(p.capital_injection || 0);
         const yearEnd = remaining + sweep;
         const growthPct = begin > 0 ? (growth / begin) * 100 : 0;
-        const growthCls = growth >= 0 ? "metric positive" : "metric negative";
+        const growthCls = growth >= 0 ? "plan-pnl-pos" : "plan-pnl-neg";
         const delta = Number(row.advantage_end_balance != null
           ? row.advantage_end_balance
           : (remaining - Number(base.end_balance || 0)));
