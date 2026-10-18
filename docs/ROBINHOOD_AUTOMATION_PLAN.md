@@ -285,13 +285,17 @@ Slip phases rather than skip exit criteria.
 
 ---
 
-## 11. Implementation slice (Phase A — started)
+## 11. Implementation status
 
 1. ✅ Plan decisions documented (frequency + allocation + 2027 sketch).  
 2. ✅ PDT guard module + unit tests.  
 3. ✅ `broker_*` / `armed_plans` / `pdt_day_trades` schema + migration.  
 4. ✅ ArmedPlan dataclass + persistence helpers.  
-5. ⏳ Sync stub fixtures, propose API, worker LaunchAgent, `--pdt-weekly-cap` report (next commits).
+5. ✅ Broker sync stub (`StubBrokerClient` + `/api/broker/sync/fixture`).  
+6. ✅ Propose/arm APIs + `/api/broker/status` + `/api/execution/pdt`.  
+7. ✅ Execution worker dry-run + `install_execution_worker_mac.sh`.  
+8. ⏳ Live Robinhood client (waiting on Tony’s account credentials).  
+9. ⏳ Dashboard Broker tab UI banner; `--pdt-weekly-cap` analysis report.
 
 ---
 
