@@ -34,7 +34,7 @@ from investment_agent.execution.random_control import (
     run_random_pick_control,
     save_random_control_summary,
 )
-from investment_agent.notify import send_email
+from investment_agent.notify import notify_paper_buy, notify_paper_sell, send_email
 
 
 class NotifyTests(unittest.TestCase):
@@ -83,6 +83,56 @@ class NotifyTests(unittest.TestCase):
         self.assertTrue(result["banner"])
         self.assertIn("SMTP not configured", result["detail"])
         banner.assert_called_once()
+
+    @patch("investment_agent.notify.send_email")
+    def test_paper_buy_sell_subjects(self, send_fn: MagicMock) -> None:
+        send_fn.return_value = {"ok": True, "emailed": False}
+        with patch.dict(
+            "os.environ",
+            {"NOTIFY_ENABLED": "1", "NOTIFY_PAPER_TRADES": "1"},
+            clear=False,
+        ):
+            notify_paper_buy(
+                session_date_et="2026-10-20",
+                ticker="AAPL",
+                shares=10,
+                entry_price=100.0,
+                deploy=1000.0,
+                fill_ts="2026-10-20T10:00:00-04:00",
+            )
+            notify_paper_sell(
+                session_date_et="2026-10-20",
+                ticker="AAPL",
+                shares=10,
+                entry_price=100.0,
+                exit_price=101.5,
+                net_pnl=12.5,
+                exit_reason="target",
+            )
+        self.assertEqual(send_fn.call_count, 2)
+        buy_subj = send_fn.call_args_list[0].args[0]
+        sell_subj = send_fn.call_args_list[1].args[0]
+        self.assertIn("[PAPER BUY]", buy_subj)
+        self.assertIn("AAPL", buy_subj)
+        self.assertIn("[PAPER SELL]", sell_subj)
+        self.assertIn("PAPER SIMULATION", send_fn.call_args_list[0].args[1])
+
+    @patch("investment_agent.notify.send_email")
+    def test_paper_trade_notify_can_disable(self, send_fn: MagicMock) -> None:
+        with patch.dict(
+            "os.environ",
+            {"NOTIFY_ENABLED": "1", "NOTIFY_PAPER_TRADES": "0"},
+            clear=False,
+        ):
+            out = notify_paper_buy(
+                session_date_et="2026-10-20",
+                ticker="AAPL",
+                shares=1,
+                entry_price=10.0,
+                deploy=10.0,
+            )
+        self.assertTrue(out.get("skipped"))
+        send_fn.assert_not_called()
 
 
 class HealthCheckTests(unittest.TestCase):

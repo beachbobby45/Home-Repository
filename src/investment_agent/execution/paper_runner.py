@@ -33,6 +33,7 @@ from investment_agent.execution.paper_sim import resolve_fill_mode, simulate_rou
 from investment_agent.execution.pdt_guard import can_open_day_trade, record_day_trade
 from investment_agent.execution.propose import propose_armed_plan
 from investment_agent.finance import DEFAULT_BUY_FEE, DEFAULT_SELL_FEE
+from investment_agent.notify import notify_paper_buy, notify_paper_sell
 from investment_agent.providers.yfinance_bars import get_intraday_bars
 from investment_agent.risk_engine import is_kill_switch_active
 from investment_agent.trading_day import today_et_str
@@ -203,6 +204,11 @@ def _process_arm(
         fill_mode=fill_mode,
     )
 
+    prev_filled = bool(existing and existing.get("filled"))
+    prev_complete = bool(existing and existing.get("status") == "complete")
+    # Email only the primary (gate) book so Tony gets one buy + one sell per day.
+    notify_arm = account_name == ACCOUNT_GATE
+
     if not sim.get("complete"):
         row = {
             **base,
@@ -219,7 +225,23 @@ def _process_arm(
             "payload_json": sim,
         }
         upsert_session_log(conn, row)
-        return {"account_name": account_name, "log": row, "in_progress": True}
+        notify_out = None
+        if notify_arm and row["filled"] and not prev_filled:
+            notify_out = notify_paper_buy(
+                session_date_et=day,
+                ticker=str(ticker),
+                shares=shares,
+                entry_price=float(row["entry_price"]),
+                deploy=float(deploy),
+                fill_ts=row.get("fill_ts"),
+                account_name=account_name,
+            )
+        return {
+            "account_name": account_name,
+            "log": row,
+            "in_progress": True,
+            "notify": notify_out,
+        }
 
     if not sim.get("filled"):
         row = {
@@ -287,7 +309,37 @@ def _process_arm(
         "payload_json": {**sim, "ledger": applied},
     }
     upsert_session_log(conn, row)
-    return {"account_name": account_name, "log": row, "applied": applied}
+    notify_out: dict[str, Any] | None = None
+    if notify_arm and not prev_complete:
+        notes: dict[str, Any] = {}
+        if not prev_filled:
+            notes["buy"] = notify_paper_buy(
+                session_date_et=day,
+                ticker=str(ticker),
+                shares=shares,
+                entry_price=float(row["entry_price"]),
+                deploy=float(deploy),
+                fill_ts=row.get("fill_ts"),
+                account_name=account_name,
+            )
+        notes["sell"] = notify_paper_sell(
+            session_date_et=day,
+            ticker=str(ticker),
+            shares=shares,
+            entry_price=float(row["entry_price"]),
+            exit_price=float(row["exit_price"]),
+            net_pnl=float(row["net_pnl"]),
+            exit_reason=row.get("exit_reason") or sim.get("scenario"),
+            exit_ts=row.get("exit_ts"),
+            account_name=account_name,
+        )
+        notify_out = notes
+    return {
+        "account_name": account_name,
+        "log": row,
+        "applied": applied,
+        "notify": notify_out,
+    }
 
 
 def run_paper_tick(

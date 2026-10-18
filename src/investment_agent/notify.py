@@ -42,7 +42,92 @@ def notify_config() -> dict:
         "smtp_password": os.getenv("SMTP_PASSWORD", "").strip(),
         "smtp_use_tls": os.getenv("SMTP_USE_TLS", "1").strip() not in {"0", "false", "no"},
         "enabled": os.getenv("NOTIFY_ENABLED", "1").strip() not in {"0", "false", "no"},
+        # Paper sim buy/sell emails (off when live RH — use the RH app instead)
+        "paper_trades": os.getenv("NOTIFY_PAPER_TRADES", "1").strip()
+        not in {"0", "false", "no"},
     }
+
+
+def paper_trade_notify_enabled() -> bool:
+    """True when paper buy/sell emails should fire (SMTP optional — always logs)."""
+    cfg = notify_config()
+    return bool(cfg["enabled"] and cfg["paper_trades"])
+
+
+def notify_paper_buy(
+    *,
+    session_date_et: str,
+    ticker: str,
+    shares: int,
+    entry_price: float,
+    deploy: float,
+    fill_ts: str | None = None,
+    account_name: str = "gate_approved",
+) -> dict:
+    """Email/log a PAPER simulated buy (not a live Robinhood order)."""
+    if not paper_trade_notify_enabled():
+        return {"ok": True, "skipped": True, "detail": "paper trade notify disabled"}
+    subject = f"[PAPER BUY] {ticker} · {shares} sh @ ${entry_price:.2f} · {session_date_et}"
+    body = "\n".join(
+        [
+            "PAPER SIMULATION — not a live Robinhood order.",
+            "When live on RH, use the Robinhood app for buy/sell alerts.",
+            "",
+            f"Session (ET): {session_date_et}",
+            f"Book: {account_name}",
+            f"Action: BUY (simulated fill)",
+            f"Ticker: {ticker}",
+            f"Shares: {shares}",
+            f"Entry: ${entry_price:.2f}",
+            f"Deploy: ${deploy:,.2f}",
+            f"Fill time: {fill_ts or '—'}",
+            "",
+            "Dashboard: http://127.0.0.1:8080",
+        ]
+    )
+    return send_email(subject, body)
+
+
+def notify_paper_sell(
+    *,
+    session_date_et: str,
+    ticker: str,
+    shares: int,
+    entry_price: float,
+    exit_price: float,
+    net_pnl: float,
+    exit_reason: str | None = None,
+    exit_ts: str | None = None,
+    account_name: str = "gate_approved",
+) -> dict:
+    """Email/log a PAPER simulated sell / round-trip close."""
+    if not paper_trade_notify_enabled():
+        return {"ok": True, "skipped": True, "detail": "paper trade notify disabled"}
+    sign = "+" if net_pnl >= 0 else ""
+    subject = (
+        f"[PAPER SELL] {ticker} · {exit_reason or 'exit'} · "
+        f"{sign}${net_pnl:.2f} · {session_date_et}"
+    )
+    body = "\n".join(
+        [
+            "PAPER SIMULATION — not a live Robinhood order.",
+            "When live on RH, use the Robinhood app for buy/sell alerts.",
+            "",
+            f"Session (ET): {session_date_et}",
+            f"Book: {account_name}",
+            f"Action: SELL (simulated exit)",
+            f"Ticker: {ticker}",
+            f"Shares: {shares}",
+            f"Entry: ${entry_price:.2f}",
+            f"Exit: ${exit_price:.2f}",
+            f"Exit reason: {exit_reason or '—'}",
+            f"Exit time: {exit_ts or '—'}",
+            f"Net P&L (after fees): {sign}${net_pnl:.2f}",
+            "",
+            "Dashboard: http://127.0.0.1:8080",
+        ]
+    )
+    return send_email(subject, body)
 
 
 def append_notify_log(subject: str, body: str) -> Path:
