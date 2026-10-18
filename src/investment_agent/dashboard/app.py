@@ -147,6 +147,8 @@ from investment_agent.execution.armed_plan import (
     set_armed_plan_status,
 )
 from investment_agent.execution.propose import propose_armed_plan, pdt_status_payload
+from investment_agent.execution.paper_runner import paper_status_payload, run_paper_tick
+from investment_agent.execution.paper_ledger import list_session_logs, paper_scoreboard
 from investment_agent.trade_proposal import (
     REJECTION_REASONS,
     approve_proposal,
@@ -876,6 +878,52 @@ def api_execution_armed_plan_arm(
     conn.commit()
     refreshed = get_armed_plan_for_session(conn, day)
     return {"ok": True, "plan": refreshed.to_payload() if refreshed else None, "pdt": pdt}
+
+
+class PaperTickBody(BaseModel):
+    session_date_et: str | None = None
+    force_complete: bool = False
+    starting_cash: float = 5_000.0
+
+
+@app.get("/api/paper/status")
+def api_paper_status(conn=Depends(_db)) -> dict[str, Any]:
+    """Internal paper ledger status (no Robinhood)."""
+    return paper_status_payload(conn)
+
+
+@app.get("/api/paper/scoreboard")
+def api_paper_scoreboard(conn=Depends(_db)) -> dict[str, Any]:
+    return paper_scoreboard(conn)
+
+
+@app.get("/api/paper/sessions")
+def api_paper_sessions(
+    account: str | None = None,
+    since: str | None = "2026-10-20",
+    limit: int = 90,
+    conn=Depends(_db),
+) -> dict[str, Any]:
+    rows = list_session_logs(conn, account_name=account, since=since, limit=limit)
+    return {"ok": True, "count": len(rows), "sessions": rows}
+
+
+@app.post("/api/paper/tick")
+def api_paper_tick(
+    body: PaperTickBody | None = None,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Run one paper worker cycle (manual / test)."""
+    opts = body or PaperTickBody()
+    result = run_paper_tick(
+        conn,
+        session_date_et=opts.session_date_et,
+        starting_cash=opts.starting_cash,
+        force_complete=opts.force_complete,
+    )
+    conn.commit()
+    return result
 
 
 @app.get("/api/capital-builder/progress")

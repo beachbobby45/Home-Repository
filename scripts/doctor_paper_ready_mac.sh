@@ -126,28 +126,41 @@ if [[ -n "$AGENTS" ]]; then
     warn "no intraday.* agents — paper needs ranks/gate; install: ./scripts/install_intraday_schedule_mac.sh"
     warn "NOTE: stock installer uses ET wall clock; on Pacific we must reinstall with PT offsets when building paper"
   fi
-  if echo "$AGENTS" | grep -q 'execution-worker'; then
-    warn "execution-worker already loaded — confirm it is paper-only before any RH keys exist"
+  if echo "$AGENTS" | grep -q 'paper-worker'; then
+    ok "paper-worker LaunchAgent loaded"
   else
-    ok "execution-worker not installed yet (expected until paper build)"
+    warn "paper-worker not loaded — install: ./scripts/install_paper_worker_mac.sh"
+  fi
+  if echo "$AGENTS" | grep -q 'execution-worker'; then
+    warn "execution-worker loaded — paper phase should use paper-worker only (no RH submit)"
   fi
 else
   warn "no investment-agent jobs in launchctl list"
 fi
 echo ""
 
-echo "── Paper build artifacts (expected missing until we build) ──"
+echo "── Paper artifacts ──"
 for f in \
-  scripts/install_execution_worker_mac.sh \
-  scripts/run_execution_worker.py \
-  src/investment_agent/execution/pdt_guard.py
+  scripts/install_paper_worker_mac.sh \
+  scripts/run_paper_worker.py \
+  src/investment_agent/execution/paper_ledger.py \
+  src/investment_agent/execution/paper_runner.py
 do
   if [[ -e "$ROOT/$f" ]]; then
     ok "found $f"
   else
-    warn "missing $f — pull/merge paper branch before install"
+    bad "missing $f — git pull paper branch"
   fi
 done
+echo ""
+
+echo "── Paper API (if dashboard up) ──"
+PCODE=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://127.0.0.1:8080/api/paper/status 2>/dev/null || echo "000")
+if [[ "$PCODE" == "200" ]]; then
+  ok "GET /api/paper/status → 200"
+else
+  warn "GET /api/paper/status → HTTP $PCODE (restart dashboard after pull if missing)"
+fi
 echo ""
 
 echo "── Disk / path ──"
@@ -162,8 +175,9 @@ echo ""
 
 echo "=== Summary ==="
 if [[ "$FAILS" -eq 0 ]]; then
-  echo "RESULT: READY_FOR_PAPER_BUILD (no FAIL items)"
-  echo "Next: Cursor builds paper ledger + PST-timed worker; then you re-run this script."
+  echo "RESULT: PAPER_STACK_OK (no FAIL items)"
+  echo "If paper-worker WARN above: ./scripts/install_paper_worker_mac.sh"
+  echo "Pacific intraday: ./scripts/install_intraday_schedule_mac.sh --pacific"
 else
   echo "RESULT: NOT_READY ($FAILS FAIL item(s) — fix those first)"
 fi

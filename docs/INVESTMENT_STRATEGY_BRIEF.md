@@ -318,7 +318,7 @@ Technical plan: `docs/ROBINHOOD_AUTOMATION_PLAN.md`.
 | Robinhood settlement | https://robinhood.com/us/en/support/articles/settlement-and-buying-power/ |
 | Related technical plan | [`docs/ROBINHOOD_AUTOMATION_PLAN.md`](https://github.com/beachbobby45/Home-Repository/blob/main/docs/ROBINHOOD_AUTOMATION_PLAN.md) |
 | Operator | Tony — self-directed retail account |
-| Next milestone | P0 controls (gate ON/OFF + random); P1 paper pass criteria; then live $5k |
+| Next milestone | Paper worker live on Mac (Oct–Nov); scoreboard at `/api/paper/scoreboard`; then live $5k only if pass |
 
 ---
 

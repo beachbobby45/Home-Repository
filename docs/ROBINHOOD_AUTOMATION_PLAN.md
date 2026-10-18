@@ -296,8 +296,8 @@ Slip phases rather than skip exit criteria. Old “Nov→Apr $20k ladder on cycl
 7. ✅ Execution worker dry-run + `install_execution_worker_mac.sh`.  
 8. ⏳ Live Robinhood client (waiting on Tony’s account credentials).  
 9. ⏳ Dashboard Broker tab UI banner; `--pdt-weekly-cap` analysis report.  
-10. ⏳ P0: random-pick control + gate ON/OFF report on same historical window.  
-11. ⏳ P1: forward paper dual-arm logger (signal + gate verdict every session).
+10. ⏳ P0: random-pick control on same historical window.  
+11. ✅ P1 paper ledger: dual arms (`gate_approved` + `all_signals`), T+1 settled cash, `/api/paper/*`, `install_paper_worker_mac.sh`, intraday `--pacific`.
 
 ---
 

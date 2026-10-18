@@ -750,6 +750,10 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         )
     if "pdt_day_trades" not in all_tables or "armed_plans" not in all_tables:
         conn.executescript(BROKER_EXECUTION_TABLES_SQL)
+    if "paper_accounts" not in all_tables:
+        from investment_agent.execution.paper_ledger import PAPER_TABLES_SQL
+
+        conn.executescript(PAPER_TABLES_SQL)
     tables = {
         row[0]
         for row in conn.execute(
