@@ -3114,7 +3114,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         const depositsShow = Number(p.capital_injection || 0);
         const yearEnd = remaining + sweep; // pre-sweep end
         const growthPct = begin > 0 ? (growth / begin) * 100 : 0;
-        const growthCls = growth >= 0 ? "pos" : "neg";
+        const growthCls = growth >= 0 ? "metric positive" : "metric negative";
         const goalMilestone = (p.goal_pct || 0) >= 100 ? " plan-row-goal" : "";
         const depCell = depositsShow > 0 ? `$${fmt(depositsShow)}` : "—";
         const growthSign = growth >= 0 ? "+" : "";
