@@ -1,6 +1,6 @@
 # Robinhood Automation Build Plan
 
-> **Status:** Approved to build — Phase A/B in progress; **PDT rules refreshed Oct 18, 2026**  
+> **Status:** Approved to build — Phase A/B in progress; **PDT + evidence gates refreshed Oct 18, 2026**  
 > **Owner:** Tony + Cursor agent  
 > **Supersedes for execution path:** Product Spec v3 “manual E*TRADE only” *when Tony explicitly enables this track*  
 > **Does not replace:** ranking, Market Activity, pullback entry, Growth Plan targets, Produce/Preserve day gate
@@ -237,19 +237,18 @@ $5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 202
 
 ---
 
-## 7. Suggested calendar (aligned to capital ladder)
+## 7. Suggested calendar (evidence-gated — see strategy brief §5)
 
 | When | Focus |
 |------|--------|
-| **Now → late Oct 2026** | Phase A + B (reliability + RH sync) |
-| **Nov 2, 2026** | Target Cycle 1 start (first trading day on/after Nov 1) — Phase C/D at least; E only if exits proven |
-| **~Dec 14, 2026** | End Cycle 1 checkpoint → Deposit #2 if green |
-| **~Jan 28, 2027** | End Cycle 2 → Deposit #3 if green |
-| **~Mar 12, 2027** | End Cycle 3 → Deposit #4 ($20k invested) if green |
-| **~Apr 26, 2027** | End Cycle 4 review (~$25–26k sketch) |
-| **May – Dec 2027** | Continue ≤5/week `#1` only; run Top2 study before any split |
+| **Now** | Confirm RH day-trade settings in-app; Phase A + B reliability + RH sync |
+| **Now (parallel)** | **P0 controls:** gate ON vs OFF + random-pick control on historical window |
+| **Next ~40–60 sessions** | **P1 forward paper** with pre-registered pass/fail; log every signal + gate verdict; dual arms |
+| **After paper pass** | Live **$5k** only (Phase C/D exits proven); hard −10% drawdown stop |
+| **After §5.4 scale gate** | Deposit #2 (+$5k) — **not** after one green 30-session cycle alone |
+| **Later** | Deposits #3–#4 only under continued evidence; Top2 study before any split |
 
-Slip phases rather than skip exit criteria.
+Slip phases rather than skip exit criteria. Old “Nov→Apr $20k ladder on cycle profit” is superseded by brief §5.
 
 ---
 
@@ -296,7 +295,9 @@ Slip phases rather than skip exit criteria.
 6. ✅ Propose/arm APIs + `/api/broker/status` + `/api/execution/pdt`.  
 7. ✅ Execution worker dry-run + `install_execution_worker_mac.sh`.  
 8. ⏳ Live Robinhood client (waiting on Tony’s account credentials).  
-9. ⏳ Dashboard Broker tab UI banner; `--pdt-weekly-cap` analysis report.
+9. ⏳ Dashboard Broker tab UI banner; `--pdt-weekly-cap` analysis report.  
+10. ⏳ P0: random-pick control + gate ON/OFF report on same historical window.  
+11. ⏳ P1: forward paper dual-arm logger (signal + gate verdict every session).
 
 ---
 

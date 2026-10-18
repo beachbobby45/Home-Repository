@@ -5,9 +5,9 @@
 |-------|--------|
 | **Document type** | Investment strategy & operating plan (for diligence) |
 | **Prepared** | October 17, 2026 |
-| **Last updated** | October 18, 2026 (**post–PDT rule change refresh**) |
+| **Last updated** | October 18, 2026 (**post–PDT + evidence-gate refresh**) |
 | **Operator** | Tony (individual account; self-directed) |
-| **Status** | Published for external diligence; pre-live / systems build; historical simulation complete for a limited window |
+| **Status** | Published for external diligence; **paper-first** before live capital; historical simulation is exploratory only |
 | **Canonical copy** | https://github.com/beachbobby45/Home-Repository/blob/main/docs/INVESTMENT_STRATEGY_BRIEF.md |
 | **Not** | A solicitation, prospectus, or guarantee of returns |
 
@@ -57,7 +57,7 @@ A **rules-based, same-day long-only** trading program that:
 2. Selects primarily the **#1 ranked name** each session.  
 3. Enters with a **pullback limit buy**, exits at a **dollar profit target** or **stop**, with an **11:30 ET** entry deadline.  
 4. Trades **up to 5 weekdays per week** when a setup fills (post–PDT rules); **one name per day**; redeploy only with **settled** buying power (cash / unlevered).  
-5. Funds capital in **staged $5,000 deposits** only after each ~30-session cycle shows profit.  
+5. **Paper-trades 40–60 sessions** with pre-registered pass/fail **before** any live deposit; then stages further $5k only under stronger evidence gates (not one green 30d).  
 6. Executes via **Robinhood** as the ledger of record, with a local always-on worker for travel-safe **broker-side** target/stop orders—not discretionary “AI guessing” each minute.
 
 ### What this is not
@@ -150,47 +150,73 @@ At **$25,000** tier, internal design daily/weekly rises (on the order of **~$350
 
 ---
 
-## 5. Capital plan & proposed outcomes (revised — 5 sessions/week capable)
+## 5. Evidence-gated capital plan (revised after external diligence)
 
-Assumptions for the ladder sketch:
+**External review takeaway (accepted):** the prior ladder treated “one profitable ~30-session cycle → next $5k” as enough proof. That is a **weak** capital gate — a no-edge process can still print a green cycle by luck (~half the time before costs). Structure (small size, staged deposits, unlevered) stays; **unlock criteria get stricter**.
 
-- Historical block returns use the **all-fill** (no 3/week cap) $5k simulation for Cycle 1 and $10k-path nets for Cycle 2.  
-- Cycles 3–4 **extrapolate** average cycle return — not guaranteed.  
-- Deposits only if prior cycle profit &gt; 0.  
-- Dates = trading-day calendar from **Mon Nov 2, 2026**.
+### 5.0 Binding sequence (do in order)
 
-### 5.1 Funding ladder
+| Phase | What | Capital at risk | Gate to proceed |
+|-------|------|-----------------|-----------------|
+| **P0 — Controls** | Re-run history with (a) **gate ON**, (b) **gate OFF / all signals**, (c) **random-pick control** using identical entry/exit/fees | $0 | Scripts complete; results logged in brief appendix |
+| **P1 — Forward paper** | **40–60 sessions**, up to 5 days/week; **log every signal** + gate verdict; run two arms from same log: *all signals* vs *gate-approved only* | $0 | Pre-registered pass criteria in §5.2 |
+| **P2 — Live $5k** | First deposit only after P1 pass; unlevered; settled cash; hard drawdown stop | **$5,000** | Written go after paper pass |
+| **P3 — Scale** | Further $5k tranches | up to **$20,000** invested | §5.4 — **not** “one green cycle” |
 
-| Stage | Approx. date | Operator cash in | Account (sketch) | Growth on cash invested |
-|-------|--------------|------------------|------------------|-------------------------|
-| Start | Mon **Nov 2, 2026** | $5,000 | $5,000 | 0% |
-| End cycle 1 | Mon **Dec 14, 2026** | $5,000 | **~$5,422** | **~+8.4%** |
-| Deposit #2 | Dec 14, 2026 | $10,000 | ~$10,422 | ~+4.2% |
-| End cycle 2 | Thu **Jan 28, 2027** | $10,000 | **~$11,756** | **~+17.6%** |
-| Deposit #3 | Jan 28, 2027 | $15,000 | ~$16,756 | ~+11.7% |
-| End cycle 3† | Fri **Mar 12, 2027** | $15,000 | **~$18,536** | **~+23.6%** |
-| Deposit #4 ($20k in)† | Mar 12, 2027 | $20,000 | ~$23,536 | ~+17.7% |
-| End cycle 4† | Mon **Apr 26, 2027** | $20,000 | **~$26,036** | **~+30.2%** |
+Illustrative growth math from the old all-fill sim (~$5.4k → ~$26k) remains a **planning sketch only** if live edge appears; it is **not** a deposit schedule and is **not** evidence of edge.
 
-†Cycles 3–4 extrapolated at ~**10.6%** per 30-session block (average of observed Cycle 1 & 2).  
-**Conservative** extrapolation (~8.4%/block): end Cycle 4 ≈ **$25,128** (~**+25.6%** on $20k invested).
+### 5.1 Why “$5k for 30 days, then +$5k if green” is incomplete
 
-### 5.2 vs prior (PDT-capped) ladder
-Removing the 3/week cap does **not** radically change the sketch: many days never filled anyway. End Cycle 4 base case moves from ~**$25.9k / +29%** (old PDT-capped path) to ~**$26.0k / +30%** (all-fill path)—same order of magnitude. The strategic win is **operational**: no need to skip valid Monday–Friday setups solely for an obsolete PDT count.
+| Issue | Why it matters |
+|-------|----------------|
+| Gate was bypassed in the only backtest | Live default should respect the gate; we don’t know if the gate helps or just cuts trades |
+| ~15 fills / 30 sessions | Cycle P&L is mostly noise; profit ≠ proven expectancy |
+| No random control | Ranking may not beat chance under the same pullback/target/stop rules |
+| One green cycle unlock | No-edge paths still reach $20k some fraction of the time |
 
-### 5.3 Full-year 2027 sketch (proposed, not guaranteed)
+**Alternate (recommended):** keep the **$5k first tranche** idea, but put **paper + controls in front of it**, and make **Deposit #2** require more than one lucky green block.
 
-| Period | Mode | Illustrative account band |
-|--------|------|---------------------------|
-| Nov 2026 – Apr 2027 | Up to 5 sessions/week; ladder to $20k in | → **~$25–26k** |
-| May – Dec 2027 | Same frequency; #1 only; scale with equity | **~$32–50k** planning band (conservative→base) |
+### 5.2 Pre-registered paper pass/fail (write before session 1)
 
-### 5.4 Cycle 1 success criteria
-- Zero freeriding / unsettled-cash violations (cash mode)  
-- No unprotected overnight longs from tooling failure  
-- RH vs dashboard cash match within **$0.01** after sync  
-- Cycle P&L **≥ $0** before Deposit #2  
-- Operator written go/no-go  
+**Pass (all required):**
+1. ≥ **30 filled** paper trades (trade-through fills preferred: price must **trade through** the limit, not only touch).  
+2. **Positive expectancy** after fees on the primary arm (default: gate-approved; also report all-signals).  
+3. Primary arm **beats random-pick control** under identical entry/exit/fee rules over the same sessions.  
+4. Max drawdown on the $5k notional paper book **≤ 10%** ($500) without a rule breach that would have been ignored live.  
+5. Ops clean: ≤5 day-trades/week policy respected; settlement rules modeled (T+1 redeploy).
+
+**Fail → do not deposit live $5k:** any of the above missed, or tooling cannot log gate + signal daily.
+
+### 5.3 Live $5k (only after paper pass)
+
+- Treat as **tuition to find out**, not an investment thesis proven.  
+- **Hard stop:** −**10%** ($500) peak-to-trough on the live book → pause all new arms; written review before any resume.  
+- Unlevered; settled cash; broker-side target/stop; kill switch.  
+- Continue logging **every** signal + gate verdict (even on NO-TRADE days).
+
+### 5.4 Deposit #2 and beyond (stricter than “cycle &gt; 0”)
+
+| Unlock | Requirement |
+|--------|-------------|
+| Deposit #2 (+$5k → $10k invested) | ≈ **100 live filled trades** *or* **two** consecutive profitable **60-session** blocks; live slippage ≈ paper assumptions; drawdown within hard-stop history; operator written go |
+| Deposit #3 / #4 | Same bar raised: expectancy still positive after costs; no hard-stop breach unresolved; RH/dashboard reconcile clean |
+
+One profitable 30-session cycle alone is **not** enough for Deposit #2.
+
+### 5.5 Frequency after PDT drop
+
+Up to **5 sessions/week** is allowed as ops policy (FINRA/RH no longer impose 3-under-$25k). Binding live constraint remains **settled cash (T+1)** for unlevered accounts — see §0.
+
+### 5.6 Illustrative ladder (edge assumed — not a promise)
+
+| Stage | Earliest sketch | Cash in | Notes |
+|-------|-----------------|---------|-------|
+| Paper P1 | Now → ~60 sessions | $0 | Must pass §5.2 |
+| Live start | After paper pass | $5,000 | Hard −10% stop |
+| Deposit #2 | After §5.4 | $10,000 | Not after first green 30d alone |
+| Later tranches | Evidence continues | → $20,000 | Optional; skip if edge absent |
+
+Old extrapolated end-state (~$25–26k on $20k invested) is retained only as a **what-if** if expectancy survives paper and live — not as a funding calendar.
 
 ---
 
@@ -198,11 +224,12 @@ Removing the 3/week cap does **not** radically change the sketch: many days neve
 
 | Evidence | Strength | Caveat |
 |----------|----------|--------|
-| 60-session 5m fill-path on #1 | Medium for a personal experiment | One window; Yahoo ≠ RH fills |
-| $5k all-fill path ≈ +18.7% / 60d | Useful for under-$25k planning | Not a forecast |
-| Weekly ≥$450 as a floor | **Weak** | Rare even with more trade slots |
+| 60-session 5m fill-path on #1 (gate off) | Exploratory | Counterfactual; gate bypassed |
+| $5k all-fill path ≈ +18.7% / 60d | Planning sketch | Not a forecast; not deposit proof |
+| Weekly ≥$450 as a floor | **Weak** | Design goal, not history |
+| Random-pick control | **Not yet run** | Required before trusting rank edge |
+| Gate ON vs OFF dual arm | **Not yet logged forward** | Required in paper |
 | Live automated RH execution | **Not yet proven** | Build in progress |
-| Ignoring NO-TRADE gate in backtest | Material | Live should prefer day-gate unless overridden |
 
 ---
 
@@ -233,9 +260,12 @@ Removing the 3/week cap does **not** radically change the sketch: many days neve
 | Settled-cash check before arm | Prevent freeriding |
 | Weekly session tracker (ops) | Cap **5** filled day trades/week by policy |
 | Kill switch | Halt new risk |
-| Cycle deposit gate | No +$5k after a losing cycle |
+| Paper pass before live $5k | §5.2 pre-registered criteria |
+| Hard −10% live drawdown stop | Pause and review |
+| Scale gate | Deposit #2 needs §5.4 evidence, not one green 30d |
 | Unlevered policy | No borrowed buying power |
 | Default `#1` only | Avoid untested dual-name complexity |
+| Dual-arm logging | Every signal + gate verdict (all vs gate-approved) |
 
 Technical plan: `docs/ROBINHOOD_AUTOMATION_PLAN.md`.
 
@@ -245,7 +275,9 @@ Technical plan: `docs/ROBINHOOD_AUTOMATION_PLAN.md`.
 
 | Tranche | Amount | Purpose |
 |---------|--------|---------|
-| 1–4 | $5,000 each | Trading capital only; next tranche only if prior cycle profitable → **$20,000** invested |
+| Paper | $0 | Prove process + beat control (§5.2) |
+| 1 | $5,000 | Live tuition after paper pass; hard −10% stop |
+| 2–4 | $5,000 each | Only under §5.4 evidence gates → max **$20,000** invested |
 
 ---
 
@@ -253,18 +285,22 @@ Technical plan: `docs/ROBINHOOD_AUTOMATION_PLAN.md`.
 
 1. Cash / do nothing  
 2. Buy-and-hold index ETF  
-3. Paper-trade 60+ sessions first  
-4. Live $5k only, no further deposits  
-5. Margin with borrow (rejected here)
+3. **Paper 40–60 first, then live $5k only** (chosen path)  
+4. Live $5k forever, never scale  
+5. Fast ladder on one green 30d (rejected — weak gate)  
+6. Margin with borrow (rejected)
 
 ---
 
 ## 11. Diligence checklist
 
-- [ ] I understand cited returns are mostly **simulated**.  
+- [ ] I understand cited returns are mostly **simulated** and gate-off.  
 - [ ] I understand **PDT $25k / 3-trade rules are replaced** (FINRA/RH, Jun 2026) but **settlement and intraday margin** still matter.  
+- [ ] I will confirm in-app: **Settings → Investing → Day trade settings**.  
 - [ ] I understand this plan is **unlevered** and uses **T+1 settled** funds in cash mode.  
 - [ ] I understand **$450/week is a design target**, not a historical minimum.  
+- [ ] I understand **paper must pass §5.2 before any live $5k**.  
+- [ ] I understand Deposit #2 needs **§5.4**, not one green 30-session cycle.  
 - [ ] I understand **total loss of trading capital is possible**.  
 - [ ] I have read §0 (sources) and §7 (risks).  
 
@@ -282,7 +318,7 @@ Technical plan: `docs/ROBINHOOD_AUTOMATION_PLAN.md`.
 | Robinhood settlement | https://robinhood.com/us/en/support/articles/settlement-and-buying-power/ |
 | Related technical plan | [`docs/ROBINHOOD_AUTOMATION_PLAN.md`](https://github.com/beachbobby45/Home-Repository/blob/main/docs/ROBINHOOD_AUTOMATION_PLAN.md) |
 | Operator | Tony — self-directed retail account |
-| Next milestone | RH connectivity; settled-cash arm checks; Cycle 1 ~Nov 2, 2026 |
+| Next milestone | P0 controls (gate ON/OFF + random); P1 paper pass criteria; then live $5k |
 
 ---
 
@@ -290,13 +326,14 @@ Technical plan: `docs/ROBINHOOD_AUTOMATION_PLAN.md`.
 
 | Question | Reading of *this* plan |
 |----------|-------------------------|
-| Clear strategy? | **Yes** — #1, pullback, target/stop, ≤5 sessions/week, settled cash, staged capital. |
-| Empirical support? | **Limited but real** — ~60 sessions positive under 5m rules. |
+| Clear strategy? | **Yes** — #1, pullback, target/stop, ≤5 sessions/week, settled cash. |
+| Empirical support for edge? | **Not yet** — exploratory sim only; controls + paper still required. |
 | PDT still blocking 3/week? | **No** (as of Jun 4, 2026 per FINRA/RH) — settlement is the pacing item. |
-| 2027 outcomes guaranteed? | **No**. |
-| Ready for outside passive investors? | **Not as presented**. |
-| Reasonable personal $5k→$20k experiment? | **Possibly**, if unlevered, cycle-gated, and loss-tolerant. |
+| Outside capital today? | **No** — reviewers correctly declined; evidence incomplete. |
+| Live first $5k today? | **No** — paper + controls first. |
+| Live first $5k after clean paper pass? | **Reasonable as tuition** if loss of $5k is personally acceptable. |
+| Scale past $5k on one green 30d? | **No** — use §5.4. |
 
 ---
 
-*End of strategy brief. Simulated figures from Oct 2026 analysis runs; post-PDT refresh Oct 18, 2026.*
+*End of strategy brief. Simulated figures from Oct 2026 analysis runs; post-PDT + evidence-gate refresh Oct 18, 2026.*
