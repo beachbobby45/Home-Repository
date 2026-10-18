@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-__version__ = "0.9.6"
-__release_name__ = "Plan calendar years"
-__release_tag__ = "v0.9.6-plan-calendar"
+__version__ = "0.9.7"
+__release_name__ = "Plan single path"
+__release_tag__ = "v0.9.7-plan-single-path"
 
 
 def version_info() -> dict[str, str]:
