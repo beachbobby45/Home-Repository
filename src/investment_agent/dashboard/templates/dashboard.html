@@ -869,8 +869,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     const API_KEY_STORAGE = "investment_agent_api_key";
     let apiKeyRequired = false;
 
+    function isLocalDashboardHost() {
+      const host = (window.location.hostname || "").toLowerCase();
+      return host === "127.0.0.1" || host === "localhost" || host === "::1";
+    }
+
     function getApiKey() {
-      if (!apiKeyRequired) return "";
+      // Match server: localhost POSTs do not need X-API-Key.
+      if (!apiKeyRequired || isLocalDashboardHost()) return "";
       return localStorage.getItem(API_KEY_STORAGE) || "";
     }
 
@@ -1954,22 +1960,35 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     }
 
     async function postOperatorDay(path, notes) {
-      if (apiKeyRequired && !getApiKey()) {
+      if (apiKeyRequired && !isLocalDashboardHost() && !getApiKey()) {
         throw new Error(
           "Dashboard password required — enter APP_API_KEY from your .env in the bar at the top, click Save, then try again."
         );
       }
       const session_date_et = document.getElementById("operator-day-date")?.value || todayEtDateStr();
-      return api(path, {
-        method: "POST",
-        body: JSON.stringify({ session_date_et, notes: notes || null }),
-      });
+      try {
+        return await api(path, {
+          method: "POST",
+          body: JSON.stringify({ session_date_et, notes: notes || null }),
+          timeoutMs: 45000,
+        });
+      } catch (err) {
+        const msg = String(err?.message || err || "");
+        if (/Cannot reach the dashboard server|connection failed|Failed to fetch|timed out/i.test(msg)) {
+          throw new Error(
+            "Dashboard is not running — cannot log this day. "
+            + "On Mac: cd ~/Home-Repository && ./scripts/hard_restart_dashboard_mac.sh --pull "
+            + "then open http://127.0.0.1:8080 and try Log NO TRADE again."
+          );
+        }
+        throw err;
+      }
     }
 
     function updateOperatorDayAuthHint() {
       const hint = document.getElementById("operator-day-auth-hint");
       if (!hint) return;
-      if (apiKeyRequired && !getApiKey()) {
+      if (apiKeyRequired && !isLocalDashboardHost() && !getApiKey()) {
         hint.textContent =
           "Enter the dashboard password at the top and click Save before logging attendance.";
         hint.hidden = false;

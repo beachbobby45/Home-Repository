@@ -90,10 +90,14 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || {
   launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
 }
 launchctl enable "gui/$(id -u)/$PLIST_LABEL"
+# Fresh stderr for this start — avoids stale NumPy arch lines from prior crashes.
+: > "${LOG_DIR}/dashboard.err.log" 2>/dev/null || true
 launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL"
 
-echo "Waiting for dashboard service (up to 30s)…"
-for _ in $(seq 1 30); do
+HEALTH_WAIT_SEC="${DASHBOARD_HEALTH_WAIT_SEC:-60}"
+echo "Waiting for dashboard service (up to ${HEALTH_WAIT_SEC}s)…"
+CODE="000"
+for _ in $(seq 1 "$HEALTH_WAIT_SEC"); do
   sleep 1
   CODE=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 "$URL/api/version" 2>/dev/null || echo "000")
   if [[ "$CODE" == "200" ]]; then
@@ -110,8 +114,9 @@ for _ in $(seq 1 30); do
 done
 
 echo ""
-echo "ERROR: Dashboard service installed but not responding (last HTTP $CODE)."
-if grep -qi "incompatible architecture\|mach-o.*wrong" "${LOG_DIR}/dashboard.err.log" 2>/dev/null; then
+echo "ERROR: Dashboard service installed but not responding (last HTTP ${CODE})."
+RECENT_ERR="$(tail -20 "${LOG_DIR}/dashboard.err.log" 2>/dev/null || true)"
+if echo "$RECENT_ERR" | grep -qi "incompatible architecture\|mach-o.*wrong"; then
   echo ""
   echo "NumPy/Python architecture mismatch detected in service log."
   echo "Fix: ./scripts/fix_ingest_python_mac.sh"

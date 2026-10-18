@@ -66,8 +66,19 @@ echo "$PY" > "$PINNED"
 
 echo ""
 echo "Reinstalling dashboard LaunchAgent with this Python…"
-"$ROOT/scripts/install_dashboard_service_mac.sh"
+if "$ROOT/scripts/install_dashboard_service_mac.sh"; then
+  echo ""
+  echo "Done. Dashboard is at http://127.0.0.1:8080"
+  echo "Test: ./scripts/doctor_dashboard_mac.sh"
+  exit 0
+fi
 
 echo ""
-echo "Done. Dashboard should be at http://127.0.0.1:8080"
-echo "Test: ./scripts/doctor_dashboard_mac.sh"
+echo "WARN: .venv is healthy but the LaunchAgent did not pass the health check yet."
+echo "      Python repair succeeded — try:"
+echo "        ./scripts/install_dashboard_service_mac.sh"
+echo "        ./scripts/ensure_dashboard_mac.sh"
+echo "      Or wait 30s and open http://127.0.0.1:8080"
+echo ""
+echo "If it still fails, send: ~/Library/Logs/investment-agent/dashboard.err.log"
+exit 0
