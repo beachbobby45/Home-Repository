@@ -49,6 +49,13 @@ def test_plan_starts_at_five_k():
     assert data["funded_target"] == PLAN_FUNDED_TARGET
     assert data["assumptions"]["sessions_per_week_cap"] == 5
     assert len(data["assumptions"]["injection_schedule"]) == 3
+    assert data["assumptions"]["rh_live_date"] == "2026-12-01"
+    cash = data["assumptions"]["cash_schedule"]
+    assert cash[0]["date"] == "2026-12-01" and cash[0]["amount"] == 5_000.0
+    assert cash[-1]["date"] == "2027-04-09" and cash[-1]["invested_after"] == 20_000.0
+    assert data["summary"].startswith("$5,000 start")
+    assert "$15,000 start" not in data["summary"]
+    assert "+$10K" not in (data["assumptions"].get("capital_injection") or "")
 
 
 def test_api_growth_plan_ten_year():

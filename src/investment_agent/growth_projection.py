@@ -241,6 +241,37 @@ def build_ten_year_growth_plan(
         for i in inj_tuple
     ]
 
+    cash_schedule = [
+        {
+            "stage": "RH Deposit #1 (CASH)",
+            "date": "2026-12-01",
+            "amount": starting_balance,
+            "invested_after": starting_balance,
+            "note": "After Oct–Nov paper pass · CASH/unlevered",
+        },
+        {
+            "stage": "Deposit #2",
+            "date": "2027-01-13",
+            "amount": 5_000.0,
+            "invested_after": 10_000.0,
+            "note": "~30 sessions after #1 · evidence-gated",
+        },
+        {
+            "stage": "Deposit #3",
+            "date": "2027-02-25",
+            "amount": 5_000.0,
+            "invested_after": 15_000.0,
+            "note": "~30 sessions after #2 · evidence-gated",
+        },
+        {
+            "stage": "Deposit #4",
+            "date": "2027-04-09",
+            "amount": 5_000.0,
+            "invested_after": PLAN_FUNDED_TARGET,
+            "note": "~30 sessions after #3 → $20K invested · evidence-gated",
+        },
+    ]
+
     return {
         "goal": goal,
         "starting_basis": starting_balance,
@@ -254,7 +285,11 @@ def build_ten_year_growth_plan(
             "injection_amount": inj_total,
             "injection_week": inj_tuple[0].week_offset if inj_tuple else None,
             "injection_schedule": inj_schedule,
+            "cash_schedule": cash_schedule,
+            "rh_live_date": "2026-12-01",
+            "account_mode": "CASH / unlevered (no borrowed margin)",
             "sessions_per_week_cap": 5,
+            "deposit_cadence": "+$5K every ~30 sessions after RH #1 until $20K invested",
             "one_trade_per_day": True,
             "second_trade": "Exceptional days only (#1 win + market GO)",
             "settlement": "Cash / unlevered · T+1 redeploy",
@@ -265,9 +300,11 @@ def build_ten_year_growth_plan(
         },
         "years": comparison,
         "summary": (
-            f"${starting_balance:,.0f} start · {hit_pct:.1f}% hit · "
-            f"{tradeable_days_per_week:.1f} tradeable days/wk · ≤5 sessions/wk · "
-            f"35% annual sweep. With {inj_label}: "
+            f"${starting_balance:,.0f} start (RH CASH #1 on 2026-12-01 after paper pass) · "
+            f"{hit_pct:.1f}% hit · {tradeable_days_per_week:.1f} tradeable days/wk · "
+            f"≤5 sessions/wk · 35% annual sweep. "
+            f"+$5K ~every 30 sessions → $20K by ~2027-04-09 (gated). "
+            f"With {inj_label}: "
             f"~{_months_to_goal(inj_rows) or '>120'} months to $5M vs "
             f"~{_months_to_goal(base_rows) or '>120'} base ($5K only)."
         ),

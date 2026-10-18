@@ -784,7 +784,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.4 · $5K Plan</strong> ($5K start, staged funding to $20K, annual 35% sweep, growth scenarios)</p>
+          <p class="brief">Latest release: <strong>v0.9.5 · $5K Plan cash dates</strong> ($5K RH CASH Dec 1, +$5K ~every 30 sessions → $20K)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -886,8 +886,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (v.version === "0.9.4" || v.version === "0.9.3") {
-              setupHelp.textContent = "You are on the current release ($5K plan · staged funding to $20K · annual sweep). Hard-refresh (Cmd+Shift+R) if Plan still shows $15K start.";
+            if (v.version === "0.9.5" || v.version === "0.9.4" || v.version === "0.9.3") {
+              setupHelp.textContent = "You are on the current release ($5K RH CASH Dec 1 · +$5K ~every 30 sessions → $20K). Hard-refresh (Cmd+Shift+R) if Plan still shows $15K start.";
               setupHelp.className = "brief setup-version-help setup-version-ok";
             } else {
               setupHelp.textContent = "Your dashboard is behind. Double-click Update and Open Dashboard.command in Finder (no Terminal typing).";
@@ -3066,14 +3066,21 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     async function loadTenYearPlan() {
       const data = await api("/api/growth-plan/ten-year");
       const a = data.assumptions || {};
-      const sched = (a.injection_schedule || [])
-        .map((x) => `wk ${x.week_offset}: +$${fmt(x.amount)}`)
-        .join(" · ") || (a.injection_week != null ? `from week ${a.injection_week}` : "—");
+      const cashLines = (a.cash_schedule || []).map((x) =>
+        `${x.date}: ${x.stage} +$${fmt(x.amount)} → $${fmt(x.invested_after)} invested`
+      );
+      const cashBlock = cashLines.length
+        ? cashLines.join("<br>&nbsp;&nbsp;")
+        : (a.injection_schedule || [])
+            .map((x) => x.label || `wk ${x.week_offset}: +$${fmt(x.amount)}`)
+            .join(" · ");
       document.getElementById("plan-assumptions").innerHTML = [
         `<strong>Assumptions</strong> (planning model — see Plan tab disclaimer)`,
-        `$${fmt(data.starting_basis)} start · ${a.hit_rate_pct}% hit · ${a.tradeable_days_per_week} tradeable days/wk · ≤${a.sessions_per_week_cap || 5} sessions/wk`,
-        `Annual ${a.sweep_rate_pct}% sweep · ${a.capital_injection || "—"} ($${fmt(a.injection_amount || 0)} total · ${sched})`,
-        `${a.settlement || "Cash / unlevered · T+1"} · ${a.one_trade_per_day ? "One #1 pick/day" : ""} · ${a.second_trade || ""}`,
+        `<strong>$${fmt(data.starting_basis)} start</strong> · RH CASH live earliest <strong>${a.rh_live_date || "2026-12-01"}</strong> (after Oct–Nov paper pass)`,
+        `${a.hit_rate_pct}% hit · ${a.tradeable_days_per_week} tradeable days/wk · ≤${a.sessions_per_week_cap || 5} sessions/wk · Annual ${a.sweep_rate_pct}% sweep`,
+        `${a.deposit_cadence || "+$5K every ~30 sessions to $20K"} · ${a.account_mode || a.settlement || "CASH / unlevered"}`,
+        `<strong>Cash schedule</strong> (earliest sketches · evidence-gated):<br>&nbsp;&nbsp;${cashBlock}`,
+        `${a.one_trade_per_day ? "One #1 pick/day" : ""} · ${a.second_trade || ""}`,
       ].join("<br>");
       document.getElementById("plan-summary").textContent = data.summary || "";
       const mtg = data.months_to_goal || {};
