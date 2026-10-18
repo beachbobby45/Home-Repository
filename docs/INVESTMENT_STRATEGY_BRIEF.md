@@ -5,8 +5,10 @@
 |-------|--------|
 | **Document type** | Investment strategy & operating plan (for diligence) |
 | **Prepared** | October 17, 2026 |
+| **Last updated** | October 18, 2026 |
 | **Operator** | Tony (individual account; self-directed) |
-| **Status** | Pre-live / systems build; historical simulation complete for a limited window |
+| **Status** | Published for external diligence; pre-live / systems build; historical simulation complete for a limited window |
+| **Canonical copy** | https://github.com/beachbobby45/Home-Repository/blob/main/docs/INVESTMENT_STRATEGY_BRIEF.md |
 | **Not** | A solicitation, prospectus, or guarantee of returns |
 
 > **Important:** This document is for informational and diligence purposes. It is **not** financial, legal, or tax advice. Past simulated or live performance does **not** predict future results. Equity trading can result in **partial or total loss** of capital. Pattern Day Trader (PDT) and broker rules apply. Any third party considering involvement should perform independent due diligence and consult licensed advisors as appropriate.
@@ -260,7 +262,9 @@ Funds are for **securities trading** in the operator’s brokerage account—not
 
 | Item | Value |
 |------|--------|
-| Related technical plan | `docs/ROBINHOOD_AUTOMATION_PLAN.md` |
+| **Final document (GitHub `main`)** | https://github.com/beachbobby45/Home-Repository/blob/main/docs/INVESTMENT_STRATEGY_BRIEF.md |
+| **Raw markdown** | https://raw.githubusercontent.com/beachbobby45/Home-Repository/main/docs/INVESTMENT_STRATEGY_BRIEF.md |
+| Related technical plan | [`docs/ROBINHOOD_AUTOMATION_PLAN.md`](https://github.com/beachbobby45/Home-Repository/blob/main/docs/ROBINHOOD_AUTOMATION_PLAN.md) |
 | Product / finance model | Internal Growth Plan / Phase 1B specs in repository |
 | Simulation tools | `scripts/analyze_blocked_day_top1_pnl.py` (5m proven fills; optional compound) |
 | Operator | Tony — self-directed retail account |
