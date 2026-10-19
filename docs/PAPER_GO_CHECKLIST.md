@@ -14,7 +14,7 @@ cd ~/Home-Repository
 ./scripts/arm_unattended_mac.sh
 ```
 
-That install+proves: paper-worker, intraday morning_prep, morning health email, dashboard, sleep=0, SMTP send.
+Operator bar (no SMTP required): paper-worker + morning_prep loaded, sleep=0, macOS **banner** notifications, dashboard shows ranked list / #1 / paper trade log.
 
 Manual checklist (same bar):
 
