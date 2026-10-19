@@ -7,13 +7,26 @@ Nothing auto-deposits. Live RH requires **your written go** after the checks bel
 
 ## A. Daily Mac readiness (before each paper week)
 
+**Before leaving the Mac unattended**, run one script until it prints `READY_UNATTENDED`:
+
+```bash
+cd ~/Home-Repository
+./scripts/arm_unattended_mac.sh
+```
+
+That install+proves: paper-worker, intraday morning_prep, morning health email, dashboard, sleep=0, SMTP send.
+
+Manual checklist (same bar):
+
+- [ ] `./scripts/arm_unattended_mac.sh` → `RESULT: READY_UNATTENDED`
 - [ ] Repo on `cursor/post-pdt-strategy-refresh-cd1d` (or `main` after merge)
 - [ ] `./scripts/doctor_paper_ready_mac.sh` — no FAIL items
 - [ ] Dashboard LaunchAgent loaded → http://127.0.0.1:8080 opens
 - [ ] Paper worker LaunchAgent loaded (`com.investment-agent.paper-worker`)
-- [ ] Mac awake through the cash session (or sleep settings allow KeepAlive)
+- [ ] Morning health LaunchAgent loaded (`com.investment-agent.health.morning`)
+- [ ] Mac on AC with `sleep=0` (calendar jobs miss if the Mac sleeps)
 - [ ] `.env` has `NOTIFY_*` + working `SMTP_*` (health + PAPER buy/sell emails)
-- [ ] Smoke: `./scripts/run_morning_health_mac.sh --force-notify` reaches inbox
+- [ ] Smoke: forced health email reached inbox
 - [ ] **STOP PROCESS** tested once: Stop → no new paper arms → Resume → arms resume
 
 ---

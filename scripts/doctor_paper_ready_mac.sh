@@ -116,26 +116,31 @@ else
 fi
 echo ""
 
-echo "── Intraday / related LaunchAgents ──"
+echo "── Intraday / paper / health LaunchAgents (unattended requires these) ──"
 AGENTS=$(launchctl list 2>/dev/null | grep investment-agent || true)
 if [[ -n "$AGENTS" ]]; then
   echo "$AGENTS"
   if echo "$AGENTS" | grep -q 'intraday'; then
     ok "intraday schedule agents present"
   else
-    warn "no intraday.* agents — paper needs ranks/gate; install: ./scripts/install_intraday_schedule_mac.sh"
-    warn "NOTE: stock installer uses ET wall clock; on Pacific we must reinstall with PT offsets when building paper"
+    bad "no intraday.* agents — run: ./scripts/arm_unattended_mac.sh"
+    warn "NOTE: Pacific Macs need: ./scripts/install_intraday_schedule_mac.sh --pacific"
   fi
   if echo "$AGENTS" | grep -q 'paper-worker'; then
     ok "paper-worker LaunchAgent loaded"
   else
-    warn "paper-worker not loaded — install: ./scripts/install_paper_worker_mac.sh"
+    bad "paper-worker not loaded — run: ./scripts/arm_unattended_mac.sh"
+  fi
+  if echo "$AGENTS" | grep -q 'health.morning'; then
+    ok "morning health LaunchAgent loaded"
+  else
+    bad "morning health not loaded — run: ./scripts/arm_unattended_mac.sh (or install_morning_health_mac.sh)"
   fi
   if echo "$AGENTS" | grep -q 'execution-worker'; then
     warn "execution-worker loaded — paper phase should use paper-worker only (no RH submit)"
   fi
 else
-  warn "no investment-agent jobs in launchctl list"
+  bad "no investment-agent jobs in launchctl list — run: ./scripts/arm_unattended_mac.sh"
 fi
 echo ""
 
