@@ -99,8 +99,11 @@ esac
 echo ""
 
 echo "── Install dashboard / paper / intraday / morning health ──"
+# launchctl bootstrap can return I/O error 5 when already loaded; hard restart is the real proof.
 if [[ -x "$ROOT/scripts/install_dashboard_service_mac.sh" ]]; then
-  "$ROOT/scripts/install_dashboard_service_mac.sh" || bad "dashboard service install failed"
+  if ! "$ROOT/scripts/install_dashboard_service_mac.sh"; then
+    warn "dashboard install reported an error — will rely on hard_restart next"
+  fi
 else
   warn "install_dashboard_service_mac.sh missing — trying hard restart only"
 fi
