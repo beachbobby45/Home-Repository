@@ -10,9 +10,10 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$(cd "$PWD" && pwd)"
 FAILS=0
+FAIL_MSGS=()
 ok() { echo "OK:   $*"; }
 warn() { echo "WARN: $*"; }
-bad() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); }
+bad() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); FAIL_MSGS+=("$*"); }
 
 echo "=== FULL UNATTENDED EVAL ($(date '+%Y-%m-%d %H:%M:%S %z')) ==="
 echo "Repo: $ROOT"
@@ -42,12 +43,20 @@ echo "Branch: $BRANCH @ $COMMIT"
 echo ""
 
 echo "── 2) Unit / process tests (paper path) ──"
-if ! "$PY" -m unittest \
-  tests.test_paper_propose_race \
-  tests.test_unattended_paper_day \
-  tests.test_paper_ledger \
-  tests.test_paper_automation \
-  -v; then
+TEST_MODS=(
+  tests.test_paper_propose_race
+  tests.test_unattended_paper_day
+  tests.test_paper_ledger
+  tests.test_paper_automation
+)
+# Include top-3 scorer tests when present on this checkout.
+if [[ -f "$ROOT/tests/test_tradable_now.py" ]]; then
+  TEST_MODS+=(tests.test_tradable_now)
+fi
+if [[ -f "$ROOT/tests/test_best_tradable_propose.py" ]]; then
+  TEST_MODS+=(tests.test_best_tradable_propose)
+fi
+if ! "$PY" -m unittest "${TEST_MODS[@]}" -v; then
   bad "paper unit/process tests FAILED"
 else
   ok "paper unit/process tests PASSED"
@@ -120,53 +129,71 @@ echo ""
 echo "── 7) Simulate overnight→prep race on a throwaway date ──"
 export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONNOUSERSITE=1
+# Use a TEMP database — never the live Mac paper ledger (settled cash / prior
+# rows on agent.db were causing a false FAIL when the gate book could not size).
 SIM=$("$PY" - <<'PY'
 from datetime import datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
+
 from investment_agent.db import connect, init_db
 from investment_agent.execution import paper_runner
+from investment_agent.execution.armed_plan import AllocationMode
 from investment_agent.execution.paper_ledger import ACCOUNT_GATE, ensure_paper_accounts, get_session_log
 from investment_agent.execution.paper_runner import run_paper_tick
 
 ET = ZoneInfo("America/New_York")
-day = "2099-01-02"  # throwaway
-conn = connect(init_db())
-ensure_paper_accounts(conn, starting_cash=5000.0)
-# wipe any prior throwaway rows
-conn.execute("DELETE FROM paper_session_logs WHERE session_date_et = ?", (day,))
-conn.commit()
+day = "2099-01-02"  # throwaway session date inside the temp DB only
 
-def tick(when, signal=None, bars=None):
-    no = {"ok": False, "error": "No top pick available to propose", "session_date_et": day}
-    with patch.object(paper_runner, "is_kill_switch_active", return_value=False), \
-         patch.object(paper_runner, "datetime") as dt, \
-         patch.object(paper_runner, "_plan_signal", return_value=signal or no), \
-         patch.object(paper_runner, "_fetch_day_bars", return_value=bars or []):
-        dt.now.return_value = when
-        return run_paper_tick(conn, session_date_et=day)
+with TemporaryDirectory() as tmp:
+    db = Path(tmp) / "eval_race.db"
+    conn = connect(init_db(db))
+    ensure_paper_accounts(conn, starting_cash=5000.0)
 
-tick(datetime(2099, 1, 2, 0, 10, tzinfo=ET))
-g1 = get_session_log(conn, day, ACCOUNT_GATE)
-sig = {
-    "ok": True, "session_date_et": day, "ticker": "SIM",
-    "limit_buy": 99.5, "limit_sell": 101.0, "stop": 98.5,
-    "shares": 50, "deploy": 5000.0, "allow_trade": True,
-    "ma_score": 70, "day_gate_mode": "produce",
-}
-bars = [
-    {"ts": "2099-01-02T09:35:00-04:00", "open": 100, "high": 100.5, "low": 99.0, "close": 99.8},
-    {"ts": "2099-01-02T10:05:00-04:00", "open": 100, "high": 101.5, "low": 100, "close": 101.2},
-]
-tick(datetime(2099, 1, 2, 10, 30, tzinfo=ET), signal=sig, bars=bars)
-g2 = get_session_log(conn, day, ACCOUNT_GATE)
-conn.execute("DELETE FROM paper_session_logs WHERE session_date_et = ?", (day,))
-conn.commit()
-conn.close()
-print(f"after_midnight={g1 and g1.get('status')}")
-print(f"after_prep_fill={g2 and g2.get('status')}")
-print(f"filled={g2 and g2.get('filled')}")
-print("SIM_OK" if g1 and g1.get("status") == "waiting_signal" and g2 and g2.get("status") == "complete" and g2.get("filled") else "SIM_FAIL")
+    def tick(when, signal=None, bars=None, *, force_complete=False):
+        no = {"ok": False, "error": "No top pick available to propose", "session_date_et": day}
+        with patch.object(paper_runner, "is_kill_switch_active", return_value=False), \
+             patch.object(paper_runner, "get_allocation_mode", return_value=AllocationMode.BEST_TRADABLE_TOP3), \
+             patch.object(paper_runner, "datetime") as dt, \
+             patch.object(paper_runner, "_plan_signal", return_value=signal or no), \
+             patch.object(paper_runner, "_fetch_day_bars", return_value=bars or []):
+            dt.now.return_value = when
+            return run_paper_tick(
+                conn,
+                session_date_et=day,
+                force_complete=force_complete,
+            )
+
+    tick(datetime(2099, 1, 2, 0, 10, tzinfo=ET))
+    g1 = get_session_log(conn, day, ACCOUNT_GATE)
+    sig = {
+        "ok": True, "session_date_et": day, "ticker": "SIM",
+        "limit_buy": 99.5, "limit_sell": 101.0, "stop": 98.5,
+        "shares": 50, "deploy": 5000.0, "allow_trade": True,
+        "ma_score": 70, "day_gate_mode": "produce",
+        "allocation_mode": "best_tradable_top3",
+    }
+    # January = EST (-05:00)
+    bars = [
+        {"ts": "2099-01-02T09:35:00-05:00", "open": 100, "high": 100.5, "low": 99.0, "close": 99.8, "volume": 1000},
+        {"ts": "2099-01-02T10:05:00-05:00", "open": 100, "high": 101.5, "low": 100, "close": 101.2, "volume": 1000},
+    ]
+    tick(datetime(2099, 1, 2, 10, 30, tzinfo=ET), signal=sig, bars=bars, force_complete=True)
+    g2 = get_session_log(conn, day, ACCOUNT_GATE)
+    print(f"after_midnight={g1 and g1.get('status')}")
+    print(f"after_prep_fill={g2 and g2.get('status')}")
+    print(f"filled={g2 and g2.get('filled')}")
+    print(f"detail={g2 and g2.get('detail')}")
+    print(f"scenario={g2 and g2.get('scenario')}")
+    ok = bool(
+        g1 and g1.get("status") == "waiting_signal"
+        and g2 and g2.get("status") == "complete"
+        and g2.get("filled")
+    )
+    print("SIM_OK" if ok else "SIM_FAIL")
+    conn.close()
 PY
 )
 echo "$SIM"
@@ -191,8 +218,8 @@ echo ""
 
 echo "=== FINAL VERDICT ==="
 echo "Note: AUTONOMOUS_READY means process path is proven."
-echo "It does NOT guarantee a fill tomorrow — that still needs #1 limit trade-through"
-echo "and (for gate book) Market Activity allow_trade=True."
+echo "It does NOT guarantee a fill tomorrow — that still needs a limit trade-through"
+echo "on the selected name (best of top-3 on gate book) and Market Activity allow_trade=True."
 if [[ "$FAILS" -eq 0 ]]; then
   echo "RESULT: AUTONOMOUS_READY"
   echo "Leave Mac on AC, sleep=0. No further input required for the process to run."
@@ -200,4 +227,9 @@ if [[ "$FAILS" -eq 0 ]]; then
 fi
 echo "RESULT: NOT_READY ($FAILS issue(s))"
 echo "Do not leave until this prints AUTONOMOUS_READY."
+echo ""
+echo "── Issues to fix ──"
+for msg in "${FAIL_MSGS[@]:-}"; do
+  echo "FAIL: $msg"
+done
 exit 1

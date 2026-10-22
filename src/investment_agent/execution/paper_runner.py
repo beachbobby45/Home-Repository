@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from investment_agent.account import get_day_gate_mode
 from investment_agent.backtest import _group_bars_by_date
-from investment_agent.execution.armed_plan import PlanStatus, set_armed_plan_status
+from investment_agent.execution.armed_plan import AllocationMode, PlanStatus, set_armed_plan_status
 from investment_agent.execution.ops_audit import (
     LEDGER_SOURCE_PAPER,
     get_ledger_source,
@@ -31,7 +31,7 @@ from investment_agent.execution.paper_ledger import (
 )
 from investment_agent.execution.paper_sim import resolve_fill_mode, simulate_round_trip_5m
 from investment_agent.execution.pdt_guard import can_open_day_trade, record_day_trade
-from investment_agent.execution.propose import propose_armed_plan
+from investment_agent.execution.propose import get_allocation_mode, propose_armed_plan
 from investment_agent.finance import DEFAULT_BUY_FEE, DEFAULT_SELL_FEE
 from investment_agent.notify import notify_paper_buy, notify_paper_sell
 from investment_agent.providers.yfinance_bars import get_intraday_bars
@@ -108,18 +108,44 @@ def _resize_shares_for_cash(deploy_target: float, limit_buy: float, settled: flo
     return shares, deploy
 
 
-def _plan_signal(conn: sqlite3.Connection, session_date_et: str) -> dict[str, Any]:
-    proposed = propose_armed_plan(conn, session_date_et=session_date_et, replace_existing=True)
+def _plan_signal(
+    conn: sqlite3.Connection,
+    session_date_et: str,
+    *,
+    allocation_mode: AllocationMode | str | None = None,
+    persist_plan: bool = True,
+    as_of_et: datetime | None = None,
+    bars_5m_by_ticker: dict[str, list[dict]] | None = None,
+) -> dict[str, Any]:
+    proposed = propose_armed_plan(
+        conn,
+        session_date_et=session_date_et,
+        replace_existing=True,
+        persist=persist_plan,
+        allocation_mode=allocation_mode,
+        as_of_et=as_of_et,
+        bars_5m_by_ticker=bars_5m_by_ticker,
+    )
     if not proposed.get("ok"):
         return {
             "ok": False,
             "error": proposed.get("error"),
             "session_date_et": session_date_et,
+            "allocation_mode": (
+                allocation_mode.value
+                if isinstance(allocation_mode, AllocationMode)
+                else allocation_mode
+            ),
+            "selection": proposed.get("selection"),
         }
     plan = proposed["plan"]
     # Auto-arm for paper when ops slot free (no human veto in paper mode)
     pdt = proposed.get("pdt") or {}
-    if pdt.get("allowed") and plan.get("status") == PlanStatus.PROPOSED.value:
+    if (
+        persist_plan
+        and pdt.get("allowed")
+        and plan.get("status") == PlanStatus.PROPOSED.value
+    ):
         set_armed_plan_status(conn, plan["plan_uuid"], PlanStatus.ARMED)
         plan["status"] = PlanStatus.ARMED.value
     leg = (plan.get("legs") or [{}])[0]
@@ -137,6 +163,8 @@ def _plan_signal(conn: sqlite3.Connection, session_date_et: str) -> dict[str, An
         "allow_trade": plan.get("allow_trade"),
         "ma_score": plan.get("ma_score"),
         "day_gate_mode": plan.get("day_gate_mode") or get_day_gate_mode(conn),
+        "allocation_mode": plan.get("allocation_mode"),
+        "selection": proposed.get("selection") or plan.get("selection_audit"),
     }
 
 
@@ -424,14 +452,44 @@ def run_paper_tick(
             "balances": {n: get_paper_balance(conn, n) for n in PAPER_ACCOUNTS},
         }
 
-    signal = _plan_signal(conn, day)
     as_of = datetime.now(ET)
-    day_bars: list[dict] = []
-    if signal.get("ok") and signal.get("ticker"):
-        day_bars = _fetch_day_bars(str(signal["ticker"]), day, lookback_days=lookback_days)
+    primary_mode = get_allocation_mode(conn)
+    # Shadow book: always #1-only selection for comparison when primary is top-3.
+    shadow_mode = (
+        AllocationMode.SINGLE_TOP1
+        if primary_mode == AllocationMode.BEST_TRADABLE_TOP3
+        else primary_mode
+    )
+
+    primary_signal = _plan_signal(
+        conn,
+        day,
+        allocation_mode=primary_mode,
+        persist_plan=True,
+        as_of_et=as_of,
+    )
+    # Shadow propose must not overwrite the primary armed plan row.
+    shadow_signal = _plan_signal(
+        conn,
+        day,
+        allocation_mode=shadow_mode,
+        persist_plan=False,
+        as_of_et=as_of,
+    )
+
+    bars_cache: dict[str, list[dict]] = {}
+
+    def _bars_for(ticker: str | None) -> list[dict]:
+        if not ticker:
+            return []
+        key = str(ticker).upper()
+        if key not in bars_cache:
+            bars_cache[key] = _fetch_day_bars(key, day, lookback_days=lookback_days)
+        return bars_cache[key]
 
     results = []
     for name in PAPER_ACCOUNTS:
+        signal = primary_signal if name == ACCOUNT_GATE else shadow_signal
         existing = get_session_log(conn, day, name)
         if not signal.get("ok"):
             # Do not finalize the day before ranks/prep catch up — worker often
@@ -472,7 +530,7 @@ def run_paper_tick(
                 conn,
                 account_name=name,
                 signal=signal,
-                day_bars=day_bars,
+                day_bars=_bars_for(signal.get("ticker")),
                 as_of_et=as_of,
                 force_complete=force_complete,
             )
@@ -497,10 +555,18 @@ def run_paper_tick(
         "ok": True,
         "session_date_et": day,
         "signal": {
-            "ticker": signal.get("ticker"),
-            "allow_trade": signal.get("allow_trade"),
-            "ma_score": signal.get("ma_score"),
-            "error": signal.get("error"),
+            "ticker": primary_signal.get("ticker"),
+            "allow_trade": primary_signal.get("allow_trade"),
+            "ma_score": primary_signal.get("ma_score"),
+            "error": primary_signal.get("error"),
+            "allocation_mode": primary_signal.get("allocation_mode") or primary_mode.value,
+            "selection": primary_signal.get("selection"),
+        },
+        "shadow_signal": {
+            "ticker": shadow_signal.get("ticker"),
+            "allocation_mode": shadow_signal.get("allocation_mode") or shadow_mode.value,
+            "error": shadow_signal.get("error"),
+            "selection": shadow_signal.get("selection"),
         },
         "arms": results,
         "balances": {n: get_paper_balance(conn, n) for n in PAPER_ACCOUNTS},
@@ -513,11 +579,18 @@ def run_paper_tick(
 def paper_status_payload(conn: sqlite3.Connection) -> dict[str, Any]:
     ensure_paper_accounts(conn)
     day = today_et_str()
+    mode = get_allocation_mode(conn)
     return {
         "ok": True,
         "execution_mode": "paper",
         "session_date_et": day,
         "fill_mode": resolve_fill_mode(),
+        "allocation_mode": mode.value,
+        "shadow_allocation_mode": (
+            AllocationMode.SINGLE_TOP1.value
+            if mode == AllocationMode.BEST_TRADABLE_TOP3
+            else mode.value
+        ),
         "balances": {n: get_paper_balance(conn, n) for n in PAPER_ACCOUNTS},
         "today": {
             n: get_session_log(conn, day, n) for n in PAPER_ACCOUNTS

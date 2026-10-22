@@ -465,7 +465,8 @@ def paper_scoreboard(
     rc = get_random_control_summary(conn)
     random_control_ok = None if not rc else rc.get("beats_random")
     notes = (
-        "Primary arm is gate_approved (live-like). all_signals is the shadow book."
+        "Primary arm is gate_approved (best_tradable_top3 by default). "
+        "all_signals is the #1-only selection shadow (also ignores the day gate)."
     )
     if rc is None:
         notes += " Run scripts/run_random_pick_control.py to populate random_control_ok."
