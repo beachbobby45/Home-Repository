@@ -104,7 +104,7 @@ Robinhood has **no stock paper account** (Simulated Returns = options scenarios 
 | Sizing | Growth Plan pullback sizing; start **$5,000** book |
 | Frequency | **Up to 5** trading sessions/week when filled (one round-trip/day) |
 | Settlement | **Cash / unlevered:** redeploy with **settled** funds (T+1 after a sale) |
-| Selection | Default **#1 only** (`single_top1`); dual #1+#2 only after a future study |
+| Selection | Default **best of top-3** (`best_tradable_top3` soft score: limit reachability + 30d MA/VWAP + volume + pullback); `#1-only` kept as paper shadow (`all_signals`). Dual #1+#2 lots only after a future study |
 | Broker | Robinhood; RH = source of truth for cash/P&L |
 | Software | Local Mac dashboard + LaunchAgent worker; Cursor for research/oversight |
 | Capital plan | Paper first → live **$5k** → scale to **$20k** only under §5 evidence gates |
@@ -144,7 +144,7 @@ At **$25,000** tier, internal design daily/weekly rises (on the order of **~$350
 | Constraint | Rule |
 |------------|------|
 | Sessions/week | Up to **5** (Mon–Fri) when a setup fills |
-| Names/day | **1** (`single_top1`) |
+| Names/day | **1** (chosen from top-3 via `best_tradable_top3`; shadow book still logs `#1-only`) |
 | Settled cash | Required before arming a buy in cash / unlevered mode |
 | After a same-day sale | Next deploy on **next trading day** once proceeds settle (T+1) |
 | Leverage | **Off** — do not borrow; avoid intraday margin deficit path |

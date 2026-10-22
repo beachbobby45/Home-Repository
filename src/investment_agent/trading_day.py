@@ -408,7 +408,7 @@ def _live_ranked_candidates(conn: sqlite3.Connection, limit: int = ACTIONABLE_PI
     return live[:limit]
 
 
-def resolve_actionable_pick(
+def resolve_actionable_picks(
     conn: sqlite3.Connection,
     *,
     quotes: dict[str, dict],
@@ -416,12 +416,17 @@ def resolve_actionable_pick(
     net_target: float,
     block_new_longs: bool = False,
     confirmation_filter: callable | None = None,
-) -> tuple[dict | None, list[dict]]:
-    """Pick first live ranked name that passes intraday tradability for today's $ goal."""
+    limit: int = 1,
+) -> tuple[list[dict], list[dict]]:
+    """Return up to `limit` live ranked names that pass intraday tradability."""
     skipped: list[dict] = []
+    selected: list[dict] = []
     candidates = _live_ranked_candidates(conn)
+    want = max(1, int(limit))
 
     for idx, row in enumerate(candidates):
+        if len(selected) >= want:
+            break
         sym = row["ticker"]
         if confirmation_filter is not None and not confirmation_filter(sym, idx):
             skipped.append({
@@ -471,11 +476,34 @@ def resolve_actionable_pick(
         source = pick.get("source")
         if not source:
             pinned = get_setting(conn, "pinned_pick_ticker", "").strip().upper()
-            source = "pinned" if sym == pinned else f"ranked_#{len(skipped) + 1}"
+            source = "pinned" if sym == pinned else f"ranked_#{len(selected) + 1}"
         pick["source"] = source
-        return pick, skipped
+        pick["prep_rank"] = len(selected) + 1
+        selected.append(pick)
 
-    return None, skipped
+    return selected, skipped
+
+
+def resolve_actionable_pick(
+    conn: sqlite3.Connection,
+    *,
+    quotes: dict[str, dict],
+    deploy: float,
+    net_target: float,
+    block_new_longs: bool = False,
+    confirmation_filter: callable | None = None,
+) -> tuple[dict | None, list[dict]]:
+    """Pick first live ranked name that passes intraday tradability for today's $ goal."""
+    selected, skipped = resolve_actionable_picks(
+        conn,
+        quotes=quotes,
+        deploy=deploy,
+        net_target=net_target,
+        block_new_longs=block_new_longs,
+        confirmation_filter=confirmation_filter,
+        limit=1,
+    )
+    return (selected[0] if selected else None), skipped
 
 
 def stopped_out_today(conn: sqlite3.Connection, date_key: str | None = None) -> bool:

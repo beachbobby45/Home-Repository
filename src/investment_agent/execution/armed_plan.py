@@ -16,6 +16,7 @@ ET = ZoneInfo("America/New_York")
 
 class AllocationMode(str, Enum):
     SINGLE_TOP1 = "single_top1"
+    BEST_TRADABLE_TOP3 = "best_tradable_top3"
     DUAL_LOT_TOP2 = "dual_lot_top2"
 
 
@@ -60,12 +61,13 @@ class ArmedPlan:
     arm_deadline_et: str | None = None
     fill_deadline_et: str = "11:30"
     notes: str | None = None
+    selection_audit: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None
     id: int | None = None
 
     def to_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "plan_uuid": self.plan_uuid,
             "session_date_et": self.session_date_et,
             "allocation_mode": self.allocation_mode.value
@@ -83,6 +85,9 @@ class ArmedPlan:
             "fill_deadline_et": self.fill_deadline_et,
             "notes": self.notes,
         }
+        if self.selection_audit is not None:
+            payload["selection_audit"] = self.selection_audit
+        return payload
 
     @classmethod
     def from_row(cls, row: sqlite3.Row | dict) -> ArmedPlan:
@@ -105,6 +110,7 @@ class ArmedPlan:
             arm_deadline_et=d.get("arm_deadline_et"),
             fill_deadline_et=d.get("fill_deadline_et") or "11:30",
             notes=d.get("notes"),
+            selection_audit=payload.get("selection_audit"),
             created_at=d.get("created_at"),
             updated_at=d.get("updated_at"),
         )

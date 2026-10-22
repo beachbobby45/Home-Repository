@@ -32,7 +32,8 @@ $5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 202
 | `max_day_trades_per_week` | **5** (ops policy — one filled round-trip per weekday max). **No** regulatory 3-under-$25k cap. |
 | Settlement | **Cash / unlevered:** arm only if **settled** buying power ≥ deploy; after a same-day sale, next buy waits **T+1** |
 | Leverage | **Off** — never borrow; avoid intraday margin deficit path |
-| `allocation_mode` (default) | **`single_top1`** — one name/day, full deploy to #1 |
+| `allocation_mode` (default) | **`best_tradable_top3`** — soft-score top-3 (MA/VWAP/volume/pullback/reachability), one name/day |
+| `allocation_mode` (shadow) | Paper `all_signals` arm uses **`single_top1`** for comparison |
 | `allocation_mode` (later) | **`dual_lot_top2`** — only after Top2 backtest + Tony OK |
 
 ### 2027 year sketch (proposed, not guaranteed)
