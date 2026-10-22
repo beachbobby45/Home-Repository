@@ -24,11 +24,17 @@ from investment_agent.strategy import REGIME_ONLY_TICKERS
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIVERSE_DIR = REPO_ROOT / "universe"
 
+# Composite preset: built in code from sp500.txt ∪ unique names in datacenter_us.txt
+MAX_COVERAGE_PRESET = "sp500_datacenter"
+
 PRESETS: dict[str, str] = {
     "starter10": "Starter 10 (default ingest list)",
     "sp100": "S&P 100 liquid subset (~100 tickers)",
     "sp500": "S&P 500 full index (~500 tickers + regime ETFs)",
     "datacenter_us": "US AI data center buildout & maintenance (~96 tickers)",
+    MAX_COVERAGE_PRESET: (
+        "Max coverage: S&P 500 + unique datacenter_us names not already in S&P 500"
+    ),
 }
 
 SPECIAL_WATCH_EXTRAS_PREFIX = "special_watch_extras:"
@@ -45,15 +51,6 @@ class PresetInfo:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def list_presets() -> list[PresetInfo]:
-    items: list[PresetInfo] = []
-    for name, desc in PRESETS.items():
-        path = UNIVERSE_DIR / f"{name}.txt"
-        tickers = load_tickers_from_file(path) if path.is_file() else []
-        items.append(PresetInfo(name=name, description=desc, ticker_count=len(tickers), path=path))
-    return items
 
 
 def load_tickers_from_file(path: Path) -> list[str]:
@@ -75,11 +72,56 @@ def load_tickers_from_file(path: Path) -> list[str]:
     return out
 
 
+def build_sp500_datacenter_tickers() -> list[str]:
+    """S&P 500 first, then datacenter_us names not already in the S&P list."""
+    sp500 = load_tickers_from_file(UNIVERSE_DIR / "sp500.txt")
+    datacenter = load_tickers_from_file(UNIVERSE_DIR / "datacenter_us.txt")
+    seen = set(sp500)
+    out = list(sp500)
+    for ticker in datacenter:
+        if ticker not in seen:
+            seen.add(ticker)
+            out.append(ticker)
+    return out
+
+
+def max_coverage_breakdown() -> dict[str, int | list[str]]:
+    """Counts for docs / CLI: how many names the max-coverage preset adds."""
+    sp500 = load_tickers_from_file(UNIVERSE_DIR / "sp500.txt")
+    datacenter = load_tickers_from_file(UNIVERSE_DIR / "datacenter_us.txt")
+    sp_set = set(sp500)
+    extras = [t for t in datacenter if t not in sp_set]
+    return {
+        "sp500_count": len(sp500),
+        "datacenter_count": len(datacenter),
+        "datacenter_only_count": len(extras),
+        "union_count": len(sp500) + len(extras),
+        "datacenter_only_sample": extras[:25],
+    }
+
+
+def list_presets() -> list[PresetInfo]:
+    items: list[PresetInfo] = []
+    for name, desc in PRESETS.items():
+        if name == MAX_COVERAGE_PRESET:
+            tickers = build_sp500_datacenter_tickers()
+            path = UNIVERSE_DIR / "sp500.txt"
+        else:
+            path = UNIVERSE_DIR / f"{name}.txt"
+            tickers = load_tickers_from_file(path) if path.is_file() else []
+        items.append(
+            PresetInfo(name=name, description=desc, ticker_count=len(tickers), path=path)
+        )
+    return items
+
+
 def load_preset_tickers(preset_name: str) -> list[str]:
     name = preset_name.lower().strip()
     if name not in PRESETS:
         known = ", ".join(sorted(PRESETS))
         raise ValueError(f"Unknown preset {preset_name!r}. Choose one of: {known}")
+    if name == MAX_COVERAGE_PRESET:
+        return build_sp500_datacenter_tickers()
     if name == "starter10" and not (UNIVERSE_DIR / "starter10.txt").is_file():
         return [t.upper() for t in DEFAULT_TICKERS]
     path = UNIVERSE_DIR / f"{name}.txt"
