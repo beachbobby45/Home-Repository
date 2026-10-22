@@ -26,6 +26,7 @@ See [baseline-reference.md](./baseline-reference.md) for DB backup and Mac resto
 | [eod-ingest-screener](./eod-ingest-screener/SKILL.md) | EOD ingest, 14d screener, ranked candidates | `ingest.py`, `period_screener.py`, `historical.py` | **Active** |
 | [opportunity-engine](./opportunity-engine/SKILL.md) | Multi-factor opportunity score, #1–#3 ranks | `opportunity_score.py`, `news_service.py`, `ai_service.py` | **Active** |
 | [trade-proposals](./trade-proposals/SKILL.md) | Trade proposals, pullback plan, human approval | `trade_proposal.py`, `pullback_entry.py` | **Active** |
+| [tradable-now](./tradable-now/SKILL.md) | Top-3 best-tradable soft score (paper default) | `execution/tradable_now.py`, `propose.py`, `paper_runner.py` | **Active** |
 | [risk-engine](./risk-engine/SKILL.md) | Sovereign risk gate, kill switch, limits | `risk_engine.py`, `strategy.py` | **Active** |
 | [journal-capital](./journal-capital/SKILL.md) | Journal, P&L, capital tiers (Phase 1B tiers TBD) | `journal.py`, `finance.py`, `capital_builder.py` | **Active** |
 | [intraday-trading-day](./intraday-trading-day/SKILL.md) | Go/no-go, live refresh, extended session | `trading_day.py`, `tradability.py`, `regime.py` | **Active** |
