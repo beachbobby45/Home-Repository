@@ -35,14 +35,67 @@ from investment_agent.execution.propose import propose_armed_plan
 from investment_agent.finance import DEFAULT_BUY_FEE, DEFAULT_SELL_FEE
 from investment_agent.notify import notify_paper_buy, notify_paper_sell
 from investment_agent.providers.yfinance_bars import get_intraday_bars
+from investment_agent.pullback_entry import LIMIT_FILL_DEADLINE
 from investment_agent.risk_engine import is_kill_switch_active
 from investment_agent.trading_day import today_et_str
 
 ET = ZoneInfo("America/New_York")
 
+# Terminal day outcomes (do not reopen).
 _FINAL_STATUSES = frozenset(
     {"complete", "skipped_gate", "skipped_cap", "skipped_cash", "no_signal"}
 )
+# Soft holding state while morning prep / ranks are still catching up.
+_WAITING_SIGNAL = "waiting_signal"
+_PROPOSE_FAILED = "propose_failed"
+
+
+def _before_fill_deadline(as_of_et: datetime | None) -> bool:
+    now = as_of_et or datetime.now(ET)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=ET)
+    else:
+        now = now.astimezone(ET)
+    return now.timetz().replace(tzinfo=None) <= LIMIT_FILL_DEADLINE
+
+
+def _is_retryable_no_signal(existing: dict[str, Any] | None) -> bool:
+    """True when an early propose miss should be retried after prep catches up."""
+    if not existing:
+        return False
+    status = existing.get("status")
+    if status == _WAITING_SIGNAL:
+        return True
+    if status != "no_signal":
+        return False
+    scenario = (existing.get("scenario") or "").strip()
+    detail = (existing.get("detail") or "").lower()
+    return scenario in {_PROPOSE_FAILED, "no_top_pick"} or "no top pick" in detail
+
+
+def _session_already_final(
+    existing: dict[str, Any] | None,
+    *,
+    signal_ok: bool,
+    as_of_et: datetime | None,
+    force_complete: bool,
+) -> bool:
+    """Block re-entry only for true finals — not premature no_signal before deadline."""
+    if not existing:
+        return False
+    status = existing.get("status")
+    if status == _WAITING_SIGNAL:
+        return False
+    if status not in _FINAL_STATUSES:
+        return False
+    # Early propose failures must not lock the day before 11:30 ET when a pick appears later.
+    if (
+        _is_retryable_no_signal(existing)
+        and signal_ok
+        and (force_complete or _before_fill_deadline(as_of_et))
+    ):
+        return False
+    return True
 
 
 def _resize_shares_for_cash(deploy_target: float, limit_buy: float, settled: float) -> tuple[int, float]:
@@ -107,7 +160,12 @@ def _process_arm(
 ) -> dict[str, Any]:
     day = signal["session_date_et"][:10]
     existing = get_session_log(conn, day, account_name)
-    if existing and existing.get("status") in {"complete", "skipped_gate", "skipped_cap", "skipped_cash", "no_signal"}:
+    if _session_already_final(
+        existing,
+        signal_ok=bool(signal.get("ticker") and signal.get("limit_buy") is not None),
+        as_of_et=as_of_et,
+        force_complete=force_complete,
+    ):
         return {"account_name": account_name, "skipped": True, "reason": "already_final", "log": existing}
 
     settle_due_cash(conn, session_date_et=day, account_name=account_name)
@@ -374,15 +432,34 @@ def run_paper_tick(
 
     results = []
     for name in PAPER_ACCOUNTS:
+        existing = get_session_log(conn, day, name)
         if not signal.get("ok"):
+            # Do not finalize the day before ranks/prep catch up — worker often
+            # ticks at midnight while morning prep is at 4:00 PT / ~7:00 ET.
+            if _session_already_final(
+                existing,
+                signal_ok=False,
+                as_of_et=as_of,
+                force_complete=force_complete,
+            ):
+                results.append(
+                    {"account_name": name, "skipped": True, "reason": "already_final", "log": existing}
+                )
+                continue
+            waiting = _before_fill_deadline(as_of) and not force_complete
             row = {
                 "session_date_et": day,
                 "account_name": name,
-                "status": "no_signal",
+                "status": _WAITING_SIGNAL if waiting else "no_signal",
                 "scenario": "propose_failed",
                 "filled": False,
                 "net_pnl": 0.0,
-                "detail": signal.get("error"),
+                "detail": signal.get("error")
+                or (
+                    "Waiting for morning prep / top pick"
+                    if waiting
+                    else "No top pick available to propose"
+                ),
                 "settled_cash_before": get_paper_balance(conn, name)["settled_cash"],
                 "settled_cash_after": get_paper_balance(conn, name)["settled_cash"],
                 "equity_after": get_paper_balance(conn, name)["equity"],
@@ -401,10 +478,10 @@ def run_paper_tick(
             )
         )
 
-    # Idempotent PAPER audit once the gate arm reaches a final status for the day
+    # Idempotent PAPER audit once the gate arm reaches a true final status for the day
     gate_log = get_session_log(conn, day, ACCOUNT_GATE) or {}
     audit_id = None
-    if gate_log.get("status") in _FINAL_STATUSES:
+    if gate_log.get("status") in _FINAL_STATUSES and gate_log.get("status") != _WAITING_SIGNAL:
         audit_id = log_paper_day_complete(
             conn,
             session_date_et=day,
