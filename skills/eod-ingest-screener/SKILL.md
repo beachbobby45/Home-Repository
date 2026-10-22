@@ -37,6 +37,7 @@ description: EOD ingest, FRED/Finnhub/yfinance data, 14-day period screener, ran
 3. Screener uses **trading days**, not calendar days (14d window).
 4. `live_pass_today` and dollar rank gate feed the Opportunity Engine — do not remove without spec update.
 5. Free tier only — no paid data assumptions.
+6. Max-coverage preset **`sp500_datacenter`** = S&P 500 ∪ unique `datacenter_us` names (~540). Prefer this over loading all four presets. Apply on Mac via `scripts/apply_max_coverage_watchlist_mac.sh`.
 
 ## Data flow
 

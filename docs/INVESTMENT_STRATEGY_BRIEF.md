@@ -99,7 +99,7 @@ Robinhood has **no stock paper account** (Simulated Returns = options scenarios 
 ### In scope
 | Area | Description |
 |------|-------------|
-| Universe | Liquid U.S. equities from the operator’s watchlist / screener |
+| Universe | Active watchlist (recommended max coverage: **S&P 500 + unique datacenter_us** ≈540 names; preset `sp500_datacenter`) |
 | Direction | Long only; flat by end of day in normal operation |
 | Sizing | Growth Plan pullback sizing; start **$5,000** book |
 | Frequency | **Up to 5** trading sessions/week when filled (one round-trip/day) |

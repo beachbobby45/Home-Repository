@@ -11,6 +11,7 @@ from investment_agent.account import get_setting, set_setting
 ACTION_SP100 = "sp100"
 ACTION_SP500 = "sp500"
 ACTION_DATACENTER_US = "datacenter_us"
+ACTION_SP500_DATACENTER = "sp500_datacenter"
 ACTION_DAILY_INGEST = "daily_ingest"
 ACTION_FULL_INGEST = "full_ingest"
 ACTION_PERIOD_SCREENER = "period_screener"
@@ -21,12 +22,14 @@ PRESET_ACTIONS: dict[str, str] = {
     "sp100": ACTION_SP100,
     "sp500": ACTION_SP500,
     "datacenter_us": ACTION_DATACENTER_US,
+    "sp500_datacenter": ACTION_SP500_DATACENTER,
 }
 
 SCREEN_ACTIONS: dict[str, str] = {
     ACTION_SP100: "SP100 load",
     ACTION_SP500: "S&P 500 load",
     ACTION_DATACENTER_US: "DC US watch load",
+    ACTION_SP500_DATACENTER: "S&P 500 + DC US max coverage",
     ACTION_DAILY_INGEST: "Daily ingest",
     ACTION_FULL_INGEST: "Full ingest",
     ACTION_PERIOD_SCREENER: "Run screener",
