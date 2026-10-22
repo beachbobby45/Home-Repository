@@ -214,6 +214,10 @@ if [[ "$FAILS" -eq 0 ]]; then
   echo "Leave Mac awake on AC (sleep=0)."
   echo "Tomorrow: morning prep builds ranks/#1; paper-worker logs fills on Dashboard."
   echo "Notifications: macOS banners (no SMTP required)."
+  echo ""
+  echo "For a stricter full-path proof before leaving overnight, also run:"
+  echo "  ./scripts/eval_unattended_full_mac.sh"
+  echo "  (need RESULT: AUTONOMOUS_READY)"
   exit 0
 fi
 echo "RESULT: NOT_READY ($FAILS issue(s))"
