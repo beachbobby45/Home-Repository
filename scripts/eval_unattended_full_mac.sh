@@ -10,9 +10,10 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 ROOT="$(cd "$PWD" && pwd)"
 FAILS=0
+FAIL_MSGS=()
 ok() { echo "OK:   $*"; }
 warn() { echo "WARN: $*"; }
-bad() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); }
+bad() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); FAIL_MSGS+=("$*"); }
 
 echo "=== FULL UNATTENDED EVAL ($(date '+%Y-%m-%d %H:%M:%S %z')) ==="
 echo "Repo: $ROOT"
@@ -42,12 +43,20 @@ echo "Branch: $BRANCH @ $COMMIT"
 echo ""
 
 echo "── 2) Unit / process tests (paper path) ──"
-if ! "$PY" -m unittest \
-  tests.test_paper_propose_race \
-  tests.test_unattended_paper_day \
-  tests.test_paper_ledger \
-  tests.test_paper_automation \
-  -v; then
+TEST_MODS=(
+  tests.test_paper_propose_race
+  tests.test_unattended_paper_day
+  tests.test_paper_ledger
+  tests.test_paper_automation
+)
+# Include top-3 scorer tests when present on this checkout.
+if [[ -f "$ROOT/tests/test_tradable_now.py" ]]; then
+  TEST_MODS+=(tests.test_tradable_now)
+fi
+if [[ -f "$ROOT/tests/test_best_tradable_propose.py" ]]; then
+  TEST_MODS+=(tests.test_best_tradable_propose)
+fi
+if ! "$PY" -m unittest "${TEST_MODS[@]}" -v; then
   bad "paper unit/process tests FAILED"
 else
   ok "paper unit/process tests PASSED"
@@ -191,8 +200,8 @@ echo ""
 
 echo "=== FINAL VERDICT ==="
 echo "Note: AUTONOMOUS_READY means process path is proven."
-echo "It does NOT guarantee a fill tomorrow — that still needs #1 limit trade-through"
-echo "and (for gate book) Market Activity allow_trade=True."
+echo "It does NOT guarantee a fill tomorrow — that still needs a limit trade-through"
+echo "on the selected name (best of top-3 on gate book) and Market Activity allow_trade=True."
 if [[ "$FAILS" -eq 0 ]]; then
   echo "RESULT: AUTONOMOUS_READY"
   echo "Leave Mac on AC, sleep=0. No further input required for the process to run."
@@ -200,4 +209,9 @@ if [[ "$FAILS" -eq 0 ]]; then
 fi
 echo "RESULT: NOT_READY ($FAILS issue(s))"
 echo "Do not leave until this prints AUTONOMOUS_READY."
+echo ""
+echo "── Issues to fix ──"
+for msg in "${FAIL_MSGS[@]:-}"; do
+  echo "FAIL: $msg"
+done
 exit 1
