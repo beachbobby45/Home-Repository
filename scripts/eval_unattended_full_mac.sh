@@ -129,53 +129,71 @@ echo ""
 echo "── 7) Simulate overnight→prep race on a throwaway date ──"
 export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONNOUSERSITE=1
+# Use a TEMP database — never the live Mac paper ledger (settled cash / prior
+# rows on agent.db were causing a false FAIL when the gate book could not size).
 SIM=$("$PY" - <<'PY'
 from datetime import datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
+
 from investment_agent.db import connect, init_db
 from investment_agent.execution import paper_runner
+from investment_agent.execution.armed_plan import AllocationMode
 from investment_agent.execution.paper_ledger import ACCOUNT_GATE, ensure_paper_accounts, get_session_log
 from investment_agent.execution.paper_runner import run_paper_tick
 
 ET = ZoneInfo("America/New_York")
-day = "2099-01-02"  # throwaway
-conn = connect(init_db())
-ensure_paper_accounts(conn, starting_cash=5000.0)
-# wipe any prior throwaway rows
-conn.execute("DELETE FROM paper_session_logs WHERE session_date_et = ?", (day,))
-conn.commit()
+day = "2099-01-02"  # throwaway session date inside the temp DB only
 
-def tick(when, signal=None, bars=None):
-    no = {"ok": False, "error": "No top pick available to propose", "session_date_et": day}
-    with patch.object(paper_runner, "is_kill_switch_active", return_value=False), \
-         patch.object(paper_runner, "datetime") as dt, \
-         patch.object(paper_runner, "_plan_signal", return_value=signal or no), \
-         patch.object(paper_runner, "_fetch_day_bars", return_value=bars or []):
-        dt.now.return_value = when
-        return run_paper_tick(conn, session_date_et=day)
+with TemporaryDirectory() as tmp:
+    db = Path(tmp) / "eval_race.db"
+    conn = connect(init_db(db))
+    ensure_paper_accounts(conn, starting_cash=5000.0)
 
-tick(datetime(2099, 1, 2, 0, 10, tzinfo=ET))
-g1 = get_session_log(conn, day, ACCOUNT_GATE)
-sig = {
-    "ok": True, "session_date_et": day, "ticker": "SIM",
-    "limit_buy": 99.5, "limit_sell": 101.0, "stop": 98.5,
-    "shares": 50, "deploy": 5000.0, "allow_trade": True,
-    "ma_score": 70, "day_gate_mode": "produce",
-}
-bars = [
-    {"ts": "2099-01-02T09:35:00-04:00", "open": 100, "high": 100.5, "low": 99.0, "close": 99.8},
-    {"ts": "2099-01-02T10:05:00-04:00", "open": 100, "high": 101.5, "low": 100, "close": 101.2},
-]
-tick(datetime(2099, 1, 2, 10, 30, tzinfo=ET), signal=sig, bars=bars)
-g2 = get_session_log(conn, day, ACCOUNT_GATE)
-conn.execute("DELETE FROM paper_session_logs WHERE session_date_et = ?", (day,))
-conn.commit()
-conn.close()
-print(f"after_midnight={g1 and g1.get('status')}")
-print(f"after_prep_fill={g2 and g2.get('status')}")
-print(f"filled={g2 and g2.get('filled')}")
-print("SIM_OK" if g1 and g1.get("status") == "waiting_signal" and g2 and g2.get("status") == "complete" and g2.get("filled") else "SIM_FAIL")
+    def tick(when, signal=None, bars=None, *, force_complete=False):
+        no = {"ok": False, "error": "No top pick available to propose", "session_date_et": day}
+        with patch.object(paper_runner, "is_kill_switch_active", return_value=False), \
+             patch.object(paper_runner, "get_allocation_mode", return_value=AllocationMode.BEST_TRADABLE_TOP3), \
+             patch.object(paper_runner, "datetime") as dt, \
+             patch.object(paper_runner, "_plan_signal", return_value=signal or no), \
+             patch.object(paper_runner, "_fetch_day_bars", return_value=bars or []):
+            dt.now.return_value = when
+            return run_paper_tick(
+                conn,
+                session_date_et=day,
+                force_complete=force_complete,
+            )
+
+    tick(datetime(2099, 1, 2, 0, 10, tzinfo=ET))
+    g1 = get_session_log(conn, day, ACCOUNT_GATE)
+    sig = {
+        "ok": True, "session_date_et": day, "ticker": "SIM",
+        "limit_buy": 99.5, "limit_sell": 101.0, "stop": 98.5,
+        "shares": 50, "deploy": 5000.0, "allow_trade": True,
+        "ma_score": 70, "day_gate_mode": "produce",
+        "allocation_mode": "best_tradable_top3",
+    }
+    # January = EST (-05:00)
+    bars = [
+        {"ts": "2099-01-02T09:35:00-05:00", "open": 100, "high": 100.5, "low": 99.0, "close": 99.8, "volume": 1000},
+        {"ts": "2099-01-02T10:05:00-05:00", "open": 100, "high": 101.5, "low": 100, "close": 101.2, "volume": 1000},
+    ]
+    tick(datetime(2099, 1, 2, 10, 30, tzinfo=ET), signal=sig, bars=bars, force_complete=True)
+    g2 = get_session_log(conn, day, ACCOUNT_GATE)
+    print(f"after_midnight={g1 and g1.get('status')}")
+    print(f"after_prep_fill={g2 and g2.get('status')}")
+    print(f"filled={g2 and g2.get('filled')}")
+    print(f"detail={g2 and g2.get('detail')}")
+    print(f"scenario={g2 and g2.get('scenario')}")
+    ok = bool(
+        g1 and g1.get("status") == "waiting_signal"
+        and g2 and g2.get("status") == "complete"
+        and g2.get("filled")
+    )
+    print("SIM_OK" if ok else "SIM_FAIL")
+    conn.close()
 PY
 )
 echo "$SIM"
