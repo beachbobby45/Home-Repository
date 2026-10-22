@@ -64,7 +64,7 @@ class ArmedPlanTests(unittest.TestCase):
         self.assertEqual(loaded.allocation_mode, AllocationMode.SINGLE_TOP1)
         self.assertEqual(loaded.status, PlanStatus.PROPOSED)
         self.assertEqual(loaded.legs[0].ticker, "IRM")
-        self.assertEqual(loaded.pdt_cap, 3)
+        self.assertEqual(loaded.pdt_cap, 5)
 
         set_armed_plan_status(self.conn, loaded.plan_uuid, PlanStatus.ARMED)
         self.conn.commit()

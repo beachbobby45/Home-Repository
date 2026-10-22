@@ -1,6 +1,6 @@
 # Robinhood Automation Build Plan
 
-> **Status:** Approved to build (2026-10-17) — Phase A in progress  
+> **Status:** Approved to build — Phase A/B in progress; **PDT + evidence gates refreshed Oct 18, 2026**  
 > **Owner:** Tony + Cursor agent  
 > **Supersedes for execution path:** Product Spec v3 “manual E*TRADE only” *when Tony explicitly enables this track*  
 > **Does not replace:** ranking, Market Activity, pullback entry, Growth Plan targets, Produce/Preserve day gate
@@ -9,46 +9,46 @@
 
 ## 1. Goal
 
-Build a **travel-safe, PDT-aware** system where:
+Build a **travel-safe, settlement-aware** system where:
 
 1. **Robinhood is the source of truth** for cash, positions, fills, and P&L.  
 2. The **dashboard is a mirror** (ingested copy), not the ledger.  
-3. A **local always-on Mac worker** (LaunchAgent) enforces day-trade caps (below).  
+3. A **local always-on Mac worker** (LaunchAgent) enforces ops caps and **settled buying power** checks.  
 4. **Exits (target + stop) live on Robinhood** as resting orders after fill — not dependent on Cursor chat or Tony being at a keyboard.  
 5. Cursor continues **Morning Prep / ranking / confirmation / oversight**; it is **not** the sole sell trigger.  
-6. Capital ladder: **$5k → +$5k each profitable ~30-session cycle → $20k invested**, deposits only if the cycle grew.
+6. Capital ladder: **$5k on 2026-12-01 (CASH) → +$5k every ~30 sessions → $20k invested** (dates: 2027-01-13 / 2027-02-25 / 2027-04-09); deposits **evidence-gated**, never automatic.
+
+**Regulatory note (Jun 4, 2026):** FINRA replaced PDT with intraday margin standards ([Notice 26-10](https://www.finra.org/rules-guidance/notices/26-10)); Robinhood removed day-trade count restrictions ([Day trading](https://robinhood.com/us/en/support/articles/day-trading/)). Binding ops constraint is now **settled cash (T+1)** for unlevered accounts ([Settlement](https://robinhood.com/us/en/support/articles/settlement-and-buying-power/)), not 3 trades/week under $25k.
 
 **Reference backtest (planning only, not a promise):**  
-$5k PDT-capped path over 60 sessions ≈ +19%; staged plan Nov 2026 → ~Apr 2027 toward ~$25–26k account with $20k invested (~+27–29% on invested) if live rhymes with history.
+$5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 2027 toward ~$25–26k account with $20k invested (~+26–30% on invested) if live rhymes with history.
 
 ---
 
-## 1b. Decided: day-trade frequency & allocation (2026-10-17)
+## 1b. Decided: frequency, settlement & allocation (updated 2026-10-18)
 
 | Setting | Rule |
 |---------|------|
-| `max_day_trades_per_week` | **3** while RH equity **&lt; $25,000**; **5** when equity **≥ $25,000** |
+| `max_day_trades_per_week` | **5** (ops policy — one filled round-trip per weekday max). **No** regulatory 3-under-$25k cap. |
+| Settlement | **Cash / unlevered:** arm only if **settled** buying power ≥ deploy; after a same-day sale, next buy waits **T+1** |
+| Leverage | **Off** — never borrow; avoid intraday margin deficit path |
 | `allocation_mode` (default) | **`single_top1`** — one name/day, full deploy to #1 |
-| `allocation_mode` (later) | **`dual_lot_top2`** — optional; size to Growth Plan lots (e.g. $10k+$15k at $25k tier) for #1 and #2 |
-| Unlock dual mode | Only after a dedicated **Top2 lot backtest** (5m fills) and Tony’s written OK |
-
-**Rationale:** All current backtests are #1-only. At $25k the product tier already defines two virtual lots, but dual-name live trading is not proven yet. Cross $25k → keep `#1` and allow **5 sessions/week**; study `#1+#2` before enabling.
+| `allocation_mode` (later) | **`dual_lot_top2`** — only after Top2 backtest + Tony OK |
 
 ### 2027 year sketch (proposed, not guaranteed)
 
 | Period | Mode | Account band (sketch) |
 |--------|------|------------------------|
-| Nov 2026 – Apr 2027 | ≤3 day trades/week; ladder to $20k invested | → **~$25–26k** |
-| May – Dec 2027 | Up to **5** day trades/week; `#1` only initially | **~$32–50k** planning band (conservative→base); optimistic higher |
-
-Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as ~3 production wins/week via lots — frequency unlock ≠ “win every day”).
+| Nov 2026 – Apr 2027 | Up to **5** sessions/week; ladder to $20k invested | → **~$25–26k** |
+| May – Dec 2027 | Up to **5** sessions/week; `#1` only initially | **~$32–50k** planning band |
 
 ---
 
 ## 2. Non-goals (this track)
 
 - Unattended strategy changes or “AI discretion” beyond the locked rules.  
-- More than **3** day trades/week while equity &lt; $25k (or more than **5**/week at/above $25k without an explicit settings override).  
+- More than **5** filled day trades/week without an explicit settings override.  
+- Borrowed margin / leverage.  
 - Enabling `dual_lot_top2` without a completed Top2 backtest.  
 - Dashboard-authored balances that disagree with Robinhood.  
 - Relying on Cursor Cloud chat as a 9:30–16:00 watchdog.
@@ -61,7 +61,8 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 |------|--------|
 | Deploy / sizing | Growth Plan pullback limit; start **$5,000** book |
 | Names per day | **1** under `single_top1` (default); dual only if mode enabled |
-| Day-trade cap | **`max_day_trades_per_week(equity)`** → 3 if &lt;$25k else 5 |
+| Day-trade cap (ops) | **5**/week max filled round-trips |
+| Settled funds | Required before arm (cash / unlevered) |
 | Entry | Limit buy from pullback plan; **fill by 11:30 ET** or cancel |
 | Exit | Growth Plan **limit sell** + **stop**; same-bar ambiguity → stop (backtest convention) |
 | Day gate | Configurable Preserve / Produce; default **do not arm** if `allow_trade` false unless Tony enables “counterfactual arm” flag (off by default for live) |
@@ -80,7 +81,7 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 ┌────────────────────────────▼────────────────────────────────┐
 │  Local worker (LaunchAgent)   Always-on on Tony’s Mac       │
 │  - Read today’s ArmedPlan                                   │
-│  - PDT slot check                                           │
+│  - Weekly ops slot + settled BP check                       │
 │  - Place/cancel RH orders                                   │
 │  - Sync RH → SQLite mirror                                  │
 └───────────────┬────────────────────────────▲────────────────┘
@@ -101,7 +102,7 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 | `src/investment_agent/broker/robinhood_client.py` | Auth, account, orders, positions (MCP/API adapter) |
 | `src/investment_agent/broker/sync.py` | Pull RH → `broker_*` tables; never overwrite RH with journal guesses |
 | `src/investment_agent/execution/armed_plan.py` | Immutable day’s plan: ticker, buy, target, stop, shares, deadlines |
-| `src/investment_agent/execution/pdt_guard.py` | Count day trades in week; block 4th |
+| `src/investment_agent/execution/pdt_guard.py` | Count day trades in week; block 6th (ops cap 5) |
 | `src/investment_agent/execution/worker.py` | Session loop: arm → buy → attach exits → EOD flatten check |
 | `scripts/run_execution_worker_mac.sh` + LaunchAgent plist | KeepAlive worker separate from dashboard if needed |
 | Dashboard: **Broker** tab | Equity, buying power, open orders, fills (read-only from sync) |
@@ -116,10 +117,11 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 - Harden dashboard KeepAlive (health check, log truncation, restart already partially done).  
 - Separate **execution worker** process from UI server so UI blips ≠ missed exits.  
 - Schema: `broker_accounts`, `broker_balances`, `broker_positions`, `broker_orders`, `broker_fills`, `armed_plans`, `pdt_day_trades`.  
-- Config: `.env.robinhood.paper` / `.env.robinhood.live` (never mixed).
+- Config: separate env profiles for **internal paper ledger** vs **live RH** (never mixed).  
+  Note: Robinhood has **no stock paper/demo account** (only options Simulated Returns). Pre-live testing stays on our internal paper + Yahoo 5m bars; see `docs/PAPER_GO_CHECKLIST.md` §E.
 
 **Test**
-- Unit: PDT counter (week boundaries, no-fill ≠ day trade).  
+- Unit: weekly ops counter (week boundaries, no-fill ≠ day trade).  
 - Integration: worker survives dashboard restart.  
 - Manual: `dashboard_service_status_mac.sh` green 7 consecutive mornings.
 
@@ -150,12 +152,12 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 - After Morning Prep / ranked #1 + confirmation: write `ArmedPlan` (status=`proposed`).  
 - Push notification / dashboard banner: “Approve to arm” (mobile-friendly).  
 - **Travel mode:** if no veto by `arm_deadline_et` (e.g. 9:25 ET) **and** `travel_auto_arm=true`, status → `armed`. Default `travel_auto_arm=false` until Phase D exit.  
-- Dry-run order preview (shares, buy, target, stop, PDT slots left) — **no broker submit**.
+- Dry-run order preview (shares, buy, target, stop, weekly slots left, settled BP) — **no broker submit**.
 
 **Test / backtest**
-- Re-run `analyze_blocked_day_top1_pnl.py --days 60 --deploy 5000` with PDT weekly cap report (script extension).  
+- Re-run `analyze_blocked_day_top1_pnl.py --days 60 --deploy 5000` with weekly ops-cap report (script extension).  
 - Unit: plan builder matches pullback + Growth Plan math at $5k/$10k.  
-- Simulation: given historical #1 days, generate ArmedPlans and assert ≤3/week.
+- Simulation: given historical #1 days, generate ArmedPlans and assert ≤5/week.
 
 **Exit criteria:** 10 consecutive mornings produce a correct proposed plan Tony can approve on phone.
 
@@ -167,14 +169,15 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 - On approved/armed day: worker places **limit buy** (or Tony taps Approve → submit).  
 - On fill: **immediately** place target limit sell + stop (OCO/bracket if RH supports; else two linked orders + monitor).  
 - Cancel unfilled buy at **11:30 ET**.  
-- PDT guard blocks submit if weekly day-trade count ≥ 3.  
+- Ops guard blocks submit if weekly day-trade count ≥ **5**.  
+- Settled buying power required before submit.  
 - Kill switch cancels entry; does **not** cancel protective stop unless flattening.
 
 **Test**
 - Paper/agent sandbox: full day lifecycle (no fill / fill→target / fill→stop / 11:30 cancel).  
 - Chaos: kill dashboard during open order → exits still rest at RH.  
 - Chaos: kill worker after fill+exits placed → RH still holds exits.  
-- PDT: 4th submit attempt rejected.
+- Ops: 6th submit attempt in a week rejected.
 
 **Exit criteria:** 15 paper (or RH agent approval) sessions with **zero** unprotected long overnight positions caused by tool failure.
 
@@ -183,14 +186,14 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 ### Phase E — Travel-safe limited auto-buy (still rule-bound)
 
 **Build**
-- Enable `travel_auto_arm` + auto-submit buy when: PDT slot free, plan armed, day-gate policy satisfied, kill switch clear.  
-- Enforce `max_day_trades_per_week(equity)` (3 or 5); notify Tony after each submit/fill/exit.  
+- Enable `travel_auto_arm` + auto-submit buy when: weekly slot free, settled BP OK, plan armed, day-gate policy satisfied, kill switch clear.  
+- Enforce `max_day_trades_per_week` = **5**; notify Tony after each submit/fill/exit.  
 - Daily EOD email/push: RH P&L, slots used, whether deposit ladder checkpoint is due.
 
 **Test**
 - 30-session paper/live-small run matching ladder Cycle 1 ($5k).  
 - Compare to backtest band (not required to match; track fill rate, target rate, max DD).  
-- PDT compliance audit: 0 violations.
+- Ops/settlement compliance audit: 0 freeriding / over-cap events.
 
 **Exit criteria:** Cycle 1 complete with **profit ≥ $0** and Tony’s written OK to Deposit #2 — **or** pause and revise rules.
 
@@ -199,17 +202,18 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 ### Phase F — Ladder operations (Cycles 2–4)
 
 **Build**
-- Dashboard “Capital ladder” widget: invested, RH equity, cycle P&L, next deposit eligibility, PDT status.  
+- Dashboard “Capital ladder” widget: invested, RH equity, cycle P&L, next deposit eligibility, weekly slots + settled BP.  
 - After each ~30 trading sessions: compute cycle P&L from **RH fills only**.  
 - Prompt Tony for +$5k only if cycle profit &gt; 0.  
-- When RH equity ≥ $25k: automatically allow up to **5** day trades/week (`single_top1` remains default).  
+- Ops cap remains **5**/week at all equity levels (post-PDT).  
+- Enforce **settled buying power** before arm.  
 - Gate `dual_lot_top2` behind Top2 backtest + setting.
 
 **Test**
 - Ladder state machine unit tests (deposit gates).  
 - Replay Jul–Oct history through ladder simulator (already sketched in chat; encode as `tests/test_capital_ladder_sim.py`).
 
-**Exit criteria:** Invested = $20k only via real deposits; mirror matches RH; no PDT breach.
+**Exit criteria:** Invested = $20k only via real deposits; mirror matches RH; settlement/ops clean.
 
 ---
 
@@ -217,9 +221,9 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 
 | ID | Type | What | Pass bar |
 |----|------|------|----------|
-| BT-1 | Backtest | 60d #1, $5k, 5m fills, PDT ≤3/week | Script reproduces prior ~+$950 path (±$1) |
+| BT-1 | Backtest | 60d #1, $5k, 5m fills, all fill days | Script reproduces ~+$933 path (±$1) |
 | BT-2 | Backtest | 60d #1, $10k compound / fixed | Matches prior published summary |
-| BT-3 | Backtest | Ladder sim Nov schedule | Stage dates/growth table reproducible |
+| BT-3 | Backtest | Ladder sim Nov schedule (post-PDT) | Stage dates/growth table reproducible |
 | UT-1 | Unit | `pdt_guard` week boundaries + holidays | Golden cases |
 | UT-2 | Unit | Pullback plan $5k vs $10k targets | Sell % widens at $5k |
 | UT-3 | Unit | Sync idempotency | No duplicate fills |
@@ -230,23 +234,25 @@ Growth Plan design at $25k ≈ **$350/day** / **$1,050/week** (still modeled as 
 | IT-5 | Chaos | Worker down after brackets | RH still protects |
 | AT-1 | Acceptance | 7-day uptime | No morning “connection failed” |
 | AT-2 | Acceptance | Balance match | RH vs dashboard $0.01 |
-| AT-3 | Acceptance | 30-session Cycle 1 | PDT clean; Tony go/no-go |
+| AT-3 | Acceptance | 30-session Cycle 1 | Settlement/ops clean; Tony go/no-go |
 
 ---
 
-## 7. Suggested calendar (aligned to capital ladder)
+## 7. Suggested calendar (evidence-gated — see strategy brief §5)
+
+Assumption: ~30 trading sessions ≈ ~6 calendar weeks (≤5 sessions/wk; US holidays skipped).
 
 | When | Focus |
 |------|--------|
-| **Now → late Oct 2026** | Phase A + B (reliability + RH sync) |
-| **Nov 2, 2026** | Target Cycle 1 start (first trading day on/after Nov 1) — Phase C/D at least; E only if exits proven |
-| **~Dec 14, 2026** | End Cycle 1 checkpoint → Deposit #2 if green |
-| **~Jan 28, 2027** | End Cycle 2 → Deposit #3 if green |
-| **~Mar 12, 2027** | End Cycle 3 → Deposit #4 ($20k invested) if green |
-| **~Apr 26, 2027** | End Cycle 4 review (~$25–26k sketch); if equity ≥ $25k → 5 day-trades/week unlocked |
-| **May – Dec 2027** | Operate at 5/week `#1` only; run Top2 study before any split |
+| **Now** | Confirm RH day-trade settings in-app; Phase A + B reliability + RH sync |
+| **Now (parallel)** | **P0 controls:** gate ON vs OFF + random-pick control on historical window |
+| **2026-10-20 → ~2026-11-28** | **P1 forward paper** (~40–60 sessions); pre-registered pass/fail; dual arms |
+| **2026-12-01** (earliest) | **Deposit #1** — live **$5,000 CASH / unlevered** after paper pass; hard −10% stop |
+| **2027-01-13** (earliest) | **Deposit #2** (+$5k → $10k) — ~30 sessions after #1; §5.4 written go |
+| **2027-02-25** (earliest) | **Deposit #3** (+$5k → $15k) — ~30 sessions after #2; evidence + written go |
+| **2027-04-09** (earliest) | **Deposit #4** (+$5k → $20k invested) — ~30 sessions after #3; optional if edge holds |
 
-Slip phases rather than skip exit criteria.
+Slip phases rather than skip exit criteria. Calendar dates are earliest sketches — **never auto-deposit**.
 
 ---
 
@@ -268,7 +274,7 @@ Slip phases rather than skip exit criteria.
 3. **Travel auto-arm default time:** e.g. veto window until 9:20 ET.  
 4. **Fee model on RH:** keep $7/$7 planning fees or switch to RH actual commissions for P&L.
 
-**Decided:** day-trade cap 3→5 at $25k; default `single_top1`; dual lots only after Top2 study.
+**Decided:** ops day-trade cap **5**/week at all equity (post-PDT); default `single_top1`; dual lots only after Top2 study; unlevered + settled cash required.
 
 ---
 
@@ -276,21 +282,27 @@ Slip phases rather than skip exit criteria.
 
 - [ ] RH is sole balance/P&L source; dashboard mirrors it.  
 - [ ] Local worker places/cancels entries; **exits rest at RH**.  
-- [ ] Day-trade cap enforced in code (3 below $25k / 5 at/above) + audited.  
+- [ ] Day-trade ops cap enforced in code (**5**/week) + settled-BP gate + audited.  
 - [ ] Travel does not leave an unprotected position.  
 - [ ] Cycle 1 live/paper complete with written go/no-go for Deposit #2.  
 - [ ] BT/UT/IT/AT matrix above green or waived in writing.
 
 ---
 
-## 11. Implementation slice (Phase A — started)
+## 11. Implementation status
 
 1. ✅ Plan decisions documented (frequency + allocation + 2027 sketch).  
 2. ✅ PDT guard module + unit tests.  
 3. ✅ `broker_*` / `armed_plans` / `pdt_day_trades` schema + migration.  
 4. ✅ ArmedPlan dataclass + persistence helpers.  
-5. ⏳ Sync stub fixtures, propose API, worker LaunchAgent, `--pdt-weekly-cap` report (next commits).
+5. ✅ Broker sync stub (`StubBrokerClient` + `/api/broker/sync/fixture`).  
+6. ✅ Propose/arm APIs + `/api/broker/status` + `/api/execution/pdt`.  
+7. ✅ Execution worker dry-run + `install_execution_worker_mac.sh`.  
+8. ⏳ Live Robinhood client (waiting on Tony’s account credentials).  
+9. ⏳ Dashboard Broker tab UI banner; `--pdt-weekly-cap` analysis report.  
+10. ⏳ P0: random-pick control on same historical window.  
+11. ✅ P1 paper ledger: dual arms (`gate_approved` + `all_signals`), T+1 settled cash, `/api/paper/*`, `install_paper_worker_mac.sh`, intraday `--pacific`.
 
 ---
 
-*This plan keeps automation for travel safety without giving up broker-truth, PDT safety, or exit protection when you’re offline.*
+*This plan keeps automation for travel safety without giving up broker-truth, settlement/ops safety, or exit protection when you’re offline.*

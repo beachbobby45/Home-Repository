@@ -2,20 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260816a" />
+  <link rel="stylesheet" href="/static/style.css?v=0.9.8b" />
 </head>
 <body>
   <header class="app-header">
     <div class="app-header-inner">
       <div class="app-brand">
         <h1>AI Investment Agent <span class="ui-version" id="app-version-badge" title="Release {{ app_release }}">v{{ app_version }} · {{ app_release }}</span></h1>
-        <p class="subtitle">E*TRADE manual · Growth Plan · $5M goal</p>
+        <p class="subtitle">Paper automation · observe results · emergency stop · path to Robinhood live</p>
       </div>
       <div class="app-header-actions">
-        <button class="btn btn-sm" type="button" id="refresh-trading-day" title="Step 3 — refresh live prices before you buy">Refresh live before buy</button>
-        <button class="btn secondary btn-sm" type="button" id="pin-top-pick">Pin #1</button>
+        <span class="mode-pill" id="execution-mode-pill" title="Current execution mode">PAPER</span>
+        <button class="btn btn-stop" type="button" id="stop-process-btn" title="Emergency: block all new automated entries">STOP PROCESS</button>
+        <button class="btn secondary btn-sm" type="button" id="resume-process-btn" title="Clear kill switch — allow automation again" hidden>Resume</button>
         <button class="btn secondary btn-sm" type="button" id="refresh-all">Refresh all</button>
       </div>
     </div>
@@ -39,15 +42,15 @@
   <div id="regime-banner" class="banner ok app-banner-compact">Loading regime…</div>
 
   <div class="status-bar" id="status-bar">
-    <div class="status-chip" id="status-verdict-chip"><span class="status-label">Session</span><span id="status-verdict-text">—</span></div>
-    <div class="status-chip status-chip-accent"><span class="status-label">Today</span><span id="status-daily-text">—</span></div>
-    <div class="status-chip" id="status-weekly-chip"><span class="status-label">Week</span><span id="status-weekly-text">—</span></div>
-    <div class="status-chip"><span class="status-label">Cash</span><span id="status-cash-text">—</span></div>
-    <div class="status-chip"><span class="status-label">Goal</span><span id="status-goal-text">—</span></div>
+    <div class="status-chip" id="status-verdict-chip"><span class="status-label">Automation</span><span id="status-verdict-text">—</span></div>
+    <div class="status-chip status-chip-accent"><span class="status-label">Paper equity</span><span id="status-daily-text">—</span></div>
+    <div class="status-chip" id="status-weekly-chip"><span class="status-label">Fills</span><span id="status-weekly-text">—</span></div>
+    <div class="status-chip"><span class="status-label">Settled</span><span id="status-cash-text">—</span></div>
+    <div class="status-chip"><span class="status-label">Pass</span><span id="status-goal-text">—</span></div>
   </div>
 
   <nav class="app-nav" aria-label="Dashboard views">
-    <button type="button" class="app-nav-btn active" data-view="trade"><span class="nav-icon">◎</span> Trade</button>
+    <button type="button" class="app-nav-btn active" data-view="trade"><span class="nav-icon">◎</span> Ops</button>
     <button type="button" class="app-nav-btn" data-view="screen"><span class="nav-icon">▦</span> Screen</button>
     <button type="button" class="app-nav-btn" data-view="review"><span class="nav-icon">▤</span> Review</button>
     <button type="button" class="app-nav-btn" data-view="account"><span class="nav-icon">◫</span> Account</button>
@@ -57,37 +60,64 @@
 
   <main class="app-main">
 
-    <!-- ═══ TRADE — primary view ═══ -->
+    <!-- ═══ OPS — automation-first primary view ═══ -->
     <div id="view-trade" class="app-view active">
 
-      <header class="trade-page-head">
-        <h2 class="trade-page-title">What to trade today</h2>
-        <p class="brief">Three steps each day — metrics after close, picks before open, live check before you buy.</p>
+      <header class="trade-page-head auto-ops-head">
+        <div>
+          <h2 class="trade-page-title">Automation ops</h2>
+          <p class="brief">Mac LaunchAgents pick, paper-buy, and paper-sell. You observe results and can emergency-stop.</p>
+        </div>
+        <div class="auto-ops-head-meta">
+          <span class="brief" id="paper-session-label">Session —</span>
+          <span class="brief" id="paper-kill-label">Kill switch: OFF</span>
+        </div>
       </header>
 
-      <section class="daily-rhythm card" id="daily-rhythm-panel">
-        <h2 class="daily-rhythm-title">Daily rhythm</h2>
-        <ol class="rhythm-steps" id="rhythm-steps"></ol>
+      <section class="card auto-hero" id="auto-hero">
+        <div class="auto-hero-grid">
+          <div class="auto-hero-main">
+            <div class="auto-hero-kicker">What automation selected</div>
+            <div class="auto-hero-ticker" id="auto-selected-ticker">—</div>
+            <div class="auto-hero-status" id="auto-selected-status">Waiting for next session…</div>
+            <div class="auto-hero-why brief" id="auto-selected-why"></div>
+          </div>
+          <div class="auto-hero-levels" id="auto-selected-levels">
+            <div class="auto-level"><span>Buy</span><strong id="auto-lvl-buy">—</strong></div>
+            <div class="auto-level"><span>Target</span><strong id="auto-lvl-sell">—</strong></div>
+            <div class="auto-level"><span>Stop</span><strong id="auto-lvl-stop">—</strong></div>
+            <div class="auto-level"><span>Shares</span><strong id="auto-lvl-shares">—</strong></div>
+          </div>
+        </div>
       </section>
 
-      <section class="card proposals-panel" id="proposals-panel">
-        <header class="panel-head proposals-panel-head">
-          <div>
-            <h2>Trade proposals</h2>
-            <p class="brief">Step 2b — generate up to 5 scored proposals; approve before logging a BUY in the journal.</p>
-            <p class="brief" id="ai-status-note">AI: loading…</p>
-          </div>
-          <button class="btn btn-sm" type="button" id="generate-proposals">Generate proposals</button>
+      <section class="card auto-pnl-strip" id="auto-pnl-strip">
+        <div class="auto-pnl-item"><span class="status-label">Gate book</span><strong id="paper-gate-equity">$5,000</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">All-signals book</span><strong id="paper-all-equity">$5,000</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">Today (gate)</span><strong id="paper-today-net">$0</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">Window fills</span><strong id="paper-window-fills">0</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">Scoreboard</span><strong id="paper-pass-flag">Not yet</strong></div>
+      </section>
+
+      <section class="card" id="paper-tx-panel">
+        <header class="panel-head">
+          <h2>Paper transactions</h2>
+          <p class="brief">Internal ledger (not Robinhood). Gate-approved is the live-like book.</p>
         </header>
-        <div id="proposals-body" class="proposals-list">
-          <div class="pick-empty">No proposals yet — run Generate after morning screener.</div>
+        <div class="table-wrap">
+          <table class="data-table" id="paper-tx-table">
+            <thead><tr>
+              <th>Date</th><th>Book</th><th>Ticker</th><th>Status</th><th>Exit</th><th>Net</th><th>Detail</th>
+            </tr></thead>
+            <tbody id="paper-tx-body"><tr><td colspan="7" class="empty">No paper sessions yet — first trading day is Mon Oct 20.</td></tr></tbody>
+          </table>
         </div>
       </section>
 
       <section class="card" id="candidates-panel">
         <header class="panel-head">
-          <h2>Today&apos;s candidates</h2>
-          <p class="brief">After Step 2 — buy size, sell target, and stop per symbol (Growth Plan).</p>
+          <h2>Top 10 ranked (read-only)</h2>
+          <p class="brief">Automation uses #1 when the gate allows. Levels shown for context — not for manual clicking.</p>
         </header>
         <div class="table-wrap">
           <table class="data-table" id="candidates-table">
@@ -95,7 +125,7 @@
               <th>#</th><th>Ticker</th><th>Hit%</th><th>Limit buy</th><th>Shares</th><th>Size</th>
               <th>Limit sell</th><th>Stop</th><th>Live S3</th>
             </tr></thead>
-            <tbody id="candidates-body"><tr><td colspan="9" class="empty">Run Step 2 to populate.</td></tr></tbody>
+            <tbody id="candidates-body"><tr><td colspan="9" class="empty">Ranks appear after morning prep (4:00 AM PT).</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -119,84 +149,111 @@
         </details>
       </div>
 
-      <div class="card risk-panel" id="risk-panel">
-        <header class="panel-head risk-panel-head">
-          <div>
-            <h2 class="risk-title">Risk Engine</h2>
-            <p class="brief" id="risk-headline">Portfolio limits — sovereign gate before every entry</p>
-          </div>
-          <label class="kill-switch-toggle" title="Block all new entries until cleared">
-            <input type="checkbox" id="kill-switch-input" />
-            <span>Kill switch</span>
-          </label>
-        </header>
-        <div class="risk-metrics" id="risk-metrics">Loading…</div>
-      </div>
+      <details class="card manual-tools-details" id="manual-tools-details">
+        <summary class="checks-summary">Advanced — manual tools &amp; legacy trade workflow</summary>
+        <p class="brief">Not required for paper automation. Kept for diagnosis and optional manual checks.</p>
+        <div class="actions" style="margin:0.5rem 0 1rem">
+          <button class="btn btn-sm" type="button" id="refresh-trading-day">Refresh live before buy</button>
+          <button class="btn secondary btn-sm" type="button" id="pin-top-pick">Pin #1</button>
+        </div>
 
-      <div class="picks-grid">
-        <article class="pick-card pick-card-primary">
-          <header class="pick-card-head">
-            <span class="pick-num">1</span>
+        <section class="daily-rhythm card" id="daily-rhythm-panel">
+          <h2 class="daily-rhythm-title">Daily rhythm</h2>
+          <ol class="rhythm-steps" id="rhythm-steps"></ol>
+        </section>
+
+        <section class="card proposals-panel" id="proposals-panel">
+          <header class="panel-head proposals-panel-head">
             <div>
-              <h2 class="pick-title">Top pick — buy this first</h2>
-              <p class="pick-sub brief">Limit buy in the expected pullback · TRADABLE for today&apos;s $ goal only</p>
+              <h2>Trade proposals</h2>
+              <p class="brief">Optional scored proposals (paper path does not require Approve).</p>
+              <p class="brief" id="ai-status-note">AI: loading…</p>
             </div>
+            <button class="btn btn-sm" type="button" id="generate-proposals">Generate proposals</button>
           </header>
-          <div class="pick-card-body" id="top-pick-body">Loading…</div>
-        </article>
+          <div id="proposals-body" class="proposals-list">
+            <div class="pick-empty">No proposals yet.</div>
+          </div>
+        </section>
 
-        <article class="pick-card pick-card-secondary" id="second-pick-block">
-          <header class="pick-card-head">
-            <span class="pick-num pick-num-alt">2</span>
+        <div class="card risk-panel" id="risk-panel">
+          <header class="panel-head risk-panel-head">
             <div>
-              <h2 class="pick-title">Backup pick</h2>
-              <p class="pick-sub brief">If #1 fails or for optional 2nd trade after a win</p>
+              <h2 class="risk-title">Risk Engine</h2>
+              <p class="brief" id="risk-headline">Portfolio limits — sovereign gate before every entry</p>
             </div>
+            <label class="kill-switch-toggle" title="Block all new entries until cleared">
+              <input type="checkbox" id="kill-switch-input" />
+              <span>Kill switch</span>
+            </label>
           </header>
-          <div class="pick-card-body" id="second-pick-body"><div class="pick-empty">Loading backup pick…</div></div>
-        </article>
-      </div>
+          <div class="risk-metrics" id="risk-metrics">Loading…</div>
+        </div>
 
-      <div class="trade-math-panel card" id="trade-math-panel" hidden>
-        <div class="trade-math-title">Trade math <span class="brief" id="trade-math-goal"></span></div>
-        <div class="trade-math-grid">
-          <div class="trade-math-box buy">
-            <div class="trade-math-label">Limit buy</div>
-            <div class="trade-math-value" id="math-buy">—</div>
-            <div class="trade-math-sub" id="math-shares">—</div>
-            <div class="trade-math-sub" id="math-limit-note">—</div>
-          </div>
-          <div class="trade-math-box stop">
-            <div class="trade-math-label">Stop (−0.75%)</div>
-            <div class="trade-math-value" id="math-stop">—</div>
-            <div class="trade-math-sub" id="math-stop-net">—</div>
-          </div>
-          <div class="trade-math-box sell">
-            <div class="trade-math-label">Sell for goal</div>
-            <div class="trade-math-value" id="math-sell">—</div>
-            <div class="trade-math-sub" id="math-sell-net">—</div>
+        <div class="picks-grid">
+          <article class="pick-card pick-card-primary">
+            <header class="pick-card-head">
+              <span class="pick-num">1</span>
+              <div>
+                <h2 class="pick-title">Top pick detail</h2>
+                <p class="pick-sub brief">Same #1 the automation uses</p>
+              </div>
+            </header>
+            <div class="pick-card-body" id="top-pick-body">Loading…</div>
+          </article>
+          <article class="pick-card pick-card-secondary" id="second-pick-block">
+            <header class="pick-card-head">
+              <span class="pick-num pick-num-alt">2</span>
+              <div>
+                <h2 class="pick-title">Backup pick</h2>
+                <p class="pick-sub brief">Context only under single_top1</p>
+              </div>
+            </header>
+            <div class="pick-card-body" id="second-pick-body"><div class="pick-empty">Loading backup pick…</div></div>
+          </article>
+        </div>
+
+        <div class="trade-math-panel card" id="trade-math-panel" hidden>
+          <div class="trade-math-title">Trade math <span class="brief" id="trade-math-goal"></span></div>
+          <div class="trade-math-grid">
+            <div class="trade-math-box buy">
+              <div class="trade-math-label">Limit buy</div>
+              <div class="trade-math-value" id="math-buy">—</div>
+              <div class="trade-math-sub" id="math-shares">—</div>
+              <div class="trade-math-sub" id="math-limit-note">—</div>
+            </div>
+            <div class="trade-math-box stop">
+              <div class="trade-math-label">Stop (−0.75%)</div>
+              <div class="trade-math-value" id="math-stop">—</div>
+              <div class="trade-math-sub" id="math-stop-net">—</div>
+            </div>
+            <div class="trade-math-box sell">
+              <div class="trade-math-label">Sell for goal</div>
+              <div class="trade-math-value" id="math-sell">—</div>
+              <div class="trade-math-sub" id="math-sell-net">—</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <section class="validate-panel card rhythm-step3-panel">
-        <header class="panel-head">
-          <h2>Step 3 — Confirm before you buy</h2>
-          <p class="brief">Click <strong>Refresh live before buy</strong> above, then place the <strong>limit buy</strong> in E*TRADE (not market).</p>
-        </header>
-        <form id="planned-trade-form" class="planned-trade-form planned-trade-form-hero">
-          <label class="plan-field"><span>Ticker</span><input type="text" id="plan-ticker" placeholder="NFLX" /></label>
-          <label class="plan-field"><span>Limit buy ($)</span><input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Pullback limit" /></label>
-          <label class="plan-field"><span>Shares</span><input type="number" id="plan-shares" step="1" min="1" placeholder="Auto" /></label>
-          <button class="btn plan-submit" type="submit">Validate trade</button>
-        </form>
-        <div id="planned-trade-result" class="planned-trade-result"></div>
-      </section>
+        <section class="validate-panel card rhythm-step3-panel">
+          <header class="panel-head">
+            <h2>Manual validate</h2>
+            <p class="brief">Optional — paper worker does not use this form.</p>
+          </header>
+          <form id="planned-trade-form" class="planned-trade-form planned-trade-form-hero">
+            <label class="plan-field"><span>Ticker</span><input type="text" id="plan-ticker" placeholder="NFLX" /></label>
+            <label class="plan-field"><span>Limit buy ($)</span><input type="number" id="plan-price" step="0.01" min="0.01" placeholder="Pullback limit" /></label>
+            <label class="plan-field"><span>Shares</span><input type="number" id="plan-shares" step="1" min="1" placeholder="Auto" /></label>
+            <button class="btn plan-submit" type="submit">Validate trade</button>
+          </form>
+          <div id="planned-trade-result" class="planned-trade-result"></div>
+        </section>
 
-      <details class="checks-panel card">
-        <summary class="checks-summary">Go / no-go checks &amp; rotation hints</summary>
-        <ul class="check-list" id="trading-checks"></ul>
-        <p class="brief rotation-hint" id="rotation-hint"></p>
+        <div class="checks-panel card">
+          <h3 class="checks-summary">Go / no-go checks</h3>
+          <ul class="check-list" id="trading-checks"></ul>
+          <p class="brief rotation-hint" id="rotation-hint"></p>
+        </div>
       </details>
     </div>
 
@@ -459,15 +516,72 @@
 
     <!-- ═══ ACCOUNT ═══ -->
     <div id="view-account" class="app-view">
+      <section class="view-section">
+        <header class="view-head">
+          <h2>Ledger &amp; balance</h2>
+          <p class="brief" id="ledger-source-note">Paper book starts at $5,000. TEST audit rows never change this balance.</p>
+        </header>
+        <div class="card auto-pnl-strip" id="account-ledger-strip">
+          <div class="auto-pnl-item"><span class="status-label">Ledger source</span><strong id="acct-ledger-source">paper</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Starting</span><strong id="acct-paper-start">$5,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Paper equity</span><strong id="acct-paper-equity">$5,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Settled</span><strong id="acct-paper-settled">$5,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Unsettled</span><strong id="acct-paper-unsettled">$0</strong></div>
+        </div>
+      </section>
+
+      <section class="view-section" id="funding-plan-section">
+        <header class="view-head">
+          <h2>Funding &amp; RH transition plan</h2>
+          <p class="brief" id="funding-plan-note">$5,000 paper now → RH CASH live 2026-12-01 after paper pass → +$5,000 every ~30 sessions (Jan 13 / Feb 25 / Apr 9 2027) to $20k — evidence-gated, not automatic.</p>
+        </header>
+        <div class="card">
+          <div class="auto-pnl-strip" id="funding-plan-highlights">
+            <div class="auto-pnl-item"><span class="status-label">Phase band</span><strong id="funding-phase-label">$5,000 → $20,000</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">RH live (earliest)</span><strong id="funding-rh-date">2026-12-01</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">RH deposit #1</span><strong id="funding-rh-amt">+$5,000</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">Next +$5k</span><strong id="funding-next">Gated</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">Paper pass</span><strong id="funding-paper-pass">Not yet</strong></div>
+          </div>
+          <div class="table-wrap" style="margin-top:1rem">
+            <table class="data-table" id="funding-plan-table">
+              <thead><tr>
+                <th>Date</th><th>Stage</th><th>Cash in</th><th>Invested after</th><th>Status</th><th>Gate</th>
+              </tr></thead>
+              <tbody id="funding-plan-body">
+                <tr><td colspan="6" class="empty">Loading funding plan…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view-section">
+        <header class="view-head">
+          <h2>Ops audit</h2>
+          <p class="brief">TEST = verification only (no W/L). PAPER = paper trades. Later LIVE will mirror Robinhood.</p>
+        </header>
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data-table" id="ops-audit-table">
+              <thead><tr>
+                <th>When</th><th>Kind</th><th>Title</th><th>Affects P&amp;L</th><th>Detail</th>
+              </tr></thead>
+              <tbody id="ops-audit-body"><tr><td colspan="5" class="empty">Loading audit…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section class="view-section capital-builder-section">
         <header class="view-head">
           <h2>Capital Builder</h2>
-          <p class="brief">Phase 1 milestone — guidance only, not a trading quota.</p>
+          <p class="brief">Paper / staged plan: <strong>$5,000 → $20,000</strong> invested. Equity follows paper ledger until RH is source of truth.</p>
         </header>
         <div class="card capital-builder-panel" id="capital-builder-panel">
           <div class="cb-milestone">
             <div class="cb-milestone-head">
-              <span class="cb-milestone-label" id="cb-phase-label">Phase 1: $15,000 → $30,000</span>
+              <span class="cb-milestone-label" id="cb-phase-label">Plan: $5,000 → $20,000</span>
               <span class="cb-milestone-badge brief" id="cb-milestone-badge"></span>
             </div>
             <div class="metric" id="cb-current-equity">—</div>
@@ -612,8 +726,8 @@
     <div id="view-plan" class="app-view">
       <section class="view-section">
         <header class="view-head">
-          <h2>10-year growth plan</h2>
-          <p class="brief">Planning view — $15K start, annual 35% sweep, +$10K capital at ~month 6 (Year 1).</p>
+          <h2>Calendar-year growth plan</h2>
+          <p class="brief">Your funded plan by calendar year: <strong>Begin → Remaining</strong> carries forward. Right side keeps <strong>Deploy · net/trade</strong>, <strong>Deposits</strong>, <strong>Δ End</strong> (vs $5K-only), and <strong>Notes</strong>.</p>
         </header>
         <div class="plan-quick-links card">
           <span class="brief">Related:</span>
@@ -623,10 +737,10 @@
           <button type="button" class="btn secondary btn-sm plan-link-btn" data-goto="sweep-section">Period-end sweep</button>
         </div>
         <div class="grid grid-4 plan-kpi-grid" id="plan-kpi-grid">
-          <div class="card kpi-card"><h2>Base → $5M</h2><div class="metric small" id="plan-months-base">—</div></div>
-          <div class="card kpi-card"><h2>+$10K → $5M</h2><div class="metric small" id="plan-months-inj">—</div></div>
-          <div class="card kpi-card"><h2>Year 10 (base)</h2><div class="metric small" id="plan-y10-base">—</div></div>
-          <div class="card kpi-card"><h2>Year 10 (+$10K)</h2><div class="metric small" id="plan-y10-inj">—</div></div>
+          <div class="card kpi-card"><h2>$5M target year</h2><div class="metric small" id="plan-months-inj">—</div></div>
+          <div class="card kpi-card"><h2>2026 begin</h2><div class="metric small" id="plan-begin-2026">$5,000</div></div>
+          <div class="card kpi-card"><h2>2027 deposits</h2><div class="metric small" id="plan-dep-2027">+$15,000</div></div>
+          <div class="card kpi-card"><h2 id="plan-y10-inj-label">2037 remaining</h2><div class="metric small" id="plan-y10-inj">—</div></div>
         </div>
         <div class="card" id="plan-assumptions">Loading assumptions…</div>
         <div class="card table-card">
@@ -636,21 +750,15 @@
               <thead>
                 <tr>
                   <th>Year</th>
-                  <th colspan="4" class="plan-col-group">Base ($15K start)</th>
-                  <th colspan="4" class="plan-col-group plan-col-injection">With +$10K @ mo ~6</th>
-                  <th colspan="2">Compare</th>
-                </tr>
-                <tr>
-                  <th></th>
-                  <th>End balance</th>
-                  <th>Goal %</th>
-                  <th>Gross prod.</th>
+                  <th>Begin</th>
+                  <th>Remaining</th>
+                  <th>Growth / loss $$</th>
+                  <th>Growth / loss %</th>
+                  <th>Year end (pre-sweep)</th>
                   <th>Annual sweep</th>
-                  <th>End balance</th>
-                  <th>Goal %</th>
                   <th>Deploy · net/trade</th>
-                  <th>Injection</th>
-                  <th>Δ balance</th>
+                  <th>Deposits</th>
+                  <th>Δ End</th>
                   <th>Notes</th>
                 </tr>
               </thead>
@@ -659,8 +767,9 @@
           </div>
         </div>
         <p class="brief plan-disclaimer">
-          Model only — 60.6% dollar hit rate, 2.9 tradeable days/week, tier-scaled net/trade, one #1 pick per day
-          (2nd trade exceptional days). Not a guarantee; journal actuals live under Account.
+          <strong>Begin</strong> / <strong>Remaining</strong> are your funded path ($5K Dec 2026 + $15K in 2027). Remaining → next year’s Begin.
+          <strong>Δ End</strong> = funded Remaining minus a $5K-only path at year-end.
+          Deploy · net/trade is tier size / net target. Model only — deposits stay evidence-gated.
         </p>
       </section>
     </div>
@@ -672,7 +781,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.1 · $15K · Annual Sweep</strong> ($15K basis, annual 35% sweep, growth scenarios)</p>
+          <p class="brief">Latest release: <strong>v0.9.8 · Plan funded + Δ End</strong> (Begin/Remaining = funded path; Δ End vs $5K-only)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -774,8 +883,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (v.version === "0.9.1") {
-              setupHelp.textContent = "You are on the current release ($15K basis · annual sweep). Hard-refresh (Cmd+Shift+R) if Cash still shows $10,000.";
+            if (["0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
+              setupHelp.textContent = "You are on the current release (Plan = one funded path: Begin → Remaining by calendar year). Hard-refresh (Cmd+Shift+R) if Plan still shows Year 1 / $15K.";
               setupHelp.className = "brief setup-version-help setup-version-ok";
             } else {
               setupHelp.textContent = "Your dashboard is behind. Double-click Update and Open Dashboard.command in Finder (no Terminal typing).";
@@ -1177,30 +1286,13 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       bindExtendedFillToggle(el, pick, td);
     }
 
-    function updateStatusBar(td, summary) {
-      const verdictEl = document.getElementById("status-verdict-text");
-      const dailyEl = document.getElementById("status-daily-text");
-      const cashEl = document.getElementById("status-cash-text");
-      const goalEl = document.getElementById("status-goal-text");
-      if (td && verdictEl) {
-        verdictEl.textContent = (td.verdict || "—").replace("_", " ");
-        document.getElementById("status-verdict-chip")?.classList.toggle("status-go", td.verdict === "GO");
-        document.getElementById("status-verdict-chip")?.classList.toggle("status-caution", td.verdict === "CAUTION");
-        document.getElementById("status-verdict-chip")?.classList.toggle("status-nogo", td.verdict === "NO_GO");
-      }
-      const weeklyEl = document.getElementById("status-weekly-text");
-      const weeklyChip = document.getElementById("status-weekly-chip");
-      if (td?.phase1b?.weekly_progress && weeklyEl) {
-        weeklyEl.textContent = td.phase1b.weekly_progress.label || "—";
-        weeklyChip?.classList.toggle("status-weekly-met", !!td.phase1b.weekly_progress.weekly_target_met);
-      }
-      if (summary && dailyEl) {
-        const todayNet = summary.today_realized_net ?? 0;
-        const target = summary.daily_target ?? 200;
-        dailyEl.textContent = `$${fmt(todayNet)} / $${fmt(target)}`;
-        if (cashEl) cashEl.textContent = "$" + fmt(summary.tradable_cash);
-        if (goalEl) goalEl.textContent = fmtPct(summary.goal_pct);
-      }
+    function updateStatusBar(td, _summary) {
+      // Top status chips are owned by loadPaperAutomation (paper equity / fills / pass).
+      // Only sync GO/CAUTION/NO_GO styling from trading-day verdict.
+      if (!td) return;
+      document.getElementById("status-verdict-chip")?.classList.toggle("status-go", td.verdict === "GO");
+      document.getElementById("status-verdict-chip")?.classList.toggle("status-caution", td.verdict === "CAUTION");
+      document.getElementById("status-verdict-chip")?.classList.toggle("status-nogo", td.verdict === "NO_GO");
     }
 
     function switchDashboardView(view) {
@@ -1606,7 +1698,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const panel = document.getElementById("capital-builder-panel");
       panel?.classList.toggle("kill-switch-on", !!cb.kill_switch_active);
       document.getElementById("cb-phase-label").textContent =
-        `Phase 1: $${fmt(cb.phase1_start)} → $${fmt(cb.phase1_target)}`;
+        `Plan: $${fmt(cb.phase1_start)} → $${fmt(cb.phase1_target)}`;
       const badge = document.getElementById("cb-milestone-badge");
       if (badge) {
         badge.textContent = cb.milestone_reached ? "Milestone reached" : "";
@@ -1652,6 +1744,123 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
     }
 
+    function syncStopProcessUi(active) {
+      const stopBtn = document.getElementById("stop-process-btn");
+      const resumeBtn = document.getElementById("resume-process-btn");
+      const killLabel = document.getElementById("paper-kill-label");
+      const pill = document.getElementById("execution-mode-pill");
+      if (stopBtn) {
+        stopBtn.classList.toggle("is-stopped", !!active);
+        stopBtn.textContent = active ? "STOPPED" : "STOP PROCESS";
+        stopBtn.disabled = !!active;
+      }
+      if (resumeBtn) resumeBtn.hidden = !active;
+      if (killLabel) killLabel.textContent = active ? "Kill switch: ON" : "Kill switch: OFF";
+      if (pill) {
+        pill.textContent = active ? "STOPPED" : "PAPER";
+        pill.classList.toggle("mode-pill-stopped", !!active);
+      }
+      document.body.classList.toggle("automation-stopped", !!active);
+    }
+
+    function renderPaperAutomation(paper, td) {
+      const gate = paper?.balances?.gate_approved || {};
+      const all = paper?.balances?.all_signals || {};
+      const todayGate = paper?.today?.gate_approved || {};
+      const sb = paper?.scoreboard || {};
+      const arm = sb.arms?.gate_approved || {};
+      const pick = td?.top_pick;
+
+      const setTxt = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = v;
+      };
+
+      setTxt("paper-session-label", `Session ${paper?.session_date_et || "—"} ET`);
+      setTxt("paper-gate-equity", gate.equity != null ? `$${fmt(gate.equity)}` : "—");
+      setTxt("paper-all-equity", all.equity != null ? `$${fmt(all.equity)}` : "—");
+      setTxt(
+        "paper-today-net",
+        todayGate.net_pnl != null ? `$${fmt(todayGate.net_pnl)}` : "$0"
+      );
+      setTxt("paper-window-fills", String(arm.fills ?? 0));
+      setTxt("paper-pass-flag", sb.paper_pass ? "PASS" : "Not yet");
+
+      // Status bar (automation-focused)
+      setTxt("status-verdict-text", todayGate.status || paper?.execution_mode || "paper");
+      setTxt("status-daily-text", gate.equity != null ? `$${fmt(gate.equity)}` : "—");
+      setTxt("status-weekly-text", `${arm.fills ?? 0} fills`);
+      setTxt("status-cash-text", gate.settled_cash != null ? `$${fmt(gate.settled_cash)}` : "—");
+      setTxt("status-goal-text", sb.paper_pass ? "Yes" : "No");
+
+      const ticker = todayGate.ticker || pick?.ticker;
+      setTxt("auto-selected-ticker", ticker || "—");
+      const statusBits = [
+        todayGate.status || "no_session",
+        todayGate.scenario || "",
+        todayGate.allow_trade === false ? "gate blocked" : "",
+        todayGate.allow_trade === true ? "gate open" : "",
+      ].filter(Boolean);
+      setTxt("auto-selected-status", statusBits.join(" · ") || "Waiting for next session…");
+
+      const whyParts = [];
+      if (pick?.ticker) whyParts.push(`Ranked #1: ${pick.ticker}`);
+      if (todayGate.ma_score != null) whyParts.push(`MA score ${todayGate.ma_score}`);
+      if (todayGate.day_gate_mode) whyParts.push(`Day gate mode: ${todayGate.day_gate_mode}`);
+      if (todayGate.detail) whyParts.push(todayGate.detail);
+      else if (!ticker) whyParts.push("No top pick yet — morning prep runs 4:00 AM PT on trading days.");
+      setTxt("auto-selected-why", whyParts.join(" — "));
+
+      const buy = pick?.limit_buy_price ?? pick?.recommended_entry ?? todayGate.entry_price;
+      const sell = pick?.limit_sell_price ?? pick?.target_price ?? todayGate.exit_price;
+      const stop = pick?.stop_price;
+      const shares = todayGate.shares ?? pick?.recommended_shares;
+      setTxt("auto-lvl-buy", buy != null ? `$${fmt(buy)}` : "—");
+      setTxt("auto-lvl-sell", sell != null ? `$${fmt(sell)}` : "—");
+      setTxt("auto-lvl-stop", stop != null ? `$${fmt(stop)}` : "—");
+      setTxt("auto-lvl-shares", shares != null ? String(shares) : "—");
+
+      syncStopProcessUi(!!paper?.kill_switch_active);
+    }
+
+    function renderPaperTransactions(sessions) {
+      const body = document.getElementById("paper-tx-body");
+      if (!body) return;
+      if (!sessions?.length) {
+        body.innerHTML =
+          '<tr><td colspan="7" class="empty">No paper sessions yet — first trading day Mon Oct 20.</td></tr>';
+        return;
+      }
+      body.innerHTML = sessions.map((r) => `
+        <tr>
+          <td>${r.session_date_et || "—"}</td>
+          <td>${r.account_name || "—"}</td>
+          <td><strong>${r.ticker || "—"}</strong></td>
+          <td>${r.status || "—"}</td>
+          <td>${r.exit_reason || r.scenario || "—"}</td>
+          <td>${r.net_pnl != null ? "$" + fmt(r.net_pnl) : "—"}</td>
+          <td class="brief">${r.detail || ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadPaperAutomation() {
+      try {
+        const [paper, sessions, td] = await Promise.all([
+          api("/api/paper/status"),
+          api("/api/paper/sessions?limit=40"),
+          api("/api/trading-day/status").catch(() => null),
+        ]);
+        renderPaperAutomation(paper, td);
+        renderPaperTransactions(sessions.sessions || []);
+        return paper;
+      } catch (err) {
+        const el = document.getElementById("auto-selected-status");
+        if (el) el.textContent = err.message || "Paper status failed";
+        return null;
+      }
+    }
+
     async function updateKillSwitch(active, sourceInput) {
       const inputs = [
         document.getElementById("kill-switch-input"),
@@ -1667,9 +1876,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         });
         inputs.forEach((el) => { el.checked = active; });
         document.getElementById("cb-kill-switch-label").textContent = active ? "ON" : "OFF";
-        toast(active ? "Kill switch ON — no new entries" : "Kill switch cleared");
+        syncStopProcessUi(active);
+        toast(active ? "STOP PROCESS — automation blocked" : "Automation resumed");
         await loadTradingDay();
         await loadCapitalBuilder();
+        await loadPaperAutomation();
       } catch (err) {
         inputs.forEach((el) => { el.checked = !active; });
         toast(err.message || "Kill switch update failed", 6000);
@@ -1710,6 +1921,78 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
     }
 
+    function renderOpsAudit(events) {
+      const body = document.getElementById("ops-audit-body");
+      if (!body) return;
+      if (!events?.length) {
+        body.innerHTML = '<tr><td colspan="5" class="empty">No audit events yet.</td></tr>';
+        return;
+      }
+      body.innerHTML = events.map((e) => `
+        <tr class="${e.kind === "TEST" ? "audit-row-test" : ""}">
+          <td>${e.created_at || "—"}</td>
+          <td><strong>${e.kind || "—"}</strong></td>
+          <td>${e.title || "—"}</td>
+          <td>${e.affects_pnl ? "Yes" : "No"}</td>
+          <td class="brief">${e.detail || ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadOpsAudit() {
+      try {
+        const data = await api("/api/audit?limit=50");
+        renderOpsAudit(data.events || []);
+      } catch (_) {
+        renderOpsAudit([]);
+      }
+    }
+
+    function renderFundingPlan(fp) {
+      if (!fp) return;
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt("funding-phase-label", fp.phase_label || "$5,000 → $20,000");
+      setTxt("funding-rh-date", fp.rh_transition?.earliest_date || "—");
+      setTxt("funding-rh-amt", fp.rh_transition?.amount != null ? `+$${fmt(fp.rh_transition.amount)}` : "+$5,000");
+      const next = fp.next_funding;
+      setTxt(
+        "funding-next",
+        next
+          ? `${next.date}: +$${fmt(next.cash_in)} (${next.stage})`
+          : "None scheduled"
+      );
+      setTxt("funding-paper-pass", fp.scoreboard?.paper_pass ? "PASS" : "Not yet");
+      const note = document.getElementById("funding-plan-note");
+      if (note) note.textContent = fp.notes || note.textContent;
+      const body = document.getElementById("funding-plan-body");
+      if (!body) return;
+      const stages = fp.stages || [];
+      if (!stages.length) {
+        body.innerHTML = '<tr><td colspan="6" class="empty">No funding stages.</td></tr>';
+        return;
+      }
+      body.innerHTML = stages.map((r) => `
+        <tr>
+          <td>${r.date || "—"}</td>
+          <td><strong>${r.stage || "—"}</strong></td>
+          <td>${r.cash_in ? "+$" + fmt(r.cash_in) : "—"}</td>
+          <td>${r.invested_after != null ? "$" + fmt(r.invested_after) : "—"}</td>
+          <td>${r.status_hint || "—"}</td>
+          <td class="brief">${r.gate || ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadFundingPlan() {
+      try {
+        const fp = await api("/api/funding-plan");
+        renderFundingPlan(fp);
+        return fp;
+      } catch (_) {
+        return null;
+      }
+    }
+
     async function loadSummary() {
       try {
         const s = await api("/api/summary");
@@ -1723,6 +2006,21 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         document.getElementById("goal-label").textContent =
           `$${fmt(s.tradable_cash)} of $${fmt(s.goal_target)} goal`;
         document.getElementById("tradable-cash").textContent = "$" + fmt(s.tradable_cash);
+        const ls = s.ledger_source || "paper";
+        const setAcct = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        setAcct("acct-ledger-source", ls);
+        setAcct("acct-paper-start", "$" + fmt(s.paper_starting_cash ?? 5000));
+        if (s.paper_balance) {
+          setAcct("acct-paper-equity", "$" + fmt(s.paper_balance.equity));
+          setAcct("acct-paper-settled", "$" + fmt(s.paper_balance.settled_cash));
+          setAcct("acct-paper-unsettled", "$" + fmt(s.paper_balance.unsettled_cash));
+        }
+        const note = document.getElementById("ledger-source-note");
+        if (note) {
+          note.textContent = ls === "paper"
+            ? "Paper book starts at $5,000 and updates from paper fills. TEST audit rows never change this balance. When Robinhood is connected, this becomes a read-only mirror of RH."
+            : "Ledger source is Robinhood — dashboard balance/audit are mirrors of the broker (source of truth).";
+        }
         document.getElementById("original-basis").textContent = "$" + fmt(s.original_basis);
 
         const dailyTarget = s.daily_target ?? 200;
@@ -2765,23 +3063,45 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     async function loadTenYearPlan() {
       const data = await api("/api/growth-plan/ten-year");
       const a = data.assumptions || {};
+      const cashLines = (a.cash_schedule || []).map((x) =>
+        `${x.date}: ${x.stage} +$${fmt(x.amount)} → $${fmt(x.invested_after)} invested`
+      );
+      const cashBlock = cashLines.length
+        ? cashLines.join("<br>&nbsp;&nbsp;")
+        : (a.injection_schedule || [])
+            .map((x) => x.label || `wk ${x.week_offset}: +$${fmt(x.amount)}`)
+            .join(" · ");
       document.getElementById("plan-assumptions").innerHTML = [
         `<strong>Assumptions</strong> (planning model — see Plan tab disclaimer)`,
-        `$${fmt(data.starting_basis)} start · ${a.hit_rate_pct}% hit · ${a.tradeable_days_per_week} tradeable days/wk`,
-        `Annual ${a.sweep_rate_pct}% sweep · ${a.capital_injection || "—"} ($${fmt(a.injection_amount || 0)} at week ${a.injection_week || "—"})`,
+        `<strong>$${fmt(data.starting_basis)} start</strong> · RH CASH live earliest <strong>${a.rh_live_date || "2026-12-01"}</strong> (after Oct–Nov paper pass)`,
+        `${a.hit_rate_pct}% hit · ${a.tradeable_days_per_week} tradeable days/wk · ≤${a.sessions_per_week_cap || 5} sessions/wk · Annual ${a.sweep_rate_pct}% sweep`,
+        `${a.deposit_cadence || "+$5K every ~30 sessions to $20K"} · ${a.account_mode || a.settlement || "CASH / unlevered"}`,
+        `<strong>Cash schedule</strong> (earliest sketches · evidence-gated):<br>&nbsp;&nbsp;${cashBlock}`,
         `${a.one_trade_per_day ? "One #1 pick/day" : ""} · ${a.second_trade || ""}`,
       ].join("<br>");
       document.getElementById("plan-summary").textContent = data.summary || "";
       const mtg = data.months_to_goal || {};
-      document.getElementById("plan-months-base").textContent =
-        mtg.base != null ? `${(mtg.base / 12).toFixed(1)} yr (${mtg.base} mo)` : ">10 yr";
-      document.getElementById("plan-months-inj").textContent =
-        mtg.injection != null ? `${(mtg.injection / 12).toFixed(1)} yr (${mtg.injection} mo)` : ">10 yr";
+      const gy = data.goal_year || {};
+      const planMonthsEl = document.getElementById("plan-months-inj");
+      if (planMonthsEl) {
+        planMonthsEl.textContent =
+          gy.injection != null
+            ? `${gy.injection} (${mtg.injection != null ? (mtg.injection / 12).toFixed(1) + " yr" : "—"})`
+            : (mtg.injection != null ? `${(mtg.injection / 12).toFixed(1)} yr` : ">2037");
+      }
       const years = data.years || [];
-      const y10 = years.find((r) => r.year === 10) || years[years.length - 1];
-      if (y10) {
-        document.getElementById("plan-y10-base").textContent = "$" + fmt(y10.base?.end_balance);
-        document.getElementById("plan-y10-inj").textContent = "$" + fmt(y10.injection?.end_balance);
+      const y2026 = years.find((r) => r.year === 2026);
+      const y2027 = years.find((r) => r.year === 2027);
+      const beginEl = document.getElementById("plan-begin-2026");
+      if (beginEl && y2026) beginEl.textContent = "$" + fmt(y2026.injection?.start_balance);
+      const depEl = document.getElementById("plan-dep-2027");
+      if (depEl && y2027) depEl.textContent = "+$" + fmt(y2027.injection?.capital_injection);
+      const yLast = years[years.length - 1];
+      if (yLast) {
+        const injLbl = document.getElementById("plan-y10-inj-label");
+        if (injLbl) injLbl.textContent = `${yLast.year} remaining`;
+        const y10inj = document.getElementById("plan-y10-inj");
+        if (y10inj) y10inj.textContent = "$" + fmt(yLast.injection?.end_balance);
       }
       const tbody = document.getElementById("plan-table-body");
       if (!years.length) {
@@ -2789,24 +3109,39 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         return;
       }
       tbody.innerHTML = years.map((row) => {
-        const b = row.base || {};
-        const inj = row.injection || {};
-        const goalMilestone = (inj.goal_pct || 0) >= 100 ? " plan-row-goal" : "";
-        const injCell = inj.capital_injection > 0
-          ? `$${fmt(inj.capital_injection)}`
-          : "—";
+        // Funded path = your plan (Begin/Remaining). Base path only used for Δ End.
+        const p = row.injection || {};
+        const base = row.base || {};
+        const begin = Number(p.start_balance || 0);
+        const growth = Number(p.gross_production || 0);
+        const sweep = Number(p.annual_sweep || 0);
+        const remaining = Number(p.end_balance || 0);
+        const depositsShow = Number(p.capital_injection || 0);
+        const yearEnd = remaining + sweep;
+        const growthPct = begin > 0 ? (growth / begin) * 100 : 0;
+        const growthCls = growth >= 0 ? "plan-pnl-pos" : "plan-pnl-neg";
+        const delta = Number(row.advantage_end_balance != null
+          ? row.advantage_end_balance
+          : (remaining - Number(base.end_balance || 0)));
+        const deltaCls = delta >= 0 ? "plan-advantage" : "metric negative";
+        const goalMilestone = (p.goal_pct || 0) >= 100 ? " plan-row-goal" : "";
+        const depCell = depositsShow > 0 ? `$${fmt(depositsShow)}` : "—";
+        const growthSign = growth >= 0 ? "+" : "";
+        const pctSign = growthPct >= 0 ? "+" : "";
+        const deltaSign = delta >= 0 ? "+" : "";
+        const deploy = `${p.trade_deploy_label || "—"} · $${fmt(p.trade_net_target)}/tr`;
         return `<tr class="${goalMilestone}">
-          <td><strong>Year ${row.year}</strong></td>
-          <td>$${fmt(b.end_balance)}</td>
-          <td>${fmtPct(b.goal_pct)}</td>
-          <td>$${fmt(b.gross_production)}</td>
-          <td>$${fmt(b.annual_sweep)}</td>
-          <td class="plan-inj-cell">$${fmt(inj.end_balance)}</td>
-          <td>${fmtPct(inj.goal_pct)}</td>
-          <td>${inj.trade_deploy_label || "—"} · $${fmt(inj.trade_net_target)}/tr</td>
-          <td>${injCell}</td>
-          <td class="plan-advantage">+$${fmt(row.advantage_end_balance)}</td>
-          <td class="brief">${inj.notes || b.notes || "—"}</td>
+          <td><strong>${row.year}</strong></td>
+          <td>$${fmt(begin)}</td>
+          <td><strong>$${fmt(remaining)}</strong></td>
+          <td class="${growthCls}">${growthSign}$${fmt(growth)}</td>
+          <td class="${growthCls}">${pctSign}${growthPct.toFixed(1)}%</td>
+          <td>$${fmt(yearEnd)}</td>
+          <td>$${fmt(sweep)}</td>
+          <td>${deploy}</td>
+          <td>${depCell}</td>
+          <td class="${deltaCls}">${deltaSign}$${fmt(Math.abs(delta))}</td>
+          <td class="brief">${p.notes || "—"}</td>
         </tr>`;
       }).join("");
     }
@@ -2818,8 +3153,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       stats.innerHTML = `
         <div class="card"><h2>Current</h2><div class="metric small">$${fmt(s.current_balance)}</div></div>
         <div class="card"><h2>Goal %</h2><div class="metric small">${fmtPct(s.current_goal_pct)}</div></div>
-        <div class="card"><h2>Growth plan</h2><div class="metric small">${s.scenarios?.growth_plan_annual?.months_to_goal != null ? s.scenarios.growth_plan_annual.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
-        <div class="card"><h2>+$10K @ 6 mo</h2><div class="metric small">${s.scenarios?.growth_plan_injection?.months_to_goal != null ? s.scenarios.growth_plan_injection.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
+        <div class="card"><h2>$5K plan</h2><div class="metric small">${s.scenarios?.growth_plan_annual?.months_to_goal != null ? s.scenarios.growth_plan_annual.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
+        <div class="card"><h2>Funded → $20K</h2><div class="metric small">${s.scenarios?.growth_plan_injection?.months_to_goal != null ? s.scenarios.growth_plan_injection.months_to_goal.toFixed(0) + " mo" : "—"}</div></div>
       `;
       renderScenarioChart(s);
       const tbody = document.getElementById("scenario-table");
@@ -2836,8 +3171,8 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       leg.innerHTML = `
         <span class="legend-item"><span class="swatch actual"></span> Actual (journal)</span>
         <span class="legend-item"><span class="swatch pace"></span> Journal pace</span>
-        <span class="legend-item"><span class="swatch growth"></span> Growth plan (annual)</span>
-        <span class="legend-item"><span class="swatch injection"></span> +$10K @ 6 mo</span>
+        <span class="legend-item"><span class="swatch growth"></span> $5K plan (annual)</span>
+        <span class="legend-item"><span class="swatch injection"></span> Funded → $20K</span>
       `;
     }
 
@@ -3051,8 +3386,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
 
     async function refreshAll() {
       await Promise.allSettled([
+        loadPaperAutomation(),
         loadTradingDay(),
         loadSummary(),
+        loadOpsAudit(),
+        loadFundingPlan(),
         loadCapitalBuilder(),
         loadScenario(),
         loadTenYearPlan(),
@@ -3373,6 +3711,15 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
 
     document.getElementById("cb-kill-switch-input")?.addEventListener("change", (e) => {
       updateKillSwitch(e.target.checked, e.target);
+    });
+
+    document.getElementById("stop-process-btn")?.addEventListener("click", () => {
+      if (!confirm("STOP PROCESS — block all new automated entries until you Resume?")) return;
+      updateKillSwitch(true, null);
+    });
+
+    document.getElementById("resume-process-btn")?.addEventListener("click", () => {
+      updateKillSwitch(false, null);
     });
 
     ["plan-ticker", "plan-price", "plan-shares"].forEach((id) => {

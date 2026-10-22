@@ -19,6 +19,8 @@ from investment_agent.strategy_models import target_pct_for_dollars
 
 
 def test_daily_profit_target_split_lot_tiers():
+    assert daily_profit_target(5_000) == 75
+    assert daily_profit_target(9_999) == 75
     assert daily_profit_target(10_000) == 150
     assert daily_profit_target(14_999) == 150
     assert daily_profit_target(15_000) == 200
@@ -51,9 +53,11 @@ def test_capital_tier_single_trade_deploy_at_20k():
 
 def test_growth_plan_milestones():
     rows = growth_plan_milestones(max_balance=30_000)
-    assert rows[0]["balance_at_least"] == 15_000.0
-    assert rows[0]["daily_target"] == 200.0
-    assert rows[0]["weekly_target"] == 600.0
+    assert rows[0]["balance_at_least"] == 5_000.0
+    assert rows[0]["daily_target"] == 75.0
+    assert rows[0]["weekly_target"] == 225.0
+    row_10k = next(r for r in rows if r["balance_at_least"] == 10_000.0)
+    assert row_10k["daily_target"] == 150.0
     row_20k = next(r for r in rows if r["balance_at_least"] == 20_000.0)
     assert row_20k["daily_target"] == 300.0
     assert row_20k["structure_label"] == "$20K"

@@ -364,7 +364,7 @@ def build_scenario_visualizer(
     inj = scenarios.get("growth_plan_injection", {})
     if inj.get("months_to_goal"):
         summary_parts.append(
-            f"With +$10K at 6 mo: ~{inj['months_to_goal']:.0f} months to $5M."
+            f"With funded ladder to $20K: ~{inj['months_to_goal']:.0f} months to $5M."
         )
 
     return {

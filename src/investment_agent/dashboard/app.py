@@ -139,6 +139,25 @@ from investment_agent.risk_engine import (
     set_kill_switch,
     auto_engaged_kill_switch,
 )
+from investment_agent.broker.client import StubBrokerClient, fixture_paper_snapshot
+from investment_agent.broker.sync import latest_broker_balance, sync_from_client
+from investment_agent.execution.armed_plan import (
+    PlanStatus,
+    get_armed_plan_for_session,
+    set_armed_plan_status,
+)
+from investment_agent.execution.propose import propose_armed_plan, pdt_status_payload
+from investment_agent.execution.paper_runner import paper_status_payload, run_paper_tick
+from investment_agent.execution.paper_ledger import list_session_logs, paper_scoreboard
+from investment_agent.execution.health_check import run_health_check
+from investment_agent.execution.ops_audit import (
+    KIND_TEST,
+    get_ledger_source,
+    list_audit_events,
+    log_test_suite_results,
+)
+from investment_agent.execution.paper_sim import resolve_fill_mode
+from investment_agent.funding_plan import build_funding_plan_payload
 from investment_agent.trade_proposal import (
     REJECTION_REASONS,
     approve_proposal,
@@ -160,6 +179,8 @@ REPO_ROOT = DASHBOARD_DIR.parents[2]
 ONE_PAGER_PDF = REPO_ROOT / "docs" / "DASHBOARD_ONE_PAGER.pdf"
 OPERATOR_CHECKLIST_PDF = REPO_ROOT / "docs" / "DAILY_OPERATOR_CHECKLIST.pdf"
 templates = Jinja2Templates(directory=str(DASHBOARD_DIR / "templates"))
+templates.env.auto_reload = True
+templates.env.cache = None
 
 app = FastAPI(title="AI Investment Agent Dashboard", version=version_info()["version"])
 
@@ -255,6 +276,17 @@ class PinPickBody(BaseModel):
 
 class KillSwitchBody(BaseModel):
     active: bool
+
+
+class ArmedPlanProposeBody(BaseModel):
+    replace_existing: bool = True
+    session_date_et: str | None = None
+
+
+class BrokerSyncFixtureBody(BaseModel):
+    equity: float = 5_000.0
+    cash: float = 5_000.0
+    account_id: str = "rh-paper-fixture-001"
 
 
 class ProposalRejectBody(BaseModel):
@@ -390,7 +422,7 @@ def api_scenario_visualizer(
 
 @app.get("/api/growth-plan/ten-year")
 def api_growth_plan_ten_year() -> dict[str, Any]:
-    """Year 1–10 projection: $15K base vs +$10K injection at ~month 6."""
+    """Year 1–10 projection: $5K base vs staged funding ladder to $20K invested."""
     return build_ten_year_growth_plan()
 
 
@@ -537,7 +569,7 @@ def api_historical_pull(
 @app.get("/api/summary")
 def api_summary(conn=Depends(_db)) -> dict[str, Any]:
     summary = build_dashboard_summary(conn)
-    return summary_to_dict(summary)
+    return summary_to_dict(summary, conn)
 
 
 @app.get("/api/trading-day/status")
@@ -675,6 +707,29 @@ def api_health_db(conn=Depends(_db)) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
 
 
+@app.get("/api/ops/health")
+def api_ops_health(
+    notify: bool = False,
+    conn=Depends(_db),
+) -> dict[str, Any]:
+    """Paper automation health (LaunchAgents on Mac, equity, rank snapshot).
+
+    By default does not send email (dashboard poll). Pass ``?notify=1`` to ping.
+    """
+    return run_health_check(conn, send_notify=bool(notify))
+
+
+@app.get("/api/health")
+def api_health(conn=Depends(_db)) -> dict[str, Any]:
+    """Lightweight liveness + paper fill mode (ops detail at /api/ops/health)."""
+    return {
+        "ok": True,
+        "service": "investment-agent",
+        "fill_mode": resolve_fill_mode(),
+        "ops_health": "/api/ops/health",
+    }
+
+
 @app.post("/api/trading-day/refresh")
 def api_trading_day_refresh(
     conn=Depends(_db),
@@ -765,6 +820,195 @@ def api_risk_kill_switch(
         "kill_switch_active": is_kill_switch_active(conn),
         "status": portfolio_status_dict(snapshot),
     }
+
+
+@app.get("/api/broker/status")
+def api_broker_status(conn=Depends(_db)) -> dict[str, Any]:
+    """Robinhood mirror + PDT slots (ledger cash when synced)."""
+    pdt = pdt_status_payload(conn)
+    plan = get_armed_plan_for_session(conn, pdt["session_date_et"])
+    return {
+        "ok": True,
+        "pdt": pdt,
+        "armed_plan": plan.to_payload() if plan else None,
+        "kill_switch_active": is_kill_switch_active(conn),
+        "latest_balance": latest_broker_balance(conn),
+    }
+
+
+@app.post("/api/broker/sync/fixture")
+def api_broker_sync_fixture(
+    body: BrokerSyncFixtureBody | None = None,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Dry-run sync using a fixture snapshot until RH credentials are wired."""
+    opts = body or BrokerSyncFixtureBody()
+    client = StubBrokerClient(
+        fixture_paper_snapshot(
+            equity=opts.equity,
+            cash=opts.cash,
+            account_id=opts.account_id,
+        )
+    )
+    result = sync_from_client(conn, client)
+    conn.commit()
+    return result
+
+
+@app.get("/api/execution/pdt")
+def api_execution_pdt(conn=Depends(_db)) -> dict[str, Any]:
+    return pdt_status_payload(conn)
+
+
+@app.get("/api/execution/armed-plan")
+def api_execution_armed_plan(conn=Depends(_db)) -> dict[str, Any]:
+    day = today_et_str()
+    plan = get_armed_plan_for_session(conn, day)
+    return {
+        "session_date_et": day,
+        "plan": plan.to_payload() if plan else None,
+        "pdt": pdt_status_payload(conn, day),
+    }
+
+
+@app.post("/api/execution/armed-plan/propose")
+def api_execution_armed_plan_propose(
+    body: ArmedPlanProposeBody | None = None,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    opts = body or ArmedPlanProposeBody()
+    result = propose_armed_plan(
+        conn,
+        session_date_et=opts.session_date_et,
+        replace_existing=opts.replace_existing,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=409, detail=result.get("error") or "Propose failed")
+    conn.commit()
+    return result
+
+
+@app.post("/api/execution/armed-plan/arm")
+def api_execution_armed_plan_arm(
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Mark today's proposed plan as armed (no broker submit yet)."""
+    if is_kill_switch_active(conn):
+        raise HTTPException(status_code=409, detail="Kill switch active — cannot arm")
+    day = today_et_str()
+    plan = get_armed_plan_for_session(conn, day)
+    if not plan:
+        raise HTTPException(status_code=404, detail="No armed plan for today — propose first")
+    pdt = pdt_status_payload(conn, day)
+    if not pdt.get("allowed"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"PDT blocked: {pdt.get('reason')} (used {pdt.get('used')}/{pdt.get('cap')})",
+        )
+    set_armed_plan_status(conn, plan.plan_uuid, PlanStatus.ARMED)
+    conn.commit()
+    refreshed = get_armed_plan_for_session(conn, day)
+    return {"ok": True, "plan": refreshed.to_payload() if refreshed else None, "pdt": pdt}
+
+
+class PaperTickBody(BaseModel):
+    session_date_et: str | None = None
+    force_complete: bool = False
+    starting_cash: float = 5_000.0
+
+
+@app.get("/api/paper/status")
+def api_paper_status(conn=Depends(_db)) -> dict[str, Any]:
+    """Internal paper ledger status (no Robinhood)."""
+    return paper_status_payload(conn)
+
+
+@app.get("/api/paper/scoreboard")
+def api_paper_scoreboard(conn=Depends(_db)) -> dict[str, Any]:
+    return paper_scoreboard(conn)
+
+
+@app.get("/api/paper/sessions")
+def api_paper_sessions(
+    account: str | None = None,
+    since: str | None = "2026-10-20",
+    limit: int = 90,
+    conn=Depends(_db),
+) -> dict[str, Any]:
+    rows = list_session_logs(conn, account_name=account, since=since, limit=limit)
+    return {"ok": True, "count": len(rows), "sessions": rows}
+
+
+@app.post("/api/paper/tick")
+def api_paper_tick(
+    body: PaperTickBody | None = None,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Run one paper worker cycle (manual / test)."""
+    opts = body or PaperTickBody()
+    result = run_paper_tick(
+        conn,
+        session_date_et=opts.session_date_et,
+        starting_cash=opts.starting_cash,
+        force_complete=opts.force_complete,
+    )
+    conn.commit()
+    return result
+
+
+class AuditTestSuiteBody(BaseModel):
+    suite_name: str = "local"
+    passed: int = 0
+    failed: int = 0
+    total: int = 0
+    notes: str | None = None
+    cases: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@app.get("/api/funding-plan")
+def api_funding_plan(conn=Depends(_db)) -> dict[str, Any]:
+    """Paper → RH transition + staged $5k deposit schedule (gated dates)."""
+    return build_funding_plan_payload(conn)
+
+
+@app.get("/api/audit")
+def api_audit_list(
+    kind: str | None = None,
+    limit: int = 100,
+    conn=Depends(_db),
+) -> dict[str, Any]:
+    """Ops audit log. TEST rows never affect P&L."""
+    rows = list_audit_events(conn, kind=kind, limit=limit)
+    return {
+        "ok": True,
+        "ledger_source": get_ledger_source(conn),
+        "count": len(rows),
+        "events": rows,
+    }
+
+
+@app.post("/api/audit/test-suite")
+def api_audit_test_suite(
+    body: AuditTestSuiteBody,
+    conn=Depends(_db),
+    _: None = Depends(_require_api_key),
+) -> dict[str, Any]:
+    """Record a pytest/smoke run as TEST (excluded from Account W/L)."""
+    event_id = log_test_suite_results(
+        conn,
+        suite_name=body.suite_name,
+        passed=body.passed,
+        failed=body.failed,
+        total=body.total,
+        details=body.cases,
+        notes=body.notes,
+    )
+    conn.commit()
+    return {"ok": True, "id": event_id, "kind": KIND_TEST, "affects_pnl": False}
 
 
 @app.get("/api/capital-builder/progress")
