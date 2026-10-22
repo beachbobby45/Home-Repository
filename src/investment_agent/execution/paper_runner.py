@@ -340,7 +340,7 @@ def _process_arm(
         try:
             record_day_trade(
                 conn,
-                session_date_et=day,
+                session_date=day,
                 ticker=str(ticker),
                 equity_at_trade=float(applied["equity_after"]),
                 notes="paper_gate_approved",
