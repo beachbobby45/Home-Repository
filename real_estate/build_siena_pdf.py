@@ -326,7 +326,7 @@ def build_pdf(path: Path = OUT) -> Path:
             status = "In contract"
         comp_rows.append(
             [
-                comp["address"].replace(" Siena Loop", ""),
+                comp["address"],
                 status.replace("Sold ", "Sold "),
                 money(comp["price"]),
                 f"{comp['living_sf']:,}",
@@ -337,7 +337,7 @@ def build_pdf(path: Path = OUT) -> Path:
     pdf.simple_table(
         ["Address", "Status", "Price", "Living sf", "$/sf", "What matters"],
         comp_rows,
-        [28, 32, 22, 18, 14, 74],
+        [40, 28, 22, 16, 14, 68],
         ["LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "LEFT"],
     )
     pdf.body(

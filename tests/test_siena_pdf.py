@@ -20,7 +20,9 @@ def test_pdf_states_the_conclusion(tmp_path: Path):
     assert "$1,195,000" in text
     assert "$456" in text
     assert "$940,000" in text
-    assert "13978" in text
+    assert "13978 Siena Loop" in text
+    assert "13853 Siena Loop" in text
+    assert "13844 Siena Loop" in text
     assert "Save Our Homes" in text or "homestead" in text.lower()
     assert "not an appraisal" in text.lower()
     pages = subprocess.check_output(["pdfinfo", str(pdf_path)], text=True)
