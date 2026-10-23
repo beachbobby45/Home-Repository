@@ -17,14 +17,31 @@ export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONNOUSERSITE=1
 
 FORCE=0
+PURGE_EVAL=0
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
+    --purge-eval-sim|--purge-2099) PURGE_EVAL=1 ;;
   esac
 done
 
-echo "=== Repair paper cash (starting \$5,000 when no fills) ==="
-"$PY" - <<PY
+if [[ "$PURGE_EVAL" -eq 1 ]]; then
+  echo "=== Purge eval SIM/2099 pollution from live paper ledger ==="
+  "$PY" - <<'PY'
+import json
+from investment_agent.db import connect, init_db
+from investment_agent.execution.paper_ledger import purge_eval_sim_pollution
+
+conn = connect(init_db())
+out = purge_eval_sim_pollution(conn)
+conn.commit()
+print(json.dumps(out, indent=2, default=str))
+conn.close()
+PY
+else
+  echo "=== Repair paper cash (starting \$5,000 when no fills) ==="
+  echo "(If diagnose showed from=2099-01-02 / ticker SIM, re-run with: --purge-eval-sim)"
+  "$PY" - <<PY
 import json
 from investment_agent.db import connect, init_db
 from investment_agent.execution.paper_ledger import repair_virgin_paper_cash
@@ -35,6 +52,7 @@ conn.commit()
 print(json.dumps(out, indent=2, default=str))
 conn.close()
 PY
+fi
 
 echo ""
 echo "=== Paper status (risk cash base) ==="

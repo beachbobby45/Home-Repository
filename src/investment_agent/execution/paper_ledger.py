@@ -305,6 +305,118 @@ def get_paper_balance(conn: sqlite3.Connection, account_name: str) -> dict[str, 
     ).fetchone()
     assert row is not None
     return dict(row)
+
+
+def purge_eval_sim_pollution(
+    conn: sqlite3.Connection,
+    *,
+    starting_cash: float = PAPER_STARTING_CASH,
+) -> dict[str, Any]:
+    """Remove fake eval race-sim trades that landed on the live paper ledger.
+
+    Older ``eval_unattended_full_mac.sh`` runs used throwaway date 2099-01-02 /
+    ticker SIM against the real DB and only deleted session logs — leaving
+    fills + unsettled rows with settle_on in 2099, which pins almost all cash
+    as unsettled forever and collapses the 1% risk cap.
+
+    Current eval uses a temp DB; this cleans residual pollution and restores
+    starting cash when no *real* (non-eval) buy fills remain.
+    """
+    ensure_paper_schema(conn)
+    now = _now_et_iso()
+    start = float(starting_cash)
+
+    unsettled_n = conn.execute(
+        """
+        DELETE FROM paper_unsettled
+        WHERE from_session_date_et LIKE '2099-%'
+           OR (from_session_date_et = '2099-01-02')
+        """
+    ).rowcount
+    # SQLite rowcount can be -1; normalize
+    unsettled_deleted = max(int(unsettled_n or 0), 0)
+
+    fills_n = conn.execute(
+        """
+        DELETE FROM paper_fills
+        WHERE session_date_et LIKE '2099-%'
+           OR UPPER(ticker) = 'SIM'
+        """
+    ).rowcount
+    fills_deleted = max(int(fills_n or 0), 0)
+
+    logs_n = conn.execute(
+        """
+        DELETE FROM paper_session_logs
+        WHERE session_date_et LIKE '2099-%'
+           OR UPPER(COALESCE(ticker, '')) = 'SIM'
+        """
+    ).rowcount
+    logs_deleted = max(int(logs_n or 0), 0)
+
+    real_fills = count_paper_fills(conn)
+    restored: list[str] = []
+    if real_fills == 0:
+        for name in PAPER_ACCOUNTS:
+            conn.execute(
+                "DELETE FROM paper_unsettled WHERE account_name = ?",
+                (name,),
+            )
+            conn.execute(
+                """
+                UPDATE paper_balances
+                SET settled_cash = ?, unsettled_cash = 0, equity = ?, updated_at = ?
+                WHERE account_name = ?
+                """,
+                (start, start, now, name),
+            )
+            conn.execute(
+                "UPDATE paper_accounts SET starting_cash = ? WHERE name = ?",
+                (start, name),
+            )
+            restored.append(name)
+
+    from investment_agent.execution.ops_audit import (
+        LEDGER_SOURCE_PAPER,
+        get_ledger_source,
+        set_ledger_source,
+    )
+
+    src = get_ledger_source(conn)
+    if src != LEDGER_SOURCE_PAPER:
+        src = set_ledger_source(conn, LEDGER_SOURCE_PAPER)
+
+    balances = {
+        n: dict(
+            conn.execute(
+                """
+                SELECT account_name, settled_cash, unsettled_cash, equity, updated_at
+                FROM paper_balances WHERE account_name = ?
+                """,
+                (n,),
+            ).fetchone()
+        )
+        for n in PAPER_ACCOUNTS
+    }
+    return {
+        "ok": True,
+        "unsettled_rows_deleted": unsettled_deleted,
+        "fills_deleted": fills_deleted,
+        "session_logs_deleted": logs_deleted,
+        "real_buy_fills_remaining": real_fills,
+        "balances_restored_to_starting": restored,
+        "starting_cash": start,
+        "ledger_source": src,
+        "balances": balances,
+        "detail": (
+            "Purged eval SIM/2099 pollution from live paper ledger"
+            + (
+                f"; restored ${start:,.0f} settled (no real fills left)"
+                if restored
+                else "; left balances unchanged (real fills remain)"
+            )
+        ),
+    }
     row = conn.execute(
         """
         SELECT account_name, settled_cash, unsettled_cash, equity, updated_at

@@ -21,6 +21,7 @@ from investment_agent.execution.paper_ledger import (
     get_paper_balance,
     next_trading_day_et,
     paper_scoreboard,
+    purge_eval_sim_pollution,
     repair_virgin_paper_cash,
     settle_due_cash,
 )
@@ -121,6 +122,48 @@ class PaperLedgerTests(unittest.TestCase):
         self.assertEqual(g["settled_cash"], 5_000.0)
         self.assertEqual(g["unsettled_cash"], 0.0)
         self.assertEqual(g["equity"], 5_000.0)
+
+    def test_purge_eval_sim_restores_starting_cash(self) -> None:
+        """Old eval wrote 2099/SIM into the live DB — purge must restore $5k."""
+        apply_round_trip(
+            self.conn,
+            account_name=ACCOUNT_GATE,
+            session_date_et="2099-01-02",
+            ticker="SIM",
+            shares=50,
+            entry_price=99.5,
+            exit_price=101.0,
+            buy_fee=DEFAULT_BUY_FEE,
+            sell_fee=DEFAULT_SELL_FEE,
+            fill_ts="2099-01-02T09:35:00-05:00",
+            exit_ts="2099-01-02T10:05:00-05:00",
+        )
+        apply_round_trip(
+            self.conn,
+            account_name=ACCOUNT_ALL,
+            session_date_et="2099-01-02",
+            ticker="SIM",
+            shares=50,
+            entry_price=99.5,
+            exit_price=101.0,
+            buy_fee=DEFAULT_BUY_FEE,
+            sell_fee=DEFAULT_SELL_FEE,
+            fill_ts="2099-01-02T09:35:00-05:00",
+            exit_ts="2099-01-02T10:05:00-05:00",
+        )
+        self.conn.commit()
+        bal = get_paper_balance(self.conn, ACCOUNT_GATE)
+        self.assertLess(bal["settled_cash"], 100)
+        self.assertGreater(bal["unsettled_cash"], 4000)
+
+        out = purge_eval_sim_pollution(self.conn)
+        self.conn.commit()
+        self.assertGreater(out["fills_deleted"], 0)
+        self.assertEqual(out["real_buy_fills_remaining"], 0)
+        self.assertEqual(set(out["balances_restored_to_starting"]), {ACCOUNT_GATE, ACCOUNT_ALL})
+        g = get_paper_balance(self.conn, ACCOUNT_GATE)
+        self.assertEqual(g["settled_cash"], 5_000.0)
+        self.assertEqual(g["unsettled_cash"], 0.0)
 
     def test_repair_refuses_when_fills_exist(self) -> None:
         apply_round_trip(

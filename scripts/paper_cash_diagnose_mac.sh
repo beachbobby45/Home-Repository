@@ -40,6 +40,7 @@ rows = conn.execute(
     ORDER BY settle_on_et, account_name
     """
 ).fetchall()
+eval_pollution = False
 if not rows:
     print("(none)")
 else:
@@ -48,6 +49,12 @@ else:
             f"{r['account_name']}: ${float(r['amount']):.2f} "
             f"from={r['from_session_date_et']} settle_on={r['settle_on_et']}"
         )
+        if str(r["from_session_date_et"] or "").startswith("2099"):
+            eval_pollution = True
+if eval_pollution:
+    print()
+    print("!!! EVAL POLLUTION DETECTED (2099-*) — not a real trade.")
+    print("    Fix:  ./scripts/repair_paper_cash_mac.sh --purge-eval-sim")
 
 print()
 print("=== Recent buy fills ===")
