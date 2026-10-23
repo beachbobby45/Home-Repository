@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from investment_agent.db import connect, init_db
+from investment_agent.execution.ops_audit import LEDGER_SOURCE_JOURNAL, set_ledger_source
 from investment_agent.execution.paper_ledger import (
     ACCOUNT_ALL,
     ACCOUNT_GATE,
@@ -20,6 +21,8 @@ from investment_agent.execution.paper_ledger import (
     get_paper_balance,
     next_trading_day_et,
     paper_scoreboard,
+    purge_eval_sim_pollution,
+    repair_virgin_paper_cash,
     settle_due_cash,
 )
 from investment_agent.execution.paper_sim import simulate_round_trip_5m
@@ -100,6 +103,97 @@ class PaperLedgerTests(unittest.TestCase):
         self.assertEqual(sb["primary_arm"], ACCOUNT_GATE)
         self.assertIn(ACCOUNT_ALL, sb["arms"])
         self.assertIn("checks", sb)
+
+    def test_repair_virgin_zeroed_cash(self) -> None:
+        set_ledger_source(self.conn, LEDGER_SOURCE_JOURNAL)
+        self.conn.execute(
+            """
+            UPDATE paper_balances
+            SET settled_cash = 0, unsettled_cash = 0, equity = 0
+            """
+        )
+        self.conn.commit()
+        out = repair_virgin_paper_cash(self.conn)
+        self.conn.commit()
+        self.assertIn(ACCOUNT_GATE, out["repaired"])
+        self.assertIn(ACCOUNT_ALL, out["repaired"])
+        self.assertEqual(out["ledger_source_after"], "paper")
+        g = get_paper_balance(self.conn, ACCOUNT_GATE)
+        self.assertEqual(g["settled_cash"], 5_000.0)
+        self.assertEqual(g["unsettled_cash"], 0.0)
+        self.assertEqual(g["equity"], 5_000.0)
+
+    def test_purge_eval_sim_restores_starting_cash(self) -> None:
+        """Old eval wrote 2099/SIM into the live DB — purge must restore $5k."""
+        apply_round_trip(
+            self.conn,
+            account_name=ACCOUNT_GATE,
+            session_date_et="2099-01-02",
+            ticker="SIM",
+            shares=50,
+            entry_price=99.5,
+            exit_price=101.0,
+            buy_fee=DEFAULT_BUY_FEE,
+            sell_fee=DEFAULT_SELL_FEE,
+            fill_ts="2099-01-02T09:35:00-05:00",
+            exit_ts="2099-01-02T10:05:00-05:00",
+        )
+        apply_round_trip(
+            self.conn,
+            account_name=ACCOUNT_ALL,
+            session_date_et="2099-01-02",
+            ticker="SIM",
+            shares=50,
+            entry_price=99.5,
+            exit_price=101.0,
+            buy_fee=DEFAULT_BUY_FEE,
+            sell_fee=DEFAULT_SELL_FEE,
+            fill_ts="2099-01-02T09:35:00-05:00",
+            exit_ts="2099-01-02T10:05:00-05:00",
+        )
+        self.conn.commit()
+        bal = get_paper_balance(self.conn, ACCOUNT_GATE)
+        self.assertLess(bal["settled_cash"], 100)
+        self.assertGreater(bal["unsettled_cash"], 4000)
+
+        out = purge_eval_sim_pollution(self.conn)
+        self.conn.commit()
+        self.assertGreater(out["fills_deleted"], 0)
+        self.assertEqual(out["real_buy_fills_remaining"], 0)
+        self.assertEqual(set(out["balances_restored_to_starting"]), {ACCOUNT_GATE, ACCOUNT_ALL})
+        g = get_paper_balance(self.conn, ACCOUNT_GATE)
+        self.assertEqual(g["settled_cash"], 5_000.0)
+        self.assertEqual(g["unsettled_cash"], 0.0)
+
+    def test_repair_refuses_when_fills_exist(self) -> None:
+        apply_round_trip(
+            self.conn,
+            account_name=ACCOUNT_GATE,
+            session_date_et="2026-10-16",
+            ticker="TEST",
+            shares=10,
+            entry_price=100.0,
+            exit_price=101.0,
+            buy_fee=DEFAULT_BUY_FEE,
+            sell_fee=DEFAULT_SELL_FEE,
+            fill_ts="2026-10-16T10:00:00-04:00",
+            exit_ts="2026-10-16T11:00:00-04:00",
+        )
+        self.conn.commit()
+        # Zero cash artificially — must NOT wipe a book that has fills
+        self.conn.execute(
+            """
+            UPDATE paper_balances
+            SET settled_cash = 0, unsettled_cash = 0, equity = 0
+            WHERE account_name = ?
+            """,
+            (ACCOUNT_GATE,),
+        )
+        self.conn.commit()
+        out = repair_virgin_paper_cash(self.conn, force=True)
+        gate_skip = next(s for s in out["skipped"] if s["account_name"] == ACCOUNT_GATE)
+        self.assertEqual(gate_skip["reason"], "has_fills")
+        self.assertNotIn(ACCOUNT_GATE, out["repaired"])
 
 
 class PaperApiTests(unittest.TestCase):
