@@ -136,10 +136,175 @@ def ensure_paper_accounts(
                 """,
                 (name, float(starting_cash), float(starting_cash), now),
             )
+    # Auto-heal zeroed virgin books (no fills) so risk 1% cap is not $0.
+    repair_virgin_paper_cash(conn, starting_cash=starting_cash, auto=True)
+
+
+def count_paper_fills(conn: sqlite3.Connection, account_name: str | None = None) -> int:
+    """Count buy fills (one per round-trip buy leg) for virgin-book detection."""
+    ensure_paper_schema(conn)
+    if account_name:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM paper_fills
+            WHERE account_name = ? AND side = 'buy'
+            """,
+            (account_name,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM paper_fills WHERE side = 'buy'"
+        ).fetchone()
+    return int(row["n"] if row else 0)
+
+
+def repair_virgin_paper_cash(
+    conn: sqlite3.Connection,
+    *,
+    starting_cash: float = PAPER_STARTING_CASH,
+    force: bool = False,
+    auto: bool = False,
+) -> dict[str, Any]:
+    """Restore paper books to starting settled cash when there are no fills.
+
+    Intended case: accounts exist but settled_cash was zeroed somehow while
+    no paper round-trip has ever filled — risk then reports
+    \"1.0% cap ($0)\" and blocks every candidate.
+
+    - force=False (default): only repair an account if it has zero buy fills
+      AND total cash (settled+unsettled) is below $1.
+    - force=True: reset both books to starting_cash even if cash looks fine,
+      but still refuse if any buy fills exist (use a dedicated wipe tool later).
+    - auto=True: quieter path used from ensure_paper_accounts.
+    """
+    ensure_paper_schema(conn)
+    now = _now_et_iso()
+    start = float(starting_cash)
+    repaired: list[str] = []
+    skipped: list[dict[str, Any]] = []
+
+    for name in PAPER_ACCOUNTS:
+        fills = count_paper_fills(conn, name)
+        bal_row = conn.execute(
+            """
+            SELECT settled_cash, unsettled_cash, equity
+            FROM paper_balances WHERE account_name = ?
+            """,
+            (name,),
+        ).fetchone()
+        if bal_row is None:
+            conn.execute(
+                """
+                INSERT INTO paper_balances
+                  (account_name, settled_cash, unsettled_cash, equity, updated_at)
+                VALUES (?, ?, 0, ?, ?)
+                """,
+                (name, start, start, now),
+            )
+            repaired.append(name)
+            continue
+
+        settled = float(bal_row["settled_cash"])
+        unsettled = float(bal_row["unsettled_cash"])
+        total = settled + unsettled
+
+        if fills > 0:
+            skipped.append(
+                {
+                    "account_name": name,
+                    "reason": "has_fills",
+                    "fills": fills,
+                    "settled_cash": settled,
+                    "unsettled_cash": unsettled,
+                }
+            )
+            continue
+
+        needs = force or total < 1.0
+        if not needs:
+            skipped.append(
+                {
+                    "account_name": name,
+                    "reason": "cash_ok",
+                    "settled_cash": settled,
+                    "unsettled_cash": unsettled,
+                }
+            )
+            continue
+
+        # Drop orphan unsettled rows for virgin books so equity matches starting cash.
+        conn.execute(
+            "DELETE FROM paper_unsettled WHERE account_name = ? AND settled_at IS NULL",
+            (name,),
+        )
+        conn.execute(
+            """
+            UPDATE paper_balances
+            SET settled_cash = ?, unsettled_cash = 0, equity = ?, updated_at = ?
+            WHERE account_name = ?
+            """,
+            (start, start, now, name),
+        )
+        conn.execute(
+            """
+            UPDATE paper_accounts SET starting_cash = ? WHERE name = ?
+            """,
+            (start, name),
+        )
+        repaired.append(name)
+
+    # Risk / Account tabs must use the paper ledger, not an empty journal.
+    from investment_agent.execution.ops_audit import (
+        LEDGER_SOURCE_PAPER,
+        get_ledger_source,
+        set_ledger_source,
+    )
+
+    src_before = get_ledger_source(conn)
+    src_after = src_before
+    if src_before != LEDGER_SOURCE_PAPER:
+        src_after = set_ledger_source(conn, LEDGER_SOURCE_PAPER)
+
+    balances: dict[str, Any] = {}
+    for name in PAPER_ACCOUNTS:
+        row = conn.execute(
+            """
+            SELECT account_name, settled_cash, unsettled_cash, equity, updated_at
+            FROM paper_balances WHERE account_name = ?
+            """,
+            (name,),
+        ).fetchone()
+        balances[name] = dict(row) if row else {
+            "account_name": name,
+            "settled_cash": 0.0,
+            "unsettled_cash": 0.0,
+            "equity": 0.0,
+        }
+
+    return {
+        "ok": True,
+        "starting_cash": start,
+        "repaired": repaired,
+        "skipped": skipped,
+        "ledger_source_before": src_before,
+        "ledger_source_after": src_after,
+        "auto": auto,
+        "force": force,
+        "balances": balances,
+    }
 
 
 def get_paper_balance(conn: sqlite3.Connection, account_name: str) -> dict[str, Any]:
     ensure_paper_accounts(conn)
+    row = conn.execute(
+        """
+        SELECT account_name, settled_cash, unsettled_cash, equity, updated_at
+        FROM paper_balances WHERE account_name = ?
+        """,
+        (account_name,),
+    ).fetchone()
+    assert row is not None
+    return dict(row)
     row = conn.execute(
         """
         SELECT account_name, settled_cash, unsettled_cash, equity, updated_at
