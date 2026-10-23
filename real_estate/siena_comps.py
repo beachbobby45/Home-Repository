@@ -11,6 +11,7 @@ total under-roof area and print a much lower number.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -425,6 +426,7 @@ def build_workbook(path: Path) -> Path:
         "Use living area, never total under-roof area. "
         "13394 Siena Loop is not a parcel; this file analyzes 13994 Siena Loop. "
         "The Permits sheet is the Manatee County check of the agent's equipment dates. "
+        "The Sale history sheet is every recorded sale on the 68 Siena Loop houses, from the property appraiser. "
         "Pulled 23 Oct 2026 (Pacific). Desk comparison, not an appraisal."
     )
     how["A2"].alignment = Alignment(wrap_text=True, vertical="top")
@@ -1023,6 +1025,7 @@ def build_workbook(path: Path) -> Path:
         ("One HVAC changeout, issued 30 May 2024, GIS certificate 22 May 2026", "Manatee GIS PermitData and Accela BLD2405-3790", "Live layer and Accela page, 23 Oct 2026"),
         ("No 2017 HVAC permit, no 2020 heater permit, no remodel permit", "Same archive CSVs through 21 Feb 2018, plus the live GIS layer for this parcel and house", "Checked 23 Oct 2026"),
         ("Two offers under $1,000,000, both rejected", "Listing agent, told to our broker. Dollar amounts were not disclosed", "23 Oct 2026"),
+        ("Sale history for all 68 Siena Loop houses", "Manatee County Property Appraiser sales history for each parcel", "Read 23 Oct 2026"),
     ]
     for r, row in enumerate(sources, 2):
         for c, value in enumerate(row, 1):
@@ -1041,6 +1044,80 @@ def build_workbook(path: Path) -> Path:
     src.sheet_properties.pageSetUpPr.fitToPage = True
     src.print_title_rows = "1:1"
     src.oddFooter.right.text = "Page &P of &N"
+
+    # --- Sale history ---
+    history = json.loads((Path(__file__).resolve().parent / "siena_loop_sales.json").read_text())
+    sales_ws = wb.create_sheet("Sale history")
+    sales_ws["A1"] = "Siena Loop sale history, 68 houses"
+    sales_ws["A1"].font = Font(bold=True, size=16, color="1F4E79")
+    sales_ws.merge_cells("A2:J2")
+    sales_ws["A2"] = (
+        "14 houses are still with the original buyer. Developer deeds to Neal Communities and deeds under $1,000 are omitted. "
+        "Lot means the deed was for the vacant lot and the house was built afterward, so that dollar figure is not the finished-home price. "
+        "Qualified No means the appraiser recorded the price and did not call it a normal market sale. "
+        "13844 sold on the MLS on 29 Jan 2026 for $619,425. That deed is not on this list yet. "
+        "Read from the Manatee County Property Appraiser on 23 Oct 2026."
+    )
+    sales_ws["A2"].alignment = Alignment(wrap_text=True, vertical="top")
+    sales_ws.row_dimensions[2].height = 48
+    sale_headers = [
+        "House",
+        "Lot",
+        "Built",
+        "Sale date",
+        "Price",
+        "Deed shows",
+        "Qualified market sale",
+        "Grantee",
+        "Sale number",
+        "Original buyer still owns it",
+    ]
+    for c, title in enumerate(sale_headers, 1):
+        cell = sales_ws.cell(4, c, title)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = WRAP
+    row_i = 5
+    originals = set(history["original_owners"])
+    for home in history["homes"]:
+        count = len(home["sales"])
+        for n, sale in enumerate(home["sales"], 1):
+            values = [
+                int(home["house"]),
+                home["lot"],
+                home["built"],
+                sale["date"],
+                sale["price"],
+                sale["kind"],
+                "Yes" if sale["qualified"] else "No",
+                sale["grantee"],
+                f"{n} of {count}",
+                "Yes" if home["house"] in originals else "No",
+            ]
+            for c, value in enumerate(values, 1):
+                cell = sales_ws.cell(row_i, c, value)
+                cell.alignment = WRAP
+                cell.border = THIN
+            sales_ws.cell(row_i, 5).number_format = MONEY
+            if home["house"] in originals:
+                sales_ws.cell(row_i, 10).fill = SOLD_FILL
+            elif not sale["qualified"]:
+                sales_ws.cell(row_i, 7).fill = WARN_FILL
+            row_i += 1
+    last_sale_row = row_i - 1
+    sales_ws.auto_filter.ref = f"A4:J{last_sale_row}"
+    sales_ws.freeze_panes = "A5"
+    _widths(sales_ws, [12, 8, 10, 14, 14, 14, 22, 42, 14, 28])
+    sales_ws.page_setup.orientation = "landscape"
+    sales_ws.page_setup.fitToPage = True
+    sales_ws.page_setup.fitToWidth = 1
+    sales_ws.page_setup.fitToHeight = 0
+    sales_ws.page_setup.paperSize = sales_ws.PAPERSIZE_TABLOID
+    sales_ws.sheet_properties.pageSetUpPr.fitToPage = True
+    sales_ws.print_title_rows = "4:4"
+    sales_ws.oddHeader.left.text = "Siena Loop deeds, property appraiser"
+    sales_ws.oddFooter.right.text = "Page &P of &N"
+    sales_ws.auto_filter.ref = f"A4:J{last_sale_row}"
 
     # Print defaults for the cover sheet too.
     how.page_setup.orientation = "landscape"

@@ -54,6 +54,7 @@ def test_workbook_formulas_and_subject_row(tmp_path: Path):
         "Risks",
         "Permits",
         "Sources",
+        "Sale history",
     ]
     subject = wb["Subject"]
     assert subject["B1"].value == "13994 Siena Loop"
@@ -96,6 +97,29 @@ def test_workbook_formulas_and_subject_row(tmp_path: Path):
     severities = [risks.cell(row, 2).value for row in range(2, 16)]
     assert severities.count("High") >= 4
     assert "Roof and insurance" in [risks.cell(row, 1).value for row in range(2, 16)]
+
+    history = wb["Sale history"]
+    houses = set()
+    prices_13804 = []
+    prices_13994 = []
+    originals = set()
+    for row in range(5, history.max_row + 1):
+        house = history.cell(row, 1).value
+        if house is None:
+            continue
+        houses.add(house)
+        if history.cell(row, 10).value == "Yes":
+            originals.add(house)
+        if house == 13804:
+            prices_13804.append(history.cell(row, 5).value)
+        if house == 13994:
+            prices_13994.append(history.cell(row, 5).value)
+    assert len(houses) == 68
+    assert len(originals) == 14
+    assert 790_000 in prices_13804
+    assert 714_100 in prices_13804
+    assert 817_700 in prices_13994
+    assert 445_000 in prices_13994
 
     permits = wb["Permits"]
     permit_text = " ".join(

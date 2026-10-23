@@ -1,0 +1,2182 @@
+{
+  "as_of": "2026-10-23",
+  "source": "Manatee County Property Appraiser sales history. Developer deeds to Neal Communities and deeds under $1,000 are omitted.",
+  "original_owners": [
+    "13824",
+    "13840",
+    "13856",
+    "13868",
+    "13880",
+    "13893",
+    "13907",
+    "13911",
+    "13959",
+    "13963",
+    "13967",
+    "13974",
+    "13975",
+    "13978"
+  ],
+  "homes": [
+    {
+      "house": "13804",
+      "lot": 1,
+      "built": 2005,
+      "parcel": "588500059",
+      "living_sf": 2319,
+      "sales": [
+        {
+          "date": "2005-09-28",
+          "year": 2005,
+          "price": 714100,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BLUMBERG, PAUL"
+        },
+        {
+          "date": "2008-08-28",
+          "year": 2008,
+          "price": 425000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HASHMI, SAJJAD A"
+        },
+        {
+          "date": "2017-05-11",
+          "year": 2017,
+          "price": 450000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "DALVANO, ROBERT"
+        },
+        {
+          "date": "2020-05-15",
+          "year": 2020,
+          "price": 404000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "KACHELE, HARALD R"
+        },
+        {
+          "date": "2026-06-11",
+          "year": 2026,
+          "price": 790000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "GEORGE, STEVEN T"
+        }
+      ]
+    },
+    {
+      "house": "13808",
+      "lot": 2,
+      "built": 2006,
+      "parcel": "588500109",
+      "living_sf": 2323,
+      "sales": [
+        {
+          "date": "2006-03-02",
+          "year": 2006,
+          "price": 643400,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "VALENTINO, MICHAEL"
+        },
+        {
+          "date": "2009-09-30",
+          "year": 2009,
+          "price": 300000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SARNA, SUNIL"
+        }
+      ]
+    },
+    {
+      "house": "13812",
+      "lot": 3,
+      "built": 2005,
+      "parcel": "588500159",
+      "living_sf": 2108,
+      "sales": [
+        {
+          "date": "2005-08-08",
+          "year": 2005,
+          "price": 509500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SUTTMILLER, THOMAS E"
+        },
+        {
+          "date": "2006-12-14",
+          "year": 2006,
+          "price": 540000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "JONES, NORMAN LEON"
+        }
+      ]
+    },
+    {
+      "house": "13816",
+      "lot": 4,
+      "built": 2004,
+      "parcel": "588500209",
+      "living_sf": 2328,
+      "sales": [
+        {
+          "date": "2003-06-17",
+          "year": 2003,
+          "price": 96000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HOWARD, WAYNE D"
+        },
+        {
+          "date": "2015-07-16",
+          "year": 2015,
+          "price": 494000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "FABER, ANDREW J"
+        }
+      ]
+    },
+    {
+      "house": "13820",
+      "lot": 5,
+      "built": 2003,
+      "parcel": "588500259",
+      "living_sf": 2314,
+      "sales": [
+        {
+          "date": "2003-05-28",
+          "year": 2003,
+          "price": 96000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "1ST NATIONAL BANK & TRUST AS CUSTODIAN"
+        },
+        {
+          "date": "2005-11-18",
+          "year": 2005,
+          "price": 500000,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Atypical motivation",
+          "grantee": "RAS, ZUDORA"
+        },
+        {
+          "date": "2006-02-28",
+          "year": 2006,
+          "price": 515000,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Atypical motivation",
+          "grantee": "RAS, ZUDORA"
+        },
+        {
+          "date": "2015-08-13",
+          "year": 2015,
+          "price": 458000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "TODD, JANICE F"
+        },
+        {
+          "date": "2021-11-30",
+          "year": 2021,
+          "price": 640000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "ROULUND, TAMERA"
+        },
+        {
+          "date": "2024-07-16",
+          "year": 2024,
+          "price": 620000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "RAWAL, ASEEM OM"
+        }
+      ]
+    },
+    {
+      "house": "13824",
+      "lot": 6,
+      "built": 2003,
+      "parcel": "588500309",
+      "living_sf": 2318,
+      "sales": [
+        {
+          "date": "2003-07-22",
+          "year": 2003,
+          "price": 450600,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MATAZINSKI, ROBERT"
+        }
+      ]
+    },
+    {
+      "house": "13828",
+      "lot": 7,
+      "built": 2003,
+      "parcel": "588500359",
+      "living_sf": 2311,
+      "sales": [
+        {
+          "date": "2002-09-11",
+          "year": 2002,
+          "price": 90000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MINTON, DAYLARD E III"
+        },
+        {
+          "date": "2012-07-30",
+          "year": 2012,
+          "price": 365000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "PIETSCH, MICHAEL R"
+        },
+        {
+          "date": "2013-05-20",
+          "year": 2013,
+          "price": 499900,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "TAVARES, ANTONIO"
+        },
+        {
+          "date": "2019-02-11",
+          "year": 2019,
+          "price": 540000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "PHILLIPS, JANE ANN"
+        },
+        {
+          "date": "2026-06-01",
+          "year": 2026,
+          "price": 799000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MCDONAUGH, ROMA"
+        }
+      ]
+    },
+    {
+      "house": "13832",
+      "lot": 8,
+      "built": 2004,
+      "parcel": "588500409",
+      "living_sf": 2164,
+      "sales": [
+        {
+          "date": "2004-03-29",
+          "year": 2004,
+          "price": 110500,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MCQUILLEN, GEORGE P"
+        },
+        {
+          "date": "2011-04-14",
+          "year": 2011,
+          "price": 328500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "ZELLER, DWAYNE"
+        },
+        {
+          "date": "2020-07-23",
+          "year": 2020,
+          "price": 370000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MURPHY, JOHN M"
+        }
+      ]
+    },
+    {
+      "house": "13836",
+      "lot": 9,
+      "built": 2005,
+      "parcel": "588500459",
+      "living_sf": 2340,
+      "sales": [
+        {
+          "date": "2004-05-26",
+          "year": 2004,
+          "price": 108500,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "OLSON, VINCENT T"
+        },
+        {
+          "date": "2018-05-02",
+          "year": 2018,
+          "price": 393000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HIRSCH, WILLIAM L JR"
+        },
+        {
+          "date": "2019-03-01",
+          "year": 2019,
+          "price": 439000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MORRILL, DORIS D"
+        }
+      ]
+    },
+    {
+      "house": "13840",
+      "lot": 10,
+      "built": 2005,
+      "parcel": "588500509",
+      "living_sf": 2685,
+      "sales": [
+        {
+          "date": "2004-06-04",
+          "year": 2004,
+          "price": 101500,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MANN, DOUGLASS M"
+        }
+      ]
+    },
+    {
+      "house": "13844",
+      "lot": 11,
+      "built": 2003,
+      "parcel": "588500559",
+      "living_sf": 2134,
+      "sales": [
+        {
+          "date": "2003-04-28",
+          "year": 2003,
+          "price": 460400,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "KEEN, FRANK"
+        },
+        {
+          "date": "2011-10-31",
+          "year": 2011,
+          "price": 367500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SCHWAB, SYLVIA S"
+        },
+        {
+          "date": "2015-07-03",
+          "year": 2015,
+          "price": 399900,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Estate, trustee, or personal representative",
+          "grantee": "WIRSKI, ROBERT"
+        },
+        {
+          "date": "2018-02-14",
+          "year": 2018,
+          "price": 380000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "FLEMING, EUGENE"
+        },
+        {
+          "date": "2020-01-02",
+          "year": 2020,
+          "price": 430000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "TESKE, BONNIE J"
+        }
+      ]
+    },
+    {
+      "house": "13848",
+      "lot": 12,
+      "built": 2006,
+      "parcel": "588500609",
+      "living_sf": 2294,
+      "sales": [
+        {
+          "date": "2005-02-10",
+          "year": 2005,
+          "price": 126500,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SCHLUP, BARTH RICHARD"
+        },
+        {
+          "date": "2017-04-28",
+          "year": 2017,
+          "price": 400000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "NATHANS, HOWARD B"
+        }
+      ]
+    },
+    {
+      "house": "13849",
+      "lot": 48,
+      "built": 2003,
+      "parcel": "588502409",
+      "living_sf": 2294,
+      "sales": [
+        {
+          "date": "2003-12-10",
+          "year": 2003,
+          "price": 481500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "IVY, LARRY"
+        },
+        {
+          "date": "2008-01-28",
+          "year": 2008,
+          "price": 595000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "CHAMP, REGIS G"
+        },
+        {
+          "date": "2012-03-16",
+          "year": 2012,
+          "price": 410000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BOUSQUET, JAMES J"
+        }
+      ]
+    },
+    {
+      "house": "13852",
+      "lot": 13,
+      "built": 2006,
+      "parcel": "588500659",
+      "living_sf": 2319,
+      "sales": [
+        {
+          "date": "2006-03-03",
+          "year": 2006,
+          "price": 613400,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BHALODIA, ASHOKKUMA L"
+        },
+        {
+          "date": "2008-05-27",
+          "year": 2008,
+          "price": 492000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MAXWELL, CHARLENE A"
+        },
+        {
+          "date": "2021-03-01",
+          "year": 2021,
+          "price": 440000,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Atypical motivation",
+          "grantee": "HINES, KEVIN PATRICK SR"
+        }
+      ]
+    },
+    {
+      "house": "13853",
+      "lot": 49,
+      "built": 2005,
+      "parcel": "588502459",
+      "living_sf": 2321,
+      "sales": [
+        {
+          "date": "2005-12-16",
+          "year": 2005,
+          "price": 634500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "CLEMENTE, ARTHUR"
+        },
+        {
+          "date": "2007-11-09",
+          "year": 2007,
+          "price": 745000,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Atypical motivation",
+          "grantee": "CLEMENTE, C L"
+        },
+        {
+          "date": "2017-02-01",
+          "year": 2017,
+          "price": 385000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "NEMAN, DENNIS A"
+        }
+      ]
+    },
+    {
+      "house": "13856",
+      "lot": 14,
+      "built": 2005,
+      "parcel": "588500709",
+      "living_sf": 2512,
+      "sales": [
+        {
+          "date": "2005-10-24",
+          "year": 2005,
+          "price": 536000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "ANTHONY, JAY A"
+        }
+      ]
+    },
+    {
+      "house": "13857",
+      "lot": 50,
+      "built": 2003,
+      "parcel": "588502509",
+      "living_sf": 2312,
+      "sales": [
+        {
+          "date": "2004-05-06",
+          "year": 2004,
+          "price": 475000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "CAMPBELL, WILLIAM R"
+        },
+        {
+          "date": "2010-06-18",
+          "year": 2010,
+          "price": 395000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "KEAN, CHARLES W"
+        }
+      ]
+    },
+    {
+      "house": "13860",
+      "lot": 15,
+      "built": 2005,
+      "parcel": "588500759",
+      "living_sf": 3187,
+      "sales": [
+        {
+          "date": "2004-07-30",
+          "year": 2004,
+          "price": 102500,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MARSH, DONNA M"
+        },
+        {
+          "date": "2007-11-28",
+          "year": 2007,
+          "price": 390300,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Atypical motivation",
+          "grantee": "SUNTRUST BANK"
+        },
+        {
+          "date": "2010-04-21",
+          "year": 2010,
+          "price": 384900,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Bank or deed in lieu of foreclosure",
+          "grantee": "DAVIS, JAMES D"
+        },
+        {
+          "date": "2020-10-13",
+          "year": 2020,
+          "price": 520000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HAWTHORNE, KERI"
+        }
+      ]
+    },
+    {
+      "house": "13861",
+      "lot": 51,
+      "built": 2003,
+      "parcel": "588502559",
+      "living_sf": 2135,
+      "sales": [
+        {
+          "date": "2002-09-26",
+          "year": 2002,
+          "price": 106000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BUTZ, TERRELL J"
+        },
+        {
+          "date": "2014-02-26",
+          "year": 2014,
+          "price": 430000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BREINING, WARREN"
+        },
+        {
+          "date": "2026-03-17",
+          "year": 2026,
+          "price": 610000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "TEDELTA NORTH AMERICA LLC"
+        }
+      ]
+    },
+    {
+      "house": "13864",
+      "lot": 16,
+      "built": 2004,
+      "parcel": "588500809",
+      "living_sf": 2294,
+      "sales": [
+        {
+          "date": "2003-11-17",
+          "year": 2003,
+          "price": 103500,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "STRUMPF, MITCHELL M"
+        },
+        {
+          "date": "2018-05-18",
+          "year": 2018,
+          "price": 385000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BRADLEY-WILLIAMS, DEIRDRE"
+        },
+        {
+          "date": "2019-05-17",
+          "year": 2019,
+          "price": 405000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HINES, DIANA G"
+        }
+      ]
+    },
+    {
+      "house": "13868",
+      "lot": 17,
+      "built": 2005,
+      "parcel": "588500859",
+      "living_sf": 2392,
+      "sales": [
+        {
+          "date": "2004-04-16",
+          "year": 2004,
+          "price": 103500,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MATHEWS, JACK S JR"
+        }
+      ]
+    },
+    {
+      "house": "13872",
+      "lot": 18,
+      "built": 2003,
+      "parcel": "588500909",
+      "living_sf": 2467,
+      "sales": [
+        {
+          "date": "2003-11-21",
+          "year": 2003,
+          "price": 445000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "FRANKLIN, RICHARD C"
+        },
+        {
+          "date": "2006-12-08",
+          "year": 2006,
+          "price": 580000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "JELLISON, LINDA JEANNE"
+        },
+        {
+          "date": "2019-09-12",
+          "year": 2019,
+          "price": 454500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BROWN, ROBERT JEROME"
+        }
+      ]
+    },
+    {
+      "house": "13876",
+      "lot": 19,
+      "built": 2004,
+      "parcel": "588500959",
+      "living_sf": 2610,
+      "sales": [
+        {
+          "date": "2003-09-17",
+          "year": 2003,
+          "price": 103000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HOWELL, LINDA G"
+        },
+        {
+          "date": "2010-04-02",
+          "year": 2010,
+          "price": 480000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "CRANDALL, SUZANNE E"
+        },
+        {
+          "date": "2020-11-30",
+          "year": 2020,
+          "price": 578000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BUCK, DONALD ANDREW"
+        },
+        {
+          "date": "2026-04-29",
+          "year": 2026,
+          "price": 775000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MASSIMINI, JOHN D"
+        }
+      ]
+    },
+    {
+      "house": "13877",
+      "lot": 52,
+      "built": 2004,
+      "parcel": "588502609",
+      "living_sf": 2294,
+      "sales": [
+        {
+          "date": "2004-03-22",
+          "year": 2004,
+          "price": 492400,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "JACOBSON, TIMOTHY H"
+        },
+        {
+          "date": "2009-12-15",
+          "year": 2009,
+          "price": 397500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "RAMSEY, CAROLYN"
+        },
+        {
+          "date": "2013-04-25",
+          "year": 2013,
+          "price": 480000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "WARD, JOHN H"
+        }
+      ]
+    },
+    {
+      "house": "13880",
+      "lot": 20,
+      "built": 2004,
+      "parcel": "588501009",
+      "living_sf": 2698,
+      "sales": [
+        {
+          "date": "2004-04-08",
+          "year": 2004,
+          "price": 87000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SEGARS, JOSEPH M"
+        }
+      ]
+    },
+    {
+      "house": "13884",
+      "lot": 21,
+      "built": 2005,
+      "parcel": "588501059",
+      "living_sf": 2361,
+      "sales": [
+        {
+          "date": "2004-08-11",
+          "year": 2004,
+          "price": 86800,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "PRECOPIA, GERALD J"
+        },
+        {
+          "date": "2015-01-30",
+          "year": 2015,
+          "price": 475000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BURGESS, WILLIAM E JR"
+        },
+        {
+          "date": "2016-03-09",
+          "year": 2016,
+          "price": 468000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "KNATZ, GERARD A"
+        }
+      ]
+    },
+    {
+      "house": "13885",
+      "lot": 53,
+      "built": 2003,
+      "parcel": "588502659",
+      "living_sf": 2673,
+      "sales": [
+        {
+          "date": "2004-06-30",
+          "year": 2004,
+          "price": 560000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "VIGLIOTTI, ALFONSO L"
+        },
+        {
+          "date": "2022-06-22",
+          "year": 2022,
+          "price": 1125000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SARKISSIAN, HAGOP Y"
+        }
+      ]
+    },
+    {
+      "house": "13888",
+      "lot": 22,
+      "built": 2005,
+      "parcel": "588501109",
+      "living_sf": 2654,
+      "sales": [
+        {
+          "date": "2005-12-27",
+          "year": 2005,
+          "price": 608600,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HAMMOND, KEN"
+        },
+        {
+          "date": "2014-09-12",
+          "year": 2014,
+          "price": 515700,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Forced or to prevent foreclosure",
+          "grantee": "BANK OF AMERICA NA"
+        },
+        {
+          "date": "2014-12-12",
+          "year": 2014,
+          "price": 380000,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Bank or deed in lieu of foreclosure",
+          "grantee": "BENCIE, JENNIFER"
+        }
+      ]
+    },
+    {
+      "house": "13892",
+      "lot": 23,
+      "built": 2003,
+      "parcel": "588501159",
+      "living_sf": 2501,
+      "sales": [
+        {
+          "date": "2004-06-01",
+          "year": 2004,
+          "price": 491300,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "ALLBEE, RONALD A"
+        },
+        {
+          "date": "2005-08-23",
+          "year": 2005,
+          "price": 630000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HART, JEFFREY B"
+        },
+        {
+          "date": "2021-09-01",
+          "year": 2021,
+          "price": 710000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BERRY, BRIAN K"
+        }
+      ]
+    },
+    {
+      "house": "13893",
+      "lot": 54,
+      "built": 2004,
+      "parcel": "588502709",
+      "living_sf": 2294,
+      "sales": [
+        {
+          "date": "2003-07-28",
+          "year": 2003,
+          "price": 122000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MUNCH, ROBERT J"
+        }
+      ]
+    },
+    {
+      "house": "13896",
+      "lot": 24,
+      "built": 2005,
+      "parcel": "588501209",
+      "living_sf": 2455,
+      "sales": [
+        {
+          "date": "2004-09-21",
+          "year": 2004,
+          "price": 80000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "PAOLINO, MICHAEL A"
+        },
+        {
+          "date": "2020-03-05",
+          "year": 2020,
+          "price": 385000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "WALTER, TYLER J"
+        }
+      ]
+    },
+    {
+      "house": "13897",
+      "lot": 55,
+      "built": 2004,
+      "parcel": "588502759",
+      "living_sf": 2680,
+      "sales": [
+        {
+          "date": "2004-02-26",
+          "year": 2004,
+          "price": 121000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "DECKER, KENNETH E"
+        },
+        {
+          "date": "2023-08-07",
+          "year": 2023,
+          "price": 955000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MOORE, BARBARA BETH"
+        }
+      ]
+    },
+    {
+      "house": "13906",
+      "lot": 25,
+      "built": 2005,
+      "parcel": "588501259",
+      "living_sf": 2145,
+      "sales": [
+        {
+          "date": "2004-10-20",
+          "year": 2004,
+          "price": 90000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SIEGEL, LOUIS"
+        },
+        {
+          "date": "2017-05-11",
+          "year": 2017,
+          "price": 360000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SOPKO, GEORGE A"
+        },
+        {
+          "date": "2018-07-06",
+          "year": 2018,
+          "price": 385000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MILLS, FLORIZEL"
+        },
+        {
+          "date": "2025-03-31",
+          "year": 2025,
+          "price": 789000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MAIER, GREGORY T"
+        }
+      ]
+    },
+    {
+      "house": "13907",
+      "lot": 56,
+      "built": 2005,
+      "parcel": "588502809",
+      "living_sf": 2455,
+      "sales": [
+        {
+          "date": "2004-07-02",
+          "year": 2004,
+          "price": 126000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "COSTAS, JAMES A"
+        }
+      ]
+    },
+    {
+      "house": "13910",
+      "lot": 26,
+      "built": 2005,
+      "parcel": "588501309",
+      "living_sf": 2325,
+      "sales": [
+        {
+          "date": "2005-10-28",
+          "year": 2005,
+          "price": 515700,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "CAMPERLENGO, HENRY A"
+        },
+        {
+          "date": "2014-06-27",
+          "year": 2014,
+          "price": 370000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "FLOWERS, PHYLLIS"
+        },
+        {
+          "date": "2017-03-20",
+          "year": 2017,
+          "price": 395000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MAGGI-THOMAS, DEBRA J"
+        }
+      ]
+    },
+    {
+      "house": "13911",
+      "lot": 57,
+      "built": 2004,
+      "parcel": "588502859",
+      "living_sf": 3216,
+      "sales": [
+        {
+          "date": "2004-01-06",
+          "year": 2004,
+          "price": 93000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SAK, DONALD J"
+        }
+      ]
+    },
+    {
+      "house": "13914",
+      "lot": 27,
+      "built": 2005,
+      "parcel": "588501359",
+      "living_sf": 2404,
+      "sales": [
+        {
+          "date": "2004-04-08",
+          "year": 2004,
+          "price": 80000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MALKO, DONALD M"
+        },
+        {
+          "date": "2019-10-11",
+          "year": 2019,
+          "price": 543000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BOISVERT, JOSHUA M"
+        }
+      ]
+    },
+    {
+      "house": "13918",
+      "lot": 28,
+      "built": 2004,
+      "parcel": "588501409",
+      "living_sf": 2303,
+      "sales": [
+        {
+          "date": "2003-11-24",
+          "year": 2003,
+          "price": 80000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "CAPPIELLO, MICHAEL A"
+        },
+        {
+          "date": "2011-05-13",
+          "year": 2011,
+          "price": 375000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "ENANDER, ROBERT"
+        },
+        {
+          "date": "2016-07-19",
+          "year": 2016,
+          "price": 470000,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Relatives or corporate affiliates",
+          "grantee": "JERNIGAN, LEON"
+        }
+      ]
+    },
+    {
+      "house": "13922",
+      "lot": 29,
+      "built": 2004,
+      "parcel": "588501459",
+      "living_sf": 2089,
+      "sales": [
+        {
+          "date": "2003-10-28",
+          "year": 2003,
+          "price": 80000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "KEIDERLING, BLAIR D"
+        },
+        {
+          "date": "2016-04-27",
+          "year": 2016,
+          "price": 420000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "DAMORE, PAUL M"
+        }
+      ]
+    },
+    {
+      "house": "13926",
+      "lot": 30,
+      "built": 2004,
+      "parcel": "588501509",
+      "living_sf": 2314,
+      "sales": [
+        {
+          "date": "2003-06-23",
+          "year": 2003,
+          "price": 90000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BRUNDAGE, KEVIN E"
+        },
+        {
+          "date": "2006-04-21",
+          "year": 2006,
+          "price": 650000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SCUTT, PAMELA O"
+        },
+        {
+          "date": "2009-01-17",
+          "year": 2009,
+          "price": 376000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "O'BRIEN, VINCENT J"
+        },
+        {
+          "date": "2009-10-16",
+          "year": 2009,
+          "price": 375000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MORIN, DAVID"
+        },
+        {
+          "date": "2014-09-24",
+          "year": 2014,
+          "price": 430500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BAILEY, JOHN G"
+        }
+      ]
+    },
+    {
+      "house": "13930",
+      "lot": 31,
+      "built": 2005,
+      "parcel": "588501559",
+      "living_sf": 2706,
+      "sales": [
+        {
+          "date": "2005-06-16",
+          "year": 2005,
+          "price": 714600,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BUETI, SERAFINO"
+        },
+        {
+          "date": "2008-04-16",
+          "year": 2008,
+          "price": 630000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "WRIGHT, RAYMOND K JR"
+        }
+      ]
+    },
+    {
+      "house": "13931",
+      "lot": 58,
+      "built": 2004,
+      "parcel": "588502909",
+      "living_sf": 3273,
+      "sales": [
+        {
+          "date": "2003-10-06",
+          "year": 2003,
+          "price": 91000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SEDIGH, MASSOUD"
+        },
+        {
+          "date": "2021-10-18",
+          "year": 2021,
+          "price": 785000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "LAGUNA PROPERTIES LLC"
+        },
+        {
+          "date": "2022-08-17",
+          "year": 2022,
+          "price": 1527100,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MASSA, LAURENT"
+        }
+      ]
+    },
+    {
+      "house": "13934",
+      "lot": 32,
+      "built": 2004,
+      "parcel": "588501609",
+      "living_sf": 3144,
+      "sales": [
+        {
+          "date": "2004-03-17",
+          "year": 2004,
+          "price": 180000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MARCUS, MICHAEL P"
+        },
+        {
+          "date": "2010-09-30",
+          "year": 2010,
+          "price": 500000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "WEIDEL, RICHARD JR"
+        },
+        {
+          "date": "2021-08-06",
+          "year": 2021,
+          "price": 776000,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Atypical motivation",
+          "grantee": "TCMAX LLC"
+        },
+        {
+          "date": "2022-01-26",
+          "year": 2022,
+          "price": 1395000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "ANACLERIO, ALBERTA P J"
+        }
+      ]
+    },
+    {
+      "house": "13938",
+      "lot": 33,
+      "built": 2004,
+      "parcel": "588501659",
+      "living_sf": 2343,
+      "sales": [
+        {
+          "date": "2004-02-24",
+          "year": 2004,
+          "price": 147000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "DANGLER, JOHN J"
+        },
+        {
+          "date": "2018-04-03",
+          "year": 2018,
+          "price": 497500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BERGTHOLDT, ROBERT H"
+        }
+      ]
+    },
+    {
+      "house": "13942",
+      "lot": 34,
+      "built": 2005,
+      "parcel": "588501709",
+      "living_sf": 2325,
+      "sales": [
+        {
+          "date": "2005-10-17",
+          "year": 2005,
+          "price": 604400,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BOULOUCON, PETER"
+        },
+        {
+          "date": "2006-07-05",
+          "year": 2006,
+          "price": 740000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "OLDHAM, JOEL GORDON"
+        },
+        {
+          "date": "2018-11-30",
+          "year": 2018,
+          "price": 495000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MELOCCHI, JOSEPH"
+        }
+      ]
+    },
+    {
+      "house": "13946",
+      "lot": 35,
+      "built": 2004,
+      "parcel": "588501759",
+      "living_sf": 2303,
+      "sales": [
+        {
+          "date": "2004-04-05",
+          "year": 2004,
+          "price": 157000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HUIN, ALEXANDRE W"
+        },
+        {
+          "date": "2009-01-22",
+          "year": 2009,
+          "price": 390000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SERRANO, JOSEPH"
+        },
+        {
+          "date": "2019-07-02",
+          "year": 2019,
+          "price": 486300,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "LEVY, BENTON J"
+        }
+      ]
+    },
+    {
+      "house": "13947",
+      "lot": 59,
+      "built": 2004,
+      "parcel": "588502959",
+      "living_sf": 2303,
+      "sales": [
+        {
+          "date": "2004-11-12",
+          "year": 2004,
+          "price": 473300,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MILLER, LORRAINE"
+        },
+        {
+          "date": "2005-06-24",
+          "year": 2005,
+          "price": 615000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SCLAFANI, JUDITH L"
+        }
+      ]
+    },
+    {
+      "house": "13950",
+      "lot": 36,
+      "built": 2005,
+      "parcel": "588501809",
+      "living_sf": 2325,
+      "sales": [
+        {
+          "date": "2004-11-15",
+          "year": 2004,
+          "price": 189000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "KORSMEYER, RICHARD W"
+        },
+        {
+          "date": "2013-11-08",
+          "year": 2013,
+          "price": 525000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MATTHEWS, JAMES F"
+        }
+      ]
+    },
+    {
+      "house": "13951",
+      "lot": 60,
+      "built": 2005,
+      "parcel": "588503009",
+      "living_sf": 2666,
+      "sales": [
+        {
+          "date": "2005-06-30",
+          "year": 2005,
+          "price": 660300,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BERESFORD, JAMES M"
+        },
+        {
+          "date": "2017-05-01",
+          "year": 2017,
+          "price": 450000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MCMILLAN, DONALD A JR"
+        },
+        {
+          "date": "2020-11-25",
+          "year": 2020,
+          "price": 564900,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "CLARE, CELIA J"
+        }
+      ]
+    },
+    {
+      "house": "13954",
+      "lot": 37,
+      "built": 2005,
+      "parcel": "588501859",
+      "living_sf": 2690,
+      "sales": [
+        {
+          "date": "2004-07-20",
+          "year": 2004,
+          "price": 147000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "RICHARDSON, EDWARD E"
+        },
+        {
+          "date": "2020-09-17",
+          "year": 2020,
+          "price": 540000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "FERRARI, KYLE"
+        }
+      ]
+    },
+    {
+      "house": "13955",
+      "lot": 61,
+      "built": 2004,
+      "parcel": "588503059",
+      "living_sf": 2106,
+      "sales": [
+        {
+          "date": "2003-08-28",
+          "year": 2003,
+          "price": 127000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "MEURER, CHARLENE D"
+        },
+        {
+          "date": "2005-06-14",
+          "year": 2005,
+          "price": 659000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "STEPHENSON, RANSI"
+        }
+      ]
+    },
+    {
+      "house": "13958",
+      "lot": 38,
+      "built": 2005,
+      "parcel": "588501909",
+      "living_sf": 2505,
+      "sales": [
+        {
+          "date": "2005-11-29",
+          "year": 2005,
+          "price": 632300,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SCHILLER, DAVID A"
+        },
+        {
+          "date": "2018-01-02",
+          "year": 2018,
+          "price": 475000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "NUSBAUM, DEAN KEVIN"
+        }
+      ]
+    },
+    {
+      "house": "13959",
+      "lot": 62,
+      "built": 2003,
+      "parcel": "588503109",
+      "living_sf": 2287,
+      "sales": [
+        {
+          "date": "2002-11-04",
+          "year": 2002,
+          "price": 103000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "UTTON, RICHARD I"
+        }
+      ]
+    },
+    {
+      "house": "13962",
+      "lot": 39,
+      "built": 2005,
+      "parcel": "588501959",
+      "living_sf": 2458,
+      "sales": [
+        {
+          "date": "2004-09-21",
+          "year": 2004,
+          "price": 147000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "WEBER, DAN M"
+        },
+        {
+          "date": "2018-10-01",
+          "year": 2018,
+          "price": 530000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "GINGERICH, JAMES A"
+        },
+        {
+          "date": "2022-03-01",
+          "year": 2022,
+          "price": 800700,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Atypical motivation",
+          "grantee": "GAUTIER, MICHAEL"
+        },
+        {
+          "date": "2022-04-14",
+          "year": 2022,
+          "price": 1085000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "RUNNALLS, IAN"
+        }
+      ]
+    },
+    {
+      "house": "13963",
+      "lot": 63,
+      "built": 2003,
+      "parcel": "588503159",
+      "living_sf": 2064,
+      "sales": [
+        {
+          "date": "2002-11-22",
+          "year": 2002,
+          "price": 106000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "GUARDINO, JAMES J JR"
+        }
+      ]
+    },
+    {
+      "house": "13966",
+      "lot": 40,
+      "built": 2004,
+      "parcel": "588502009",
+      "living_sf": 2674,
+      "sales": [
+        {
+          "date": "2004-09-16",
+          "year": 2004,
+          "price": 647200,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "TONGEN, LEE E"
+        },
+        {
+          "date": "2010-11-10",
+          "year": 2010,
+          "price": 505000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "STAIKOS, CHRIS"
+        },
+        {
+          "date": "2016-04-26",
+          "year": 2016,
+          "price": 549900,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "KELLY, KEVIN E"
+        }
+      ]
+    },
+    {
+      "house": "13967",
+      "lot": 64,
+      "built": 2004,
+      "parcel": "588503209",
+      "living_sf": 2303,
+      "sales": [
+        {
+          "date": "2004-11-11",
+          "year": 2004,
+          "price": 559100,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SCHLOBOHM, RAY"
+        }
+      ]
+    },
+    {
+      "house": "13970",
+      "lot": 41,
+      "built": 2004,
+      "parcel": "588502059",
+      "living_sf": 2303,
+      "sales": [
+        {
+          "date": "2004-01-28",
+          "year": 2004,
+          "price": 156000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "DELFABRO PROPERTIES LLC"
+        },
+        {
+          "date": "2015-03-26",
+          "year": 2015,
+          "price": 390000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "DELFABRO PROPERTIES LLC"
+        }
+      ]
+    },
+    {
+      "house": "13974",
+      "lot": 42,
+      "built": 2003,
+      "parcel": "588502109",
+      "living_sf": 2715,
+      "sales": [
+        {
+          "date": "2004-10-28",
+          "year": 2004,
+          "price": 585000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HILDEBRAND, G JACK"
+        }
+      ]
+    },
+    {
+      "house": "13975",
+      "lot": 65,
+      "built": 2006,
+      "parcel": "588503259",
+      "living_sf": 2629,
+      "sales": [
+        {
+          "date": "2006-01-05",
+          "year": 2006,
+          "price": 833700,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "FELDMAN, NOEL"
+        }
+      ]
+    },
+    {
+      "house": "13978",
+      "lot": 43,
+      "built": 2004,
+      "parcel": "588502159",
+      "living_sf": 2673,
+      "sales": [
+        {
+          "date": "2003-09-16",
+          "year": 2003,
+          "price": 158000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "LEAVEY, THOMAS E"
+        }
+      ]
+    },
+    {
+      "house": "13982",
+      "lot": 44,
+      "built": 2004,
+      "parcel": "588502209",
+      "living_sf": 2502,
+      "sales": [
+        {
+          "date": "2004-03-25",
+          "year": 2004,
+          "price": 587100,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "NORMAN, JACK"
+        },
+        {
+          "date": "2021-03-01",
+          "year": 2021,
+          "price": 579000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HARKEY, JOHN THOMAS"
+        }
+      ]
+    },
+    {
+      "house": "13983",
+      "lot": 66,
+      "built": 2003,
+      "parcel": "588503309",
+      "living_sf": 3192,
+      "sales": [
+        {
+          "date": "2004-02-27",
+          "year": 2004,
+          "price": 775000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "JAMISON, PAUL W"
+        },
+        {
+          "date": "2005-12-14",
+          "year": 2005,
+          "price": 940000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SALTZ, JEFFREY S"
+        },
+        {
+          "date": "2024-06-10",
+          "year": 2024,
+          "price": 1000000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "FARSAD, MANSOUR"
+        }
+      ]
+    },
+    {
+      "house": "13986",
+      "lot": 45,
+      "built": 2003,
+      "parcel": "588502259",
+      "living_sf": 2607,
+      "sales": [
+        {
+          "date": "2004-02-24",
+          "year": 2004,
+          "price": 846600,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "WOOD, JOHN MICHAEL"
+        },
+        {
+          "date": "2008-02-19",
+          "year": 2008,
+          "price": 599500,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "CAHILL, TOM"
+        },
+        {
+          "date": "2018-05-25",
+          "year": 2018,
+          "price": 500000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "HUNTER, JOSEPH R"
+        }
+      ]
+    },
+    {
+      "house": "13987",
+      "lot": 67,
+      "built": 2003,
+      "parcel": "588503359",
+      "living_sf": 2289,
+      "sales": [
+        {
+          "date": "2004-01-28",
+          "year": 2004,
+          "price": 559700,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SAALFELD, CLEM"
+        },
+        {
+          "date": "2020-02-07",
+          "year": 2020,
+          "price": 420000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "ENGEL, KENNETH WAYNE"
+        },
+        {
+          "date": "2023-11-22",
+          "year": 2023,
+          "price": 810000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "SULLIVAN, KURT R"
+        },
+        {
+          "date": "2026-08-03",
+          "year": 2026,
+          "price": 760000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "DIAZ, CHRISTINE"
+        }
+      ]
+    },
+    {
+      "house": "13990",
+      "lot": 46,
+      "built": 2005,
+      "parcel": "588502309",
+      "living_sf": 2361,
+      "sales": [
+        {
+          "date": "2004-12-03",
+          "year": 2004,
+          "price": 200000,
+          "kind": "Lot",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "NARCISCO, BARBARA"
+        },
+        {
+          "date": "2017-06-20",
+          "year": 2017,
+          "price": 480000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "PARSONS, TIMOTHY JOHN"
+        },
+        {
+          "date": "2022-12-16",
+          "year": 2022,
+          "price": 935000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "RYDBERG, THOMAS C"
+        }
+      ]
+    },
+    {
+      "house": "13994",
+      "lot": 47,
+      "built": 2006,
+      "parcel": "588502359",
+      "living_sf": 2623,
+      "sales": [
+        {
+          "date": "2006-03-08",
+          "year": 2006,
+          "price": 817700,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "PHILLIPS, PERCIVAL"
+        },
+        {
+          "date": "2020-05-12",
+          "year": 2020,
+          "price": 445000,
+          "kind": "House",
+          "qualified": false,
+          "reason": "Forced or to prevent foreclosure",
+          "grantee": "MORIARTY, TIMOTHY P"
+        }
+      ]
+    },
+    {
+      "house": "13995",
+      "lot": 68,
+      "built": 2006,
+      "parcel": "588503409",
+      "living_sf": 2321,
+      "sales": [
+        {
+          "date": "2006-04-04",
+          "year": 2006,
+          "price": 632900,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "BHALODIA, ASHOKKUMA L"
+        },
+        {
+          "date": "2009-10-26",
+          "year": 2009,
+          "price": 299000,
+          "kind": "House",
+          "qualified": true,
+          "reason": "Qualified market sale",
+          "grantee": "GRAY, ROBERT"
+        }
+      ]
+    }
+  ]
+}
