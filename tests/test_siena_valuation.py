@@ -38,7 +38,7 @@ def test_tax_reset_is_higher_than_the_seller_bill():
     assert non_homestead_tax(ASK) == ASK * TOTAL_MILLS / 1000 + NON_AD_VALOREM
     assert non_homestead_tax(ASK) > seller_bill + 7_000
     assert homestead_tax(ASK) > seller_bill + 6_000
-    assert homestead_tax(940_000) > seller_bill
+    assert homestead_tax(880_000) > seller_bill
 
 
 def test_workbook_formulas_and_subject_row(tmp_path: Path):
@@ -79,7 +79,9 @@ def test_workbook_formulas_and_subject_row(tmp_path: Path):
     assert valuation["B4"].value == ASK
     assert valuation["B6"].value == "=B4/B5"
     assert valuation["B11"].value == "=B10*B5"
-    assert valuation["B14"].value == 940_000
+    assert valuation["B13"].value == 850_000
+    assert valuation["B14"].value == 880_000
+    assert valuation["B15"].value == 910_000
     assert valuation["B16"].value == "=B4/B14-1"
 
     costs = wb["Carrying costs"]

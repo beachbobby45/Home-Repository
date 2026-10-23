@@ -19,7 +19,12 @@ def test_pdf_states_the_conclusion(tmp_path: Path):
     assert "13394" in text
     assert "$1,195,000" in text
     assert "$456" in text
-    assert "$940,000" in text
+    assert "$880,000" in text
+    assert "$850,000" in text
+    assert "$910,000" in text
+    assert "20 years" in text
+    assert "2017" in text
+    assert "2024" in text
     assert "13978 Siena Loop" in text
     assert "13853 Siena Loop" in text
     assert "13844 Siena Loop" in text

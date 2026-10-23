@@ -60,7 +60,7 @@ COMPS = [
         "year": 2006,
         "lot_acres": 0.23,
         "view": "Golf and lake",
-        "updates": "Interior remodel claimed; roof, AC, and water heater not dated",
+        "updates": "Agent 23 Oct 2026: roof 20 years old, HVAC 2024 and HVAC 2017, pool heater 2020. Water heater still undated.",
         "source": "MLS A4704244",
     },
     {
@@ -262,12 +262,18 @@ def homestead_tax(price: float) -> float:
     return school + county + NON_AD_VALOREM
 
 
+# Listing-agent ages reported 23 Oct 2026: roof 20 years, HVAC 2024 and 2017, pool heater 2020.
+OFFER = 850_000
+SUPPORTED = 880_000
+CEILING = 910_000
+
+
 def desk_range() -> dict[str, int]:
-    """Conditional desk range. See the Valuation sheet for the basis."""
+    """Offer, supported value, and ceiling after the listing agent's equipment ages."""
     return {
-        "low_if_original_mechanicals": 860_000,
-        "mid_if_systems_have_life": 940_000,
-        "high_if_roof_and_ac_are_recent": 1_030_000,
+        "offer": OFFER,
+        "supported": SUPPORTED,
+        "ceiling": CEILING,
     }
 
 
@@ -368,8 +374,9 @@ def build_workbook(path: Path) -> Path:
         ("Of which ad valorem", AD_VALOREM, "Millage 14.160 combined. School exemption $25,000. Non-school exemption $50,722."),
         ("Of which non-ad valorem", NON_AD_VALOREM, f"CDD 5 operations ${CDD_OM:,.2f}, CDD debt ${CDD_DEBT:,.2f}, East Manatee fire ${FIRE_NON_AD:,.2f}."),
         ("MLS association fee", 135, "Per year, Lakewood Ranch Town Hall. This is not the Siena maintenance fee. Neighbors disclose $175–$188 per month."),
-        ("Roof", "Tile, year not stated", "A 2006 tile roof can still look fine while the underlayment is at the end of its life."),
-        ("Pool", "Heated in-ground pool and spa, screen cage, outdoor kitchen", "All of this was already in the May 2019 listing remarks."),
+        ("Roof", "Tile, 20 years old", "Listing agent, 23 Oct 2026. On a 2006 house this is the original roof. Underlayment is the insurance issue. Planning range to replace tile is $40,000–$80,000, not a bid."),
+        ("HVAC", "2024 and 2017", "Listing agent, 23 Oct 2026. Two systems, replaced on different dates. The 2017 unit is mid-life. Tonnage and zones are still unknown."),
+        ("Pool", "Heater 2020. Surface and cage undated.", "The pool, spa, and outdoor kitchen were already in the May 2019 remarks. The heater date does not date the surface or the screen cage."),
         ("Orientation", "Front faces east", "Photo captions describe a west-facing lanai and sunsets. Consistent with a rear-west plan."),
         ("Schools", "Willis / Nolan / Lakewood Ranch High", "Public assignment. Confirm boundaries before relying on them."),
     ]
@@ -383,7 +390,7 @@ def build_workbook(path: Path) -> Path:
     sub.cell(16, 2).number_format = MONEY_C
     sub.cell(17, 2).number_format = MONEY_C
     sub.cell(18, 2).number_format = MONEY
-    sub.auto_filter.ref = "A1:C22"
+    sub.auto_filter.ref = "A1:C23"
     sub.freeze_panes = "A2"
     sub.page_setup.orientation = "landscape"
     sub.page_setup.fitToPage = True
@@ -518,7 +525,7 @@ def build_workbook(path: Path) -> Path:
     val["A1"] = "Desk value"
     val["A1"].font = Font(bold=True, size=16, color="1F4E79")
     val["A2"] = (
-        "Yellow cells are inputs. The opinion is conditional on the roof and the air conditioner. "
+        "Yellow cells are inputs. Updated 23 Oct 2026 for the listing agent's ages: roof 20 years, HVAC 2024 and 2017, pool heater 2020. "
         "It is not an appraisal and it is not a prediction of the contract price."
     )
     val["A2"].alignment = Alignment(wrap_text=True)
@@ -535,11 +542,11 @@ def build_workbook(path: Path) -> Path:
         (10, "13978 $/sf", "=B8/B9", "Formula"),
         (11, "Subject sized at 13978 $/sf", "=B10*B5", "What this house costs if it sells at the twin's ask rate"),
         (12, "Dollars above that twin", "=B4-B11", "Ask minus the twin-sized value"),
-        (13, "Low value, original roof and AC", 860_000, "Near the size-adjusted 2026 sales, with a reserve for a 2006 roof and AC"),
-        (14, "Mid value, systems still have life", 940_000, "About 6% per foot over the 13978 ask, for a newer interior only"),
-        (15, "High value, roof and AC are recent", 1_030_000, "Still under the failed $400+/sf tests on this street"),
-        (16, "Ask vs mid", "=B4/B15-1" if False else "=B4/B14-1", "Percent the ask sits above the mid desk value"),
-        (17, "Dollars above mid", "=B4-B14", "Negotiation gap if the mid case holds"),
+        (13, "Opening offer", OFFER, "Start here. The roof is confirmed 20 years old, so the offer leaves room for a roof credit."),
+        (14, "Supported value", SUPPORTED, "About the 13978 contract rate on this living area. The 2024 HVAC offsets part of the known roof. It does not support a premium."),
+        (15, "Ceiling", CEILING, "Only with an affordable insurance binder and a roof report that does not require immediate replacement."),
+        (16, "Ask vs supported", "=B4/B14-1", "Percent the ask sits above the supported value"),
+        (17, "Dollars above supported", "=B4-B14", "Gap between the ask and the supported value"),
         (18, "2020 purchase", PRIOR_SALE, "21 May 2020. Ask is 2.69 times that price"),
         (19, "Ask / 2020 price", "=B4/B18", "Formula"),
         (20, "County 2025 market value", MARKET_VALUE, "Tax roll. Lags renovations. Still the assessor's number, not the ask"),
@@ -579,7 +586,9 @@ def build_workbook(path: Path) -> Path:
         "13911 started at $1,295,000 in January 2026, has been cut to $995,000, and was still active in August with more bedrooms, more baths, and a 2024 air conditioner. "
         "This house's own 2019 campaign listed at $540,000 and sold at $445,000. "
         "The current remarks sell a remodel. The May 2019 remarks already advertised the pool, spa, outdoor kitchen, tile floors, 48-inch cabinets, granite island, and the office bath. "
-        "Quartz, new cabinet claims, bath glass, a wine bar, an electric fireplace, and a softener can support a finish premium. They do not support $456 per foot."
+        "Quartz, new cabinet claims, bath glass, a wine bar, an electric fireplace, and a softener can support a finish premium. They do not support $456 per foot. "
+        "On 23 Oct 2026 the listing agent dated the roof at 20 years old, one air conditioner at 2024, the second air conditioner at 2017, and the pool heater at 2020. "
+        "The 2024 system and the 2020 heater remove the all-original mechanicals case. The 20-year roof removes the $1,030,000 case. Supported value is $880,000. Open at $850,000. Do not exceed $910,000."
     )
     val["A24"].alignment = Alignment(wrap_text=True, vertical="top")
     val.row_dimensions[24].height = 30
@@ -696,16 +705,17 @@ def build_workbook(path: Path) -> Path:
         ("Guest baths", "Both remodeled", "Three baths already, including the office bath", "Cosmetic unless permits show a rebuild."),
         ("Office bath", "Den bath doubles as the pool bath", "Office with its own private bathroom", "Same room, not an added bath."),
         ("Floors", "Tile", "18-inch tile in the main living area", "Already there in 2019."),
-        ("Pool, spa, cage", "Heated pool and spa, screen enclosure", "Private pool, spa, and enclosed lanai", "Already there in 2019. Age of surface, heater, and cage is unknown."),
+        ("Pool, spa, cage", "Heated pool and spa, screen enclosure", "Private pool, spa, and enclosed lanai", "Already there in 2019. Heater is 2020 per the agent. Surface and cage are still undated."),
         ("Outdoor kitchen", "Grill and outdoor kitchen", "Outdoor kitchen", "Already there in 2019."),
         ("Wine bar and fireplace", "Wine bar, electric fireplace", "Not in the 2019 remarks", "Cosmetic. An electric fireplace is not a gas fireplace."),
         ("Lighting and windows treatments", "Designer lighting and window treatments", "Not singled out in 2019", "Cosmetic. Not impact glass."),
         ("Water softener", "Whole-house softener listed as an appliance", "Not in the 2019 remarks", "Useful. Small dollars."),
         ("Closet", "Oversized custom organized closet", "Two walk-in closets", "Organization system, not added area."),
         ("Accent walls", "Distinctive accent walls", "Not in the 2019 remarks", "Paint and millwork."),
-        ("Roof", "Tile. No year.", "Not described as new in 2019 either", "Open risk. Underlayment on a 2006 tile roof is the expensive item."),
-        ("Air conditioner", "Central air. No year.", "Not dated in 2019", "Open risk. Neighbors are advertising 2023–2026 replacements."),
-        ("Water heater", "Not mentioned", "Not mentioned", "Open risk. Typical life is inside the time since 2006."),
+        ("Roof", "Agent: 20 years old", "Not described as new in 2019", "Original 2006 tile roof. Underlayment is the expensive item. Still get the certification."),
+        ("Air conditioners", "Agent: one system 2024, second system 2017", "Not dated in 2019", "Two systems. The 2024 unit is current. The 2017 unit is mid-life. Ask which zone each serves."),
+        ("Pool heater", "Agent: 2020", "Pool and spa already existed", "Serviceable. This date does not cover the pool surface or the screen cage."),
+        ("Water heater", "Still not dated", "Not mentioned", "Still open. Typical life is inside the time since 2006."),
         ("Windows", "Blinds and treatments only", "Not described as impact", "No wind-mitigation credit is being claimed. Verify."),
         ("Public record renovation year", "Remarks say fully remodeled, no date", "Redfin shows a 2012 renovation year", "Do not treat 2012 as proven. Pull the permit file."),
     ]
@@ -744,7 +754,7 @@ def build_workbook(path: Path) -> Path:
             "Price",
             "High",
             "Ask is $456/sf against a 2026 sold median near $314/sf and a same-view neighbor under contract at $336/sf.",
-            "Do not write at the ask. Mid desk value is $940,000 only if the roof and AC still have life.",
+            "Do not write at the ask. Supported value is $880,000. Open at $850,000. Ceiling is $910,000.",
         ),
         (
             "Resale",
@@ -755,14 +765,14 @@ def build_workbook(path: Path) -> Path:
         (
             "Roof and insurance",
             "High",
-            "Tile roof, house built 2006, year not disclosed. 13828, which sold at $346/sf, led with a brand-new roof.",
-            "Roof certification with underlayment age, 4-point, wind mitigation, and an insurance binder before the inspection period ends. Planning range to replace a tile roof of this size is $40,000–$80,000. That is not a bid.",
+            "Listing agent says the roof is 20 years old, so it is the original 2006 tile roof. 13828, which sold at $346/sf, led with a brand-new roof.",
+            "Roof certification, 4-point, wind mitigation, and an insurance binder before the inspection period ends. Planning range to replace a tile roof of this size is $40,000–$80,000. That is not a bid.",
         ),
         (
-            "Air conditioner and water heater",
-            "High",
-            "Listing is silent. 13853, 13860, 13861, 13911, and 13978 all date a recent HVAC or water heater.",
-            "4-point ages. Planning range for a 4-ton replacement is $8,000–$16,000, water heater $1,500–$3,000. Not bids.",
+            "Second HVAC and water heater",
+            "Medium",
+            "Listing agent: one air conditioner replaced in 2024, the second in 2017. Water heater is still undated.",
+            "Confirm tonnage and which zone each system serves. Budget the 2017 unit for replacement later in the decade. Water heater planning range is $1,500–$3,000 if it is original.",
         ),
         (
             "Tax reset",
@@ -785,7 +795,7 @@ def build_workbook(path: Path) -> Path:
         (
             "Pool and cage",
             "Medium",
-            "Marketed as heated pool and spa. No surface, equipment, or cage date. A 2006 aluminum cage in Florida corrodes.",
+            "Listing agent dated the pool heater at 2020. Surface, pump, and the 2006 screen cage are still undated.",
             "Pool inspection. Resurface and rescreen are separate five-figure and four-figure jobs when they are due.",
         ),
         (

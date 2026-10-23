@@ -26,8 +26,11 @@ from real_estate.siena_comps import (
     LIVING_SF,
     MARKET_VALUE,
     NON_AD_VALOREM,
+    CEILING,
+    OFFER,
     PRIOR_SALE,
     SELLER_TAX_BILL,
+    SUPPORTED,
     TOTAL_SF,
     COMPS,
     homestead_tax,
@@ -80,7 +83,7 @@ class Brief(FPDF):
         self.cell(
             0,
             4.5,
-            "13994 Siena Loop   ·   Lakewood Ranch Country Club   ·   Desk comparison   ·   23 Oct 2026, Pacific",
+            "13994 Siena Loop   ·   Updated 23 Oct 2026, Pacific   ·   Agent ages: roof 20 years, HVAC 2024 and 2017, pool heater 2020",
             align="L",
         )
         self.set_xy(self.l_margin, 16)
@@ -245,7 +248,7 @@ def build_pdf(path: Path = OUT) -> Path:
     median_psf = sold_median_ppsf()
     twin = twin_implied_value()
     gap = ASK - twin
-    mid = 940_000
+    supported = SUPPORTED
     year1 = non_homestead_tax(ASK)
     year2 = homestead_tax(ASK)
 
@@ -270,19 +273,26 @@ def build_pdf(path: Path = OUT) -> Path:
     pdf.set_font("InterM", "", 9)
     pdf.set_text_color(*NAVY)
     pdf.set_x(pdf.l_margin)
-    pdf.cell(pdf.content_w, 5, "Desk value, conditional on the roof and the air conditioner", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(pdf.content_w, 5, "Pricing after the listing agent's equipment ages", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
     pdf.boxes(
         [
-            (money(860_000), "Original roof and AC.\nAbout $328 per foot.", WARM),
-            (money(mid), "Systems still have life.\nAbout $358 per foot.", BAND),
-            (money(1_030_000), "Roof and AC are recent.\nAbout $393 per foot.", GREEN),
+            (money(OFFER), f"Opening offer.\nAbout {psf(OFFER / LIVING_SF)} per foot.", WARM),
+            (money(supported), f"Supported value.\nAbout {psf(supported / LIVING_SF)} per foot.", BAND),
+            (money(CEILING), f"Ceiling.\nAbout {psf(CEILING / LIVING_SF)} per foot.", GREEN),
         ]
     )
     pdf.body(
-        f"The middle case pays a modest finish premium over 13978 and assumes the roof and air conditioner "
-        f"still have useful life. County market value on the 2025 roll is {money(MARKET_VALUE)}. "
-        f"The owners bought the house on 21 May 2020 for {money(PRIOR_SALE)}, after a 2019 listing that opened at $540,000."
+        "On 23 Oct 2026 the listing agent dated the roof at 20 years old, one air conditioner at 2024, "
+        "the second air conditioner at 2017, and the pool heater at 2020. The roof is the original 2006 tile roof. "
+        f"That removes the old high case near {money(1_030_000)}. The 2024 system and the 2020 heater also remove the case "
+        "that every mechanical is original. Supported value sits on the 13978 contract rate for this floor plan, "
+        f"about {money(round(twin, -3))}, because the newer air conditioner offsets part of the known roof and does not justify a premium over that neighbor. "
+        f"Open at {money(OFFER)}. Do not go above {money(CEILING)}, and only approach that number with an insurance binder "
+        "and a roof report that does not require immediate replacement. "
+        f"The ask is {money(ASK - supported)} above the supported value. "
+        f"County market value on the 2025 roll is {money(MARKET_VALUE)}. "
+        f"The owners bought the house on 21 May 2020 for {money(PRIOR_SALE)}."
     )
 
     pdf.h2("The house")
@@ -292,7 +302,7 @@ def build_pdf(path: Path = OUT) -> Path:
             ("Size", f"{LIVING_SF:,} living sq ft  ·  {TOTAL_SF:,} total building sq ft  ·  one story  ·  built 2006"),
             ("Rooms", "3 bedrooms, 3 baths, plus an office. The third bath serves the office and the pool."),
             ("Lot and view", "0.23 acres, lot 47. Golf course and lake view. Front faces east; lanai faces west."),
-            ("Roof and pool", "Tile roof, year not stated. Heated pool and spa, screen cage, outdoor kitchen."),
+            ("Equipment, per the agent", "Roof 20 years old. HVAC 2024 and HVAC 2017. Pool heater 2020. Water heater still undated."),
             ("Flood", "Flood zone X on the listing detail. The lake is a view. MLS waterfront flag is No."),
             ("Parcel", "588502359. Country Club Village subphase R, Siena, and subphase S, Mizner Reserve."),
             ("Last sale", f"{money(PRIOR_SALE)} on 21 May 2020. Prior MLS A4436936."),
@@ -356,9 +366,8 @@ def build_pdf(path: Path = OUT) -> Path:
 
     pdf.h2("What the remodel adds")
     pdf.body(
-        "The current remarks describe a full remodel. The May 2019 remarks, when this house was listed and then sold "
-        "for $445,000, already advertised the pool, spa, outdoor kitchen, 18-inch tile, 48-inch cabinets, a granite island, "
-        "stainless appliances, a gas range, and an office with its own bath."
+        "The May 2019 listing, which sold for $445,000, already advertised the pool, spa, outdoor kitchen, "
+        "18-inch tile, 48-inch cabinets, a granite island, and an office bath. A 2012 renovation year on Redfin is unverified."
     )
     pdf.simple_table(
         ["Claimed in 2026", "Already true in 2019", "How to treat it"],
@@ -368,15 +377,14 @@ def build_pdf(path: Path = OUT) -> Path:
             ["Frameless primary shower", "Tub, spa shower, two vanities", "Finish work in the same room."],
             ["Guest baths remodeled", "Three baths already", "Cosmetic unless permits show a rebuild."],
             ["Tile floors", "18-inch tile", "Existing."],
-            ["Pool, spa, cage, outdoor kitchen", "Same features in the 2019 copy", "Existing. Ages are not disclosed."],
+            ["Pool, spa, outdoor kitchen", "Same features in the 2019 copy", "Existing. Heater is 2020. Surface and cage are not."],
             ["Wine bar, electric fireplace", "Not in the 2019 remarks", "Cosmetic. The fireplace is electric."],
             ["Softener and closet system", "Two walk-in closets", "Useful. Small dollars."],
-            ["Roof, AC, water heater", "No dates then either", "Open. Neighbors date 2023-2026 gear."],
+            ["Roof", "Agent: 20 years old", "Original tile roof. Underlayment is the cost."],
+            ["Two air conditioners", "Agent: 2024 and 2017", "2024 is current. 2017 is mid-life."],
+            ["Pool heater", "Agent: 2020", "Serviceable. Surface, cage, and water heater are still undated."],
         ],
         [58, 62, 68],
-    )
-    pdf.note(
-        "Redfin shows a 2012 renovation year on its public-record pane. Treat that field as unverified until the Manatee permit file is pulled."
     )
 
     pdf.add_page()
@@ -388,11 +396,11 @@ def build_pdf(path: Path = OUT) -> Path:
         "A buyer who ports a Florida homestead cap would pay less."
     )
     pdf.simple_table(
-        ["Item", "Seller, 2025", "Buyer at the ask", "Buyer at $940,000"],
+        ["Item", "Seller, 2025", "Buyer at the ask", "Buyer at $880,000"],
         [
-            ["Price", "Already owned", money(ASK), money(mid)],
-            ["Tax bill, year 1", money(SELLER_TAX_BILL), money(year1), money(non_homestead_tax(mid))],
-            ["Tax bill, year 2 with homestead", money(SELLER_TAX_BILL), money(year2), money(homestead_tax(mid))],
+            ["Price", "Already owned", money(ASK), money(supported)],
+            ["Tax bill, year 1", money(SELLER_TAX_BILL), money(year1), money(non_homestead_tax(supported))],
+            ["Tax bill, year 2 with homestead", money(SELLER_TAX_BILL), money(year2), money(homestead_tax(supported))],
             ["Town Hall fee", "$135 / year", "$135 / year", "$135 / year"],
             ["Siena maintenance, planning", "$186 / month", "$186 / month", "$186 / month"],
             ["Insurance", "Unknown", "Quote before writing", "Quote before writing"],
@@ -421,12 +429,12 @@ def build_pdf(path: Path = OUT) -> Path:
         ["Risk", "Level", "What is open"],
         [
             ["Price and resale", "High", "The ask is the outlier. 13911 has already been cut 23 percent and was still listed. 13987 sold in 2026 below its 2023 price."],
-            ["Roof and insurance", "High", "2006 tile, year not disclosed. Underlayment is the failure point. Planning range to replace tile on a house this size is $40,000 to $80,000. That is not a bid."],
-            ["HVAC and water heater", "High", "The listing is silent. Neighbors advertise 2023-2026 replacements. Planning range: $8,000 to $16,000 for a 4-ton system, $1,500 to $3,000 for a heater."],
+            ["Roof and insurance", "High", "Agent says 20 years old, so this is the original tile roof. Underlayment is the failure point. Planning range to replace tile is $40,000 to $80,000. That is not a bid."],
+            ["2017 HVAC, water heater", "Medium", "One system is 2024. The second is 2017, so it is mid-life. The water heater is still undated. Ask which zone each system serves."],
             ["Tax reset", "High", f"About {money(year1 - SELLER_TAX_BILL)} more per year at the ask than the homestead bill."],
             ["Remodel story", "Medium", "Pool, tile, kitchen footprint, and the office bath were already in the 2019 listing. Pull permits before paying a remodel premium."],
             ["HOA disclosure", "Medium", "The $135 annual line is the Town Hall fee. The village maintenance fee is the one on the neighbors' listings."],
-            ["Pool and cage", "Medium", "Heated pool and spa are real. Surface, equipment, and the 2006 aluminum cage are undated."],
+            ["Pool surface and cage", "Medium", "The heater is from 2020. The surface, pump, and 2006 screen cage are still undated."],
             ["Three bedrooms", "Medium", "The third bath is the office and pool bath. 13911 offers more bedrooms and baths at a lower ask."],
             ["Golf lot", "Medium", "The view is real, and 13978 shows what buyers paid for the same view. Balls, mowers, and course chemicals come with the lot."],
             ["Flood, CDD, 2006 screen", "Low", "Flood zone X. CDD debt is small. Nothing reviewed here ties this address to Chinese drywall. A 2006 build still belongs on a stucco, flashing, and drywall screen."],
@@ -434,13 +442,18 @@ def build_pdf(path: Path = OUT) -> Path:
         [42, 22, 124],
     )
 
-    pdf.h2("Before an offer")
+    pdf.h2("Pricing recommendation")
     pdf.body(
-        "Require a roof certification that states the underlayment age, a 4-point inspection, a wind-mitigation report, "
-        "a wood-destroying-organism inspection, a pool inspection, an insurance binder, both estoppels, and the Manatee permit history. "
-        f"A price near {money(mid)} is the supported case when those reports show remaining life in the roof and the air conditioner. "
-        f"An original 2006 roof pulls the case toward {money(860_000)}. "
-        f"The {money(ASK)} ask requires a buyer who sets aside the six 2026 sales and the under-contract house with the same view."
+        f"Offer {money(OFFER)}. Supported value is {money(supported)}, about {psf(supported / LIVING_SF)} per living foot, "
+        "in line with the 13978 contract once this house's living area is used. "
+        "The 2024 air conditioner and the 2020 pool heater are real credits. The 2017 air conditioner is mid-life, not a reason to add price. "
+        f"The 20-year roof is the reason not to pay up. Do not exceed {money(CEILING)}. "
+        "Go there only if the insurance binder is affordable and the roof certification does not call for immediate replacement. "
+        f"The {money(ASK)} ask is {money(ASK - supported)} above the supported value."
+    )
+    pdf.body(
+        "Still require a roof certification, a 4-point, a wind-mitigation report, a wood-destroying-organism inspection, "
+        "a pool inspection, both estoppels, and the permit file. Ask which zone each air conditioner serves, and the water-heater age."
     )
     pdf.h2("Sources")
     pdf.note(
@@ -448,7 +461,9 @@ def build_pdf(path: Path = OUT) -> Path:
         "payment posted 1 Dec 2025. Stellar MLS reprints for 13978 (A4705315), 13911 (A4678185), 13860 (TB8526072), "
         "13853 (A4666855), 13828 (A4687316), 13804 (A4691647), 13876, 13861 (A4668432), and 13844 (A4671692). "
         "Your Observer, 18 Aug 2026, for the 13987 sale. Lakewood Ranch CDD 5 FY2026/27 hearing notice for the proposed Siena assessment. "
-        "Lakewood Ranch Golf & Country Club 2026 membership packet for dues. Repair ranges are planning numbers, not contractor bids."
+        "Lakewood Ranch Golf & Country Club 2026 membership packet for dues. "
+        "Roof, HVAC, and pool-heater ages are from the listing agent on 23 Oct 2026, not from a permit or a paid invoice. "
+        "Repair ranges are planning numbers, not contractor bids."
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(path)
@@ -457,7 +472,7 @@ def build_pdf(path: Path = OUT) -> Path:
 
 def _short_note(comp: dict) -> str:
     notes = {
-        "13994 Siena Loop": "Subject. Golf and lake. Roof and AC undated.",
+        "13994 Siena Loop": "Roof 20 years. HVAC 2024 and 2017. Heater 2020.",
         "13978 Siena Loop": "Same plan and view. AC replaced Apr 2026.",
         "13853 Siena Loop": "Recent HVAC, heater, rescreen. Pond.",
         "13860 Siena Loop": "Larger. AC 2024, water heater 2025.",
