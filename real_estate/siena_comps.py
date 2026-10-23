@@ -603,7 +603,7 @@ def build_workbook(path: Path) -> Path:
     val["A1"] = "Desk value"
     val["A1"].font = Font(bold=True, size=16, color="1F4E79")
     val["A2"] = (
-        "Yellow cells are inputs. Recommendation on 23 Oct 2026 is to pass. The owners rejected two offers under $1,000,000 and are still asking $1,195,000. "
+        "Yellow cells are inputs. No offer has been sent. Wait until the list price is under $1,000,000, then write $850,000 to $910,000. The owners rejected two other offers under $1,000,000 and are still asking $1,195,000. "
         "The roof is the original tile roof, completed 28 Feb 2006. One HVAC changeout was permitted on 30 May 2024. "
         "The agent's 2017 HVAC date and 2020 pool-heater date are not in the public permit file. "
         "It is not an appraisal and it is not a prediction of the contract price."
@@ -622,9 +622,9 @@ def build_workbook(path: Path) -> Path:
         (10, "13978 $/sf", "=B8/B9", "Formula"),
         (11, "Subject sized at 13978 $/sf", "=B10*B5", "What this house costs if it sells at the twin's ask rate"),
         (12, "Dollars above that twin", "=B4-B11", "Ask minus the twin-sized value"),
-        (13, "Pass unless the price is", OFFER, "No offer today. The owners rejected two bids under $1,000,000 and are still asking $1,195,000. This cell is the bottom of the old bid range, not an instruction to write it."),
+        (13, "Opening offer, once listed under $1,000,000", OFFER, "No offer has been sent. This number is what to write after the list price falls under $1,000,000. It is not an offer to send at the current ask."),
         (14, "Supported value", SUPPORTED, "About the 13978 contract rate on this living area. One permitted 2024 changeout offsets part of the roof. It does not support a premium, and the unconfirmed 2017 system does not add value."),
-        (15, "Reopen the file at or below", CEILING, "Only if the ask or a written counter is this or less, with an affordable insurance binder, a roof report that does not require immediate replacement, and a data plate showing the second system is 2017 or newer."),
+        (15, "Ceiling once listed under $1,000,000", CEILING, "Top of the offer after the list price is under $1,000,000. Still requires an affordable insurance binder, a roof report that does not require immediate replacement, and a data plate showing the second system is 2017 or newer."),
         (16, "Ask vs supported", "=B4/B14-1", "Percent the ask sits above the supported value"),
         (17, "Dollars above supported", "=B4-B14", "Gap between the ask and the supported value"),
         (18, "2020 purchase", PRIOR_SALE, "21 May 2020. Ask is 2.69 times that price"),
@@ -672,8 +672,8 @@ def build_workbook(path: Path) -> Path:
         "That is one system. The agent's 2017 air conditioner and 2020 pool heater are not in the county file, so they are not credits. "
         "The original roof removes the $1,030,000 case. Supported value is $880,000. "
         "On 23 Oct 2026 the listing agent told our broker the owners have rejected two offers, both under $1,000,000. The amounts were not disclosed. "
-        "The owners are holding a price above the bids buyers will write. Pass. "
-        "Reopen the file only if the ask or a written counter is $910,000 or less."
+        "The owners are holding a price above the bids buyers will write. No offer has been sent. "
+        "Wait until the house is listed under $1,000,000, then write $850,000 to $910,000."
     )
     val["A24"].alignment = Alignment(wrap_text=True, vertical="top")
     val.row_dimensions[24].height = 36
@@ -839,7 +839,7 @@ def build_workbook(path: Path) -> Path:
             "Price",
             "High",
             "Ask is $456/sf against a 2026 sold median near $314/sf and a same-view neighbor under contract at $336/sf. The owners rejected two offers under $1,000,000. Amounts were not disclosed.",
-            "Pass. The owners rejected the band buyers are writing. Supported value is $880,000. Reopen the file only if the ask or a counter is $910,000 or less.",
+            "No offer has been sent. Wait until the list price is under $1,000,000, then write $850,000 to $910,000. Supported value is $880,000.",
         ),
         (
             "Resale",

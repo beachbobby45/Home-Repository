@@ -15,6 +15,7 @@ from real_estate.build_siena_pdf import DESKTOP_NAME, build_pdf, copy_to_desktop
 def test_pdf_states_the_conclusion(tmp_path: Path):
     pdf_path = build_pdf(tmp_path / "brief.pdf")
     text = subprocess.check_output(["pdftotext", "-layout", str(pdf_path), "-"], text=True)
+    flat = " ".join(text.split())
     assert "13994 Siena Loop" in text
     assert "13394" in text
     assert "$1,195,000" in text
@@ -32,6 +33,8 @@ def test_pdf_states_the_conclusion(tmp_path: Path):
     assert "None found" in text
     assert "no completed inspections" in text
     assert "Pass" in text
+    assert "listed under $1,000,000" in flat
+    assert "No offer has been sent" in flat
     assert "two offers" in text
     assert "under $1,000,000" in text
     assert "rejected" in text

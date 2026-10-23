@@ -278,9 +278,9 @@ def build_pdf(path: Path = OUT) -> Path:
     pdf.ln(1)
     pdf.boxes(
         [
-            ("Pass", "No offer today.\nSellers are above the market.", WARM),
-            (money(supported), f"Comps support this.\nAbout {psf(supported / LIVING_SF)} per foot.", BAND),
-            (money(CEILING), f"Reopen only at this.\nAbout {psf(CEILING / LIVING_SF)} per foot.", GREEN),
+            ("Pass", "No offer sent.\nWait for a list under $1M.", WARM),
+            (money(supported), f"Offer once listed.\nAbout {psf(supported / LIVING_SF)} per foot.", BAND),
+            (money(CEILING), f"Do not bid above.\nAbout {psf(CEILING / LIVING_SF)} per foot.", GREEN),
         ]
     )
     pdf.body(
@@ -290,8 +290,8 @@ def build_pdf(path: Path = OUT) -> Path:
         "It does not confirm the agent's second system from 2017 or a pool heater from 2020. Those two dates are not in the public file, "
         "so they are not credits. Supported value stays on the 13978 contract rate for this floor plan, "
         f"about {money(round(twin, -3))}. Buyers have already written two offers under $1,000,000, and the owners rejected both. "
-        f"A bid from {money(OFFER)} to {money(CEILING)} is inside the band they refused. "
-        f"Pass. Reopen the file only if the ask or a counter is {money(CEILING)} or less. "
+        f"No offer has been sent, so there is no counter to wait on. "
+        f"Send an offer only after this house is listed under $1,000,000, and write it from {money(OFFER)} to {money(CEILING)}. "
         f"The ask is {money(ASK - supported)} above the supported value."
     )
 
@@ -446,12 +446,13 @@ def build_pdf(path: Path = OUT) -> Path:
         f"The {money(ASK)} ask is {money(ASK - supported)} above that. "
         "The owners rejected two offers under $1,000,000 and have not cut the price on day 49. "
         "They are holding a value the current buyers have already refused. "
-        f"A fresh offer from {money(OFFER)} to {money(CEILING)} would ask them to accept the same kind of bid they turned down."
+        "No offer has been sent. Waiting on a list price under $1,000,000 is the whole strategy."
     )
     pdf.body(
-        f"Look again only if the ask, or a written counter, is {money(CEILING)} or less, the insurance binder is affordable, "
-        "the roof report does not require immediate replacement, and the second system's data plate is 2017 or newer. "
-        "Until then, spend the inspection money on a house whose seller is in the market."
+        f"When the list price is under $1,000,000, write {money(OFFER)} to {money(CEILING)}. "
+        "A new ask of $999,000 is the moment to engage, and it is still above the comps. "
+        "Require an affordable insurance binder, a roof report that does not call for immediate replacement, "
+        "and a second-system data plate from 2017 or newer before raising the bid inside that range."
     )
     pdf.h2("Sources")
     pdf.note(
