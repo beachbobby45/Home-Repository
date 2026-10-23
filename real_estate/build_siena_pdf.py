@@ -28,6 +28,7 @@ from real_estate.siena_comps import (
     NON_AD_VALOREM,
     CEILING,
     OFFER,
+    PERMITS,
     PRIOR_SALE,
     SELLER_TAX_BILL,
     SUPPORTED,
@@ -83,7 +84,7 @@ class Brief(FPDF):
         self.cell(
             0,
             4.5,
-            "13994 Siena Loop   ·   Updated 23 Oct 2026, Pacific   ·   Agent ages: roof 20 years, HVAC 2024 and 2017, pool heater 2020",
+            "13994 Siena Loop   ·   Permits checked 23 Oct 2026, Pacific   ·   Original 2006 roof   ·   One HVAC permit, May 2024",
             align="L",
         )
         self.set_xy(self.l_margin, 16)
@@ -273,7 +274,7 @@ def build_pdf(path: Path = OUT) -> Path:
     pdf.set_font("InterM", "", 9)
     pdf.set_text_color(*NAVY)
     pdf.set_x(pdf.l_margin)
-    pdf.cell(pdf.content_w, 5, "Pricing after the listing agent's equipment ages", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(pdf.content_w, 5, "Pricing after the Manatee County permit check", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
     pdf.boxes(
         [
@@ -283,16 +284,15 @@ def build_pdf(path: Path = OUT) -> Path:
         ]
     )
     pdf.body(
-        "On 23 Oct 2026 the listing agent dated the roof at 20 years old, one air conditioner at 2024, "
-        "the second air conditioner at 2017, and the pool heater at 2020. The roof is the original 2006 tile roof. "
-        f"That removes the old high case near {money(1_030_000)}. The 2024 system and the 2020 heater also remove the case "
-        "that every mechanical is original. Supported value sits on the 13978 contract rate for this floor plan, "
-        f"about {money(round(twin, -3))}, because the newer air conditioner offsets part of the known roof and does not justify a premium over that neighbor. "
-        f"Open at {money(OFFER)}. Do not go above {money(CEILING)}, and only approach that number with an insurance binder "
-        "and a roof report that does not require immediate replacement. "
+        "Manatee County permits confirm the tile roof is original, which matches the agent's statement that it is 20 years old. Permit CMP-05031188 was completed on 28 Feb 2006, "
+        "and no reroof permit follows it. The only later mechanical permit is BLD2405-3790, one like-for-like air-conditioner "
+        f"changeout issued 30 May 2024 for $9,524. That removes the old high case near {money(1_030_000)}. "
+        "It does not confirm the agent's second system from 2017 or a pool heater from 2020. Those two dates are not in the public file, "
+        "so they are not credits. Supported value stays on the 13978 contract rate for this floor plan, "
+        f"about {money(round(twin, -3))}. Open at {money(OFFER)}. Do not go above {money(CEILING)} unless the insurance binder is affordable, "
+        "the roof report does not require immediate replacement, and the second system's data plate is 2017 or newer. "
         f"The ask is {money(ASK - supported)} above the supported value. "
-        f"County market value on the 2025 roll is {money(MARKET_VALUE)}. "
-        f"The owners bought the house on 21 May 2020 for {money(PRIOR_SALE)}."
+        f"County market value on the 2025 roll is {money(MARKET_VALUE)}. The owners bought the house on 21 May 2020 for {money(PRIOR_SALE)}."
     )
 
     pdf.h2("The house")
@@ -302,7 +302,7 @@ def build_pdf(path: Path = OUT) -> Path:
             ("Size", f"{LIVING_SF:,} living sq ft  ·  {TOTAL_SF:,} total building sq ft  ·  one story  ·  built 2006"),
             ("Rooms", "3 bedrooms, 3 baths, plus an office. The third bath serves the office and the pool."),
             ("Lot and view", "0.23 acres, lot 47. Golf course and lake view. Front faces east; lanai faces west."),
-            ("Equipment, per the agent", "Roof 20 years old. HVAC 2024 and HVAC 2017. Pool heater 2020. Water heater still undated."),
+            ("County permits", "Original tile roof completed 28 Feb 2006. One HVAC changeout issued 30 May 2024. No 2017 HVAC permit. No 2020 heater permit."),
             ("Flood", "Flood zone X on the listing detail. The lake is a view. MLS waterfront flag is No."),
             ("Parcel", "588502359. Country Club Village subphase R, Siena, and subphase S, Mizner Reserve."),
             ("Last sale", f"{money(PRIOR_SALE)} on 21 May 2020. Prior MLS A4436936."),
@@ -352,42 +352,51 @@ def build_pdf(path: Path = OUT) -> Path:
     )
     pdf.body(
         "13978 is the cleanest comparison: same bedroom count, three baths, an office, and a golf-and-lake lot, "
-        "plus a 4-ton 16 SEER air conditioner replaced in April 2026. It found a buyer at $899,000."
-    )
-    pdf.body(
-        "13911 shows what an ambitious ask does on this loop. It opened at $1,295,000 on 16 Jan 2026 and was cut "
-        "to $995,000 by 20 Aug 2026. It is larger, has four bedrooms and 3.5 baths, a 2024 air conditioner, and a 3-car garage, "
-        "and it was still for sale. 13987 sold in the week of 3 Aug 2026 for $760,000 after a 2023 sale at $810,000."
+        "plus a 4-ton 16 SEER air conditioner replaced in April 2026. It found a buyer at $899,000. "
+        "13911 opened at $1,295,000 on 16 Jan 2026 and was cut to $995,000 by 20 Aug 2026, with more bedrooms and baths, and it was still for sale. "
+        "13987 sold in the week of 3 Aug 2026 for $760,000 after a 2023 sale at $810,000."
     )
     pdf.body(
         "13828 closed at $799,000 on 1 Jun 2026 with a brand-new tile roof, a new pool heater, and a rescreened cage, "
-        f"at {psf(price_per_sf(799_000, 2311))} per living foot. That is the top of the 2026 sold range, and the roof was the headline."
+        f"at {psf(price_per_sf(799_000, 2311))} per living foot. That is the top of the 2026 sold range. "
+        "This house's roof, pool, and cage are the 2006 originals."
     )
 
     pdf.h2("What the remodel adds")
     pdf.body(
-        "The May 2019 listing, which sold for $445,000, already advertised the pool, spa, outdoor kitchen, "
-        "18-inch tile, 48-inch cabinets, a granite island, and an office bath. A 2012 renovation year on Redfin is unverified."
+        "The May 2019 listing already advertised the pool, spa, outdoor kitchen, 18-inch tile, 48-inch cabinets, "
+        "a granite island, and an office bath. None of that later finish work has a permit."
     )
     pdf.simple_table(
         ["Claimed in 2026", "Already true in 2019", "How to treat it"],
         [
-            ["Quartz island", "Granite island", "Likely replaced. A real, limited premium."],
-            ["New cabinetry and pantry", "48-inch cabinets, walk-in pantry", "Confirm they are new."],
-            ["Frameless primary shower", "Tub, spa shower, two vanities", "Finish work in the same room."],
-            ["Guest baths remodeled", "Three baths already", "Cosmetic unless permits show a rebuild."],
-            ["Tile floors", "18-inch tile", "Existing."],
-            ["Pool, spa, outdoor kitchen", "Same features in the 2019 copy", "Existing. Heater is 2020. Surface and cage are not."],
-            ["Wine bar, electric fireplace", "Not in the 2019 remarks", "Cosmetic. The fireplace is electric."],
-            ["Softener and closet system", "Two walk-in closets", "Useful. Small dollars."],
-            ["Roof", "Agent: 20 years old", "Original tile roof. Underlayment is the cost."],
-            ["Two air conditioners", "Agent: 2024 and 2017", "2024 is current. 2017 is mid-life."],
-            ["Pool heater", "Agent: 2020", "Serviceable. Surface, cage, and water heater are still undated."],
+            ["Quartz island", "Granite island", "Likely replaced. No permit."],
+            ["Cabinets and primary shower", "Tall cabinets, tub, spa shower", "Finish work. No bath permit."],
+            ["Pool, spa, cage", "Same features in 2019", "Original 2006 permits. Heater has none."],
+            ["Roof", "Not described as new", "Original tile, completed 28 Feb 2006."],
+            ["Two air conditioners", "Agent: 2024 and 2017", "Only the 2024 changeout is permitted."],
+            ["Pool heater", "Agent: 2020", "No county permit. Require the data plate."],
         ],
-        [58, 62, 68],
+        [52, 62, 74],
     )
 
     pdf.add_page()
+    pdf.h2("What the county permits show")
+    pdf.body(
+        "Checked 23 Oct 2026 on the Manatee County public site. The historical permit files cover 2004 through 21 Feb 2018. "
+        "The live permit layer, searched by parcel 588502359 and by 13994 SIENA, has one building permit, plus a pointer to the historical archive. "
+        "\"None found\" means that work was not in those files. It does not by itself prove the equipment was never changed."
+    )
+    pdf.simple_table(
+        ["Work", "Permit", "County result"],
+        [[item["work"], item["permit"], item["pdf"]] for item in PERMITS],
+        [48, 32, 108],
+    )
+    pdf.note(
+        "BLD2405-3790 is Mechanical Express, project description \"Moriarty HVAC CHANGEOUT. LIKE FOR LIKE,\" "
+        "no duct replacement, mechanical trade only. Record status is Closed. The Accela page still says there are no completed inspections."
+    )
+
     pdf.h2("Carrying costs the ask does not show")
     pdf.body(
         "The sellers have homestead, so Save Our Homes is holding the assessed value at "
@@ -411,17 +420,9 @@ def build_pdf(path: Path = OUT) -> Path:
     )
     pdf.body(
         f"At the ask, year-1 taxes are about {money(year1)}, roughly {money(year1 - SELLER_TAX_BILL)} more per year than the bill the seller is paying. "
-        "The CDD is already inside the $13,013 bill. Debt service is only $331 a year, so the bond is small. "
-        "Operations continue. The proposed FY2026/27 Siena CDD total is $3,782, against $3,497 billed for 2025."
-    )
-    pdf.body(
-        "Neighbor listings put the Siena maintenance fee at $175 to $188 per month. 13828 disclosed $186 and 13804 disclosed $188. "
-        "Confirm both associations on the estoppel, including what the maintenance covers and whether a special assessment is open."
-    )
-    pdf.body(
-        "Club membership does not transfer with the deed. The 2026 Lakewood Ranch Golf & Country Club packet lists "
-        "Premier golf at $110,000 to join and $1,360 a month, Sports at $15,000 and $430 a month, and Social at $6,000 and $185 a month. "
-        "Heritage Golf Group has owned the club since early 2024. Price a membership separately if it matters."
+        "The CDD is already inside that bill. Proposed FY2026/27 Siena CDD total is $3,782. "
+        "Neighbor listings put Siena maintenance at $175 to $188 a month; confirm both associations on the estoppel. "
+        "Club membership is optional and does not transfer. The 2026 Premier golf packet is $110,000 to join and $1,360 a month."
     )
 
     pdf.h2("Risk, in the order it can cost money")
@@ -429,15 +430,11 @@ def build_pdf(path: Path = OUT) -> Path:
         ["Risk", "Level", "What is open"],
         [
             ["Price and resale", "High", "The ask is the outlier. 13911 has already been cut 23 percent and was still listed. 13987 sold in 2026 below its 2023 price."],
-            ["Roof and insurance", "High", "Agent says 20 years old, so this is the original tile roof. Underlayment is the failure point. Planning range to replace tile is $40,000 to $80,000. That is not a bid."],
-            ["2017 HVAC, water heater", "Medium", "One system is 2024. The second is 2017, so it is mid-life. The water heater is still undated. Ask which zone each system serves."],
+            ["Roof and insurance", "High", "Permit CMP-05031188 completed 28 Feb 2006 with the original tile roof. No reroof permit. Planning range to replace tile is $40,000 to $80,000. That is not a bid."],
+            ["Second HVAC, water heater", "High", "Only BLD2405-3790, one 2024 changeout for $9,524. No 2017 permit and no water-heater permit. Read both data plates."],
             ["Tax reset", "High", f"About {money(year1 - SELLER_TAX_BILL)} more per year at the ask than the homestead bill."],
-            ["Remodel story", "Medium", "Pool, tile, kitchen footprint, and the office bath were already in the 2019 listing. Pull permits before paying a remodel premium."],
-            ["HOA disclosure", "Medium", "The $135 annual line is the Town Hall fee. The village maintenance fee is the one on the neighbors' listings."],
-            ["Pool surface and cage", "Medium", "The heater is from 2020. The surface, pump, and 2006 screen cage are still undated."],
-            ["Three bedrooms", "Medium", "The third bath is the office and pool bath. 13911 offers more bedrooms and baths at a lower ask."],
-            ["Golf lot", "Medium", "The view is real, and 13978 shows what buyers paid for the same view. Balls, mowers, and course chemicals come with the lot."],
-            ["Flood, CDD, 2006 screen", "Low", "Flood zone X. CDD debt is small. Nothing reviewed here ties this address to Chinese drywall. A 2006 build still belongs on a stucco, flashing, and drywall screen."],
+            ["Remodel, pool, and cage", "Medium", "No kitchen or bath permit. Pool completed 25 May 2006. Cage completed 7 Mar 2006. No 2020 heater permit."],
+            ["HOA, flood, bedrooms", "Medium", "Town Hall fee is $135 a year; Siena maintenance is separate. Flood zone X. The office is not a fourth bedroom. The golf view did not get 13978 a premium."],
         ],
         [42, 22, 124],
     )
@@ -446,14 +443,15 @@ def build_pdf(path: Path = OUT) -> Path:
     pdf.body(
         f"Offer {money(OFFER)}. Supported value is {money(supported)}, about {psf(supported / LIVING_SF)} per living foot, "
         "in line with the 13978 contract once this house's living area is used. "
-        "The 2024 air conditioner and the 2020 pool heater are real credits. The 2017 air conditioner is mid-life, not a reason to add price. "
-        f"The 20-year roof is the reason not to pay up. Do not exceed {money(CEILING)}. "
-        "Go there only if the insurance binder is affordable and the roof certification does not call for immediate replacement. "
+        "The permitted 2024 changeout is one system at a $9,524 job value. It offsets part of the original roof. It is not a premium. "
+        "The 2017 air conditioner and the 2020 pool heater are not in the county file, so do not pay for them. "
+        f"Do not exceed {money(CEILING)}. Go there only if the insurance binder is affordable, the roof certification does not call for immediate replacement, "
+        "and the second system's data plate or invoice shows 2017 or newer. "
         f"The {money(ASK)} ask is {money(ASK - supported)} above the supported value."
     )
     pdf.body(
         "Still require a roof certification, a 4-point, a wind-mitigation report, a wood-destroying-organism inspection, "
-        "a pool inspection, both estoppels, and the permit file. Ask which zone each air conditioner serves, and the water-heater age."
+        "a pool inspection, and both estoppels. Photograph both air-conditioner data plates and the pool-heater and water-heater plates."
     )
     pdf.h2("Sources")
     pdf.note(
@@ -462,8 +460,8 @@ def build_pdf(path: Path = OUT) -> Path:
         "13853 (A4666855), 13828 (A4687316), 13804 (A4691647), 13876, 13861 (A4668432), and 13844 (A4671692). "
         "Your Observer, 18 Aug 2026, for the 13987 sale. Lakewood Ranch CDD 5 FY2026/27 hearing notice for the proposed Siena assessment. "
         "Lakewood Ranch Golf & Country Club 2026 membership packet for dues. "
-        "Roof, HVAC, and pool-heater ages are from the listing agent on 23 Oct 2026, not from a permit or a paid invoice. "
-        "Repair ranges are planning numbers, not contractor bids."
+        "Permits: Manatee historical files 2004 through 21 Feb 2018, the live GIS PermitData layer, and Accela record BLD2405-3790, all read 23 Oct 2026. "
+        "The agent's 2017 HVAC date and 2020 heater date remain the agent's statements. Repair ranges are planning numbers, not contractor bids."
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(path)
@@ -472,7 +470,7 @@ def build_pdf(path: Path = OUT) -> Path:
 
 def _short_note(comp: dict) -> str:
     notes = {
-        "13994 Siena Loop": "Roof 20 years. HVAC 2024 and 2017. Heater 2020.",
+        "13994 Siena Loop": "Original 2006 roof. One HVAC permit, 2024.",
         "13978 Siena Loop": "Same plan and view. AC replaced Apr 2026.",
         "13853 Siena Loop": "Recent HVAC, heater, rescreen. Pond.",
         "13860 Siena Loop": "Larger. AC 2024, water heater 2025.",

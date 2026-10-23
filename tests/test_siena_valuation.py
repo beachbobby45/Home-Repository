@@ -52,6 +52,7 @@ def test_workbook_formulas_and_subject_row(tmp_path: Path):
         "Carrying costs",
         "Upgrades",
         "Risks",
+        "Permits",
         "Sources",
     ]
     subject = wb["Subject"]
@@ -93,6 +94,19 @@ def test_workbook_formulas_and_subject_row(tmp_path: Path):
     severities = [risks.cell(row, 2).value for row in range(2, 16)]
     assert severities.count("High") >= 4
     assert "Roof and insurance" in [risks.cell(row, 1).value for row in range(2, 16)]
+
+    permits = wb["Permits"]
+    permit_text = " ".join(
+        str(permits.cell(row, col).value or "")
+        for row in range(1, 12)
+        for col in range(1, 8)
+    )
+    assert "CMP-05031188" in permit_text
+    assert "BLD2405-3790" in permit_text
+    assert "CMP-05070213" in permit_text
+    assert "CMP-06011072" in permit_text
+    assert "None found" in permit_text
+    assert "2017" in permit_text
 
 
 def test_2020_sale_multiple():

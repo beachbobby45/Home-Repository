@@ -25,6 +25,12 @@ def test_pdf_states_the_conclusion(tmp_path: Path):
     assert "20 years" in text
     assert "2017" in text
     assert "2024" in text
+    assert "BLD2405-3790" in text
+    assert "CMP-05031188" in text
+    assert "CMP-05070213" in text
+    assert "CMP-06011072" in text
+    assert "None found" in text
+    assert "no completed inspections" in text
     assert "13978 Siena Loop" in text
     assert "13853 Siena Loop" in text
     assert "13844 Siena Loop" in text

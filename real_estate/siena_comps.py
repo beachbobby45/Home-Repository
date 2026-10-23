@@ -60,7 +60,7 @@ COMPS = [
         "year": 2006,
         "lot_acres": 0.23,
         "view": "Golf and lake",
-        "updates": "Agent 23 Oct 2026: roof 20 years old, HVAC 2024 and HVAC 2017, pool heater 2020. Water heater still undated.",
+        "updates": "Permits: original tile roof completed 28 Feb 2006 (CMP-05031188). One HVAC changeout issued 30 May 2024 (BLD2405-3790). No 2017 HVAC permit and no 2020 pool-heater permit.",
         "source": "MLS A4704244",
     },
     {
@@ -263,13 +263,90 @@ def homestead_tax(price: float) -> float:
 
 
 # Listing-agent ages reported 23 Oct 2026: roof 20 years, HVAC 2024 and 2017, pool heater 2020.
+# County permits checked the same day support the roof and one 2024 HVAC changeout only.
 OFFER = 850_000
 SUPPORTED = 880_000
 CEILING = 910_000
 
+# Manatee public permits for parcel 588502359 / 13994 Siena Loop.
+# Archive CSVs: 2004–2005, 2006, 2007–2009, 2010–2012, 2013–2015, and 2016 through 21 Feb 2018.
+# Live layer: Manatee GIS PermitData, queried 23 Oct 2026. Accela detail for BLD2405-3790 the same day.
+PERMITS = [
+    {
+        "work": "New house and tile roof",
+        "permit": "CMP-05031188",
+        "issued": "28 Mar 2005",
+        "completed": "28 Feb 2006",
+        "status": "Closed",
+        "record": "Original 3-bed, 3-bath, one-story concrete-block house with a tile roof and gas. Neal Communities of Southwest Florida. Declared cost $130,000. Lot 47.",
+        "pdf": "Closed. Completed 28 Feb 2006. Neal Communities. Original tile roof. No later roof permit.",
+        "versus_agent": "Matches the agent's 20-year roof. No reroof permit appears after this one.",
+    },
+    {
+        "work": "Pool and spa",
+        "permit": "CMP-05070213",
+        "issued": "4 Aug 2005",
+        "completed": "25 May 2006",
+        "status": "Closed",
+        "record": "In-ground pool, spa, and deck. Splash Pools. Declared cost $28,100. Built with the house.",
+        "pdf": "Closed. Completed 25 May 2006. Splash Pools. Declared cost $28,100. Original pool.",
+        "versus_agent": "The pool is original. This permit does not date a heater.",
+    },
+    {
+        "work": "Screen cage",
+        "permit": "CMP-06011072",
+        "issued": "23 Feb 2006",
+        "completed": "7 Mar 2006",
+        "status": "Closed",
+        "record": "Mansard pool cage on the existing deck. Absolute Aluminum. Declared cost $6,667.",
+        "pdf": "Closed. Completed 7 Mar 2006. Mansard cage. Absolute Aluminum. No later cage permit.",
+        "versus_agent": "The cage is original. No later cage or rescreen permit was found.",
+    },
+    {
+        "work": "Air conditioner",
+        "permit": "BLD2405-3790",
+        "issued": "30 May 2024",
+        "completed": "GIS certificate 22 May 2026",
+        "status": "Closed",
+        "record": "One like-for-like HVAC changeout. Arctic Air Services, Scott Whitaker. Job value $9,524. No duct replacement. Mechanical only. Accela lists no completed inspections.",
+        "pdf": "Closed. Issued 30 May 2024. One like-for-like changeout, $9,524, Arctic Air. GIS certificate 22 May 2026. Accela lists no completed inspections.",
+        "versus_agent": "Confirms one 2024 system, not two. The agent's 2017 system has no permit in the files searched.",
+    },
+    {
+        "work": "Second air conditioner, 2017",
+        "permit": "None found",
+        "issued": "",
+        "completed": "",
+        "status": "Not in file",
+        "record": "No 2017 mechanical permit for this parcel in the 2013–2018 archive or in the live GIS layer.",
+        "pdf": "Not in the 2013–2018 archive or the live layer. Do not treat 2017 as a permit date.",
+        "versus_agent": "The 2017 date is the agent's statement only. The second system may still be the 2006 equipment.",
+    },
+    {
+        "work": "Pool heater, 2020",
+        "permit": "None found",
+        "issued": "",
+        "completed": "",
+        "status": "Not in file",
+        "record": "A 2020 heater permit would be in the live Accela-era layer. That layer has no heater permit for this house.",
+        "pdf": "A 2020 permit would be in the live layer. None is. Do not treat 2020 as a permit date.",
+        "versus_agent": "The 2020 heater date is the agent's statement only.",
+    },
+    {
+        "work": "Kitchen, baths, water heater",
+        "permit": "None found",
+        "issued": "",
+        "completed": "",
+        "status": "Not in file",
+        "record": "No alteration, plumbing, or water-heater permit for this parcel in the files searched. Redfin's 2012 renovation year is not a permit.",
+        "pdf": "No alteration or plumbing permit for this parcel. Redfin's 2012 renovation year is not a permit.",
+        "versus_agent": "Finish claims are not backed by a county building permit.",
+    },
+]
+
 
 def desk_range() -> dict[str, int]:
-    """Offer, supported value, and ceiling after the listing agent's equipment ages."""
+    """Offer, supported value, and ceiling after the county permit check."""
     return {
         "offer": OFFER,
         "supported": SUPPORTED,
@@ -347,6 +424,7 @@ def build_workbook(path: Path) -> Path:
         "Yellow cells on Valuation are the only inputs. "
         "Use living area, never total under-roof area. "
         "13394 Siena Loop is not a parcel; this file analyzes 13994 Siena Loop. "
+        "The Permits sheet is the Manatee County check of the agent's equipment dates. "
         "Pulled 23 Oct 2026 (Pacific). Desk comparison, not an appraisal."
     )
     how["A2"].alignment = Alignment(wrap_text=True, vertical="top")
@@ -364,9 +442,9 @@ def build_workbook(path: Path) -> Path:
         ("Total building area", TOTAL_SF, "Garage and lanai are inside this number. Ask divided by 3,548 is about $337/sf and is not comparable."),
         ("Ask per living sq ft", round(ASK / LIVING_SF, 2), "1,195,000 / 2,623."),
         ("Beds / baths", "3 / 3", "The third bath serves the office and the pool. Guest bedrooms share one bath. Office is not a fourth bedroom."),
-        ("Year built / stories", "2006 / one story", "Stucco on slab. Builder not named in the current MLS remarks."),
+        ("Year built / stories", "2006 / one story", "Permit CMP-05031188 completed 28 Feb 2006. Neal Communities of Southwest Florida. Concrete block, tile roof, gas."),
         ("Lot", "0.23 acres / 9,810 sf", "Lot 47, Block A. Legal: Country Club Village subphase R, Siena, and subphase S, Mizner Reserve."),
-        ("Parcel", "588502359", "Manatee County. Zoning A/WPE. Flood zone X on the Coldwell Banker detail page."),
+        ("Parcel", "588502359", "Listing says zoning A/WPE. The 2024 Accela record says PD-MU. Flood zone X on both."),
         ("Owners of record", "Timothy P. and Shannon L. Moriarty", "Homestead and Additional Homestead. Mortgage escrow is PHH. Public tax roll."),
         ("Last sale", PRIOR_SALE, "Sold 21 May 2020, prior MLS A4436936. Listed 24 May 2019 at $540,000 and cut five times."),
         ("2025 market / assessed", f"{MARKET_VALUE} / {ASSESSED_VALUE}", "Save Our Homes keeps assessed value under market value. Market value is still far under the ask."),
@@ -374,9 +452,9 @@ def build_workbook(path: Path) -> Path:
         ("Of which ad valorem", AD_VALOREM, "Millage 14.160 combined. School exemption $25,000. Non-school exemption $50,722."),
         ("Of which non-ad valorem", NON_AD_VALOREM, f"CDD 5 operations ${CDD_OM:,.2f}, CDD debt ${CDD_DEBT:,.2f}, East Manatee fire ${FIRE_NON_AD:,.2f}."),
         ("MLS association fee", 135, "Per year, Lakewood Ranch Town Hall. This is not the Siena maintenance fee. Neighbors disclose $175–$188 per month."),
-        ("Roof", "Tile, 20 years old", "Listing agent, 23 Oct 2026. On a 2006 house this is the original roof. Underlayment is the insurance issue. Planning range to replace tile is $40,000–$80,000, not a bid."),
-        ("HVAC", "2024 and 2017", "Listing agent, 23 Oct 2026. Two systems, replaced on different dates. The 2017 unit is mid-life. Tonnage and zones are still unknown."),
-        ("Pool", "Heater 2020. Surface and cage undated.", "The pool, spa, and outdoor kitchen were already in the May 2019 remarks. The heater date does not date the surface or the screen cage."),
+        ("Roof", "Original tile, completed 28 Feb 2006", "CMP-05031188. No reroof permit in the 2006–2018 archive or the live GIS layer. The agent's 20-year age matches. Planning range to replace tile is $40,000–$80,000, not a bid."),
+        ("HVAC", "One permitted changeout, 30 May 2024", "BLD2405-3790, like for like, $9,524, Arctic Air. GIS certificate date 22 May 2026. Accela lists no completed inspections. No permit was found for the agent's 2017 system."),
+        ("Pool", "Original pool and cage, 2006", "Pool completed 25 May 2006 (CMP-05070213). Mansard cage completed 7 Mar 2006 (CMP-06011072). No 2020 heater permit was found."),
         ("Orientation", "Front faces east", "Photo captions describe a west-facing lanai and sunsets. Consistent with a rear-west plan."),
         ("Schools", "Willis / Nolan / Lakewood Ranch High", "Public assignment. Confirm boundaries before relying on them."),
     ]
@@ -525,12 +603,14 @@ def build_workbook(path: Path) -> Path:
     val["A1"] = "Desk value"
     val["A1"].font = Font(bold=True, size=16, color="1F4E79")
     val["A2"] = (
-        "Yellow cells are inputs. Updated 23 Oct 2026 for the listing agent's ages: roof 20 years, HVAC 2024 and 2017, pool heater 2020. "
+        "Yellow cells are inputs. Updated 23 Oct 2026 after a Manatee County permit check. "
+        "The roof is the original tile roof, completed 28 Feb 2006. One HVAC changeout was permitted on 30 May 2024. "
+        "The agent's 2017 HVAC date and 2020 pool-heater date are not in the public permit file. "
         "It is not an appraisal and it is not a prediction of the contract price."
     )
     val["A2"].alignment = Alignment(wrap_text=True)
     val.merge_cells("A2:C2")
-    val.row_dimensions[2].height = 32
+    val.row_dimensions[2].height = 48
 
     labels = [
         (4, "Ask", ASK, "MLS A4704244"),
@@ -542,9 +622,9 @@ def build_workbook(path: Path) -> Path:
         (10, "13978 $/sf", "=B8/B9", "Formula"),
         (11, "Subject sized at 13978 $/sf", "=B10*B5", "What this house costs if it sells at the twin's ask rate"),
         (12, "Dollars above that twin", "=B4-B11", "Ask minus the twin-sized value"),
-        (13, "Opening offer", OFFER, "Start here. The roof is confirmed 20 years old, so the offer leaves room for a roof credit."),
-        (14, "Supported value", SUPPORTED, "About the 13978 contract rate on this living area. The 2024 HVAC offsets part of the known roof. It does not support a premium."),
-        (15, "Ceiling", CEILING, "Only with an affordable insurance binder and a roof report that does not require immediate replacement."),
+        (13, "Opening offer", OFFER, "Start here. The roof permit confirms original tile completed 28 Feb 2006, so the offer leaves room for a roof credit."),
+        (14, "Supported value", SUPPORTED, "About the 13978 contract rate on this living area. One permitted 2024 changeout offsets part of the roof. It does not support a premium, and the unconfirmed 2017 system does not add value."),
+        (15, "Ceiling", CEILING, "Only with an affordable insurance binder, a roof report that does not require immediate replacement, and a data plate or invoice showing the second system is 2017 or newer."),
         (16, "Ask vs supported", "=B4/B14-1", "Percent the ask sits above the supported value"),
         (17, "Dollars above supported", "=B4-B14", "Gap between the ask and the supported value"),
         (18, "2020 purchase", PRIOR_SALE, "21 May 2020. Ask is 2.69 times that price"),
@@ -587,14 +667,16 @@ def build_workbook(path: Path) -> Path:
         "This house's own 2019 campaign listed at $540,000 and sold at $445,000. "
         "The current remarks sell a remodel. The May 2019 remarks already advertised the pool, spa, outdoor kitchen, tile floors, 48-inch cabinets, granite island, and the office bath. "
         "Quartz, new cabinet claims, bath glass, a wine bar, an electric fireplace, and a softener can support a finish premium. They do not support $456 per foot. "
-        "On 23 Oct 2026 the listing agent dated the roof at 20 years old, one air conditioner at 2024, the second air conditioner at 2017, and the pool heater at 2020. "
-        "The 2024 system and the 2020 heater remove the all-original mechanicals case. The 20-year roof removes the $1,030,000 case. Supported value is $880,000. Open at $850,000. Do not exceed $910,000."
+        "Manatee permits confirm the tile roof is original: CMP-05031188 was completed 28 Feb 2006, and no reroof permit follows it. "
+        "The only later mechanical permit is BLD2405-3790, a like-for-like HVAC changeout issued 30 May 2024 for $9,524. "
+        "That is one system. The agent's 2017 air conditioner and 2020 pool heater are not in the county file, so they are not credits. "
+        "The original roof removes the $1,030,000 case. Supported value is $880,000. Open at $850,000. Do not exceed $910,000 unless the second system's data plate is 2017 or newer and the roof report is clean."
     )
     val["A24"].alignment = Alignment(wrap_text=True, vertical="top")
-    val.row_dimensions[24].height = 30
-    val.row_dimensions[25].height = 30
-    val.row_dimensions[26].height = 30
-    val.row_dimensions[27].height = 30
+    val.row_dimensions[24].height = 36
+    val.row_dimensions[25].height = 36
+    val.row_dimensions[26].height = 36
+    val.row_dimensions[27].height = 36
     val.page_setup.orientation = "landscape"
     val.page_setup.fitToPage = True
     val.page_setup.fitToWidth = 1
@@ -705,19 +787,19 @@ def build_workbook(path: Path) -> Path:
         ("Guest baths", "Both remodeled", "Three baths already, including the office bath", "Cosmetic unless permits show a rebuild."),
         ("Office bath", "Den bath doubles as the pool bath", "Office with its own private bathroom", "Same room, not an added bath."),
         ("Floors", "Tile", "18-inch tile in the main living area", "Already there in 2019."),
-        ("Pool, spa, cage", "Heated pool and spa, screen enclosure", "Private pool, spa, and enclosed lanai", "Already there in 2019. Heater is 2020 per the agent. Surface and cage are still undated."),
+        ("Pool, spa, cage", "Heated pool and spa, screen enclosure", "Private pool, spa, and enclosed lanai", "Original. Pool completed 25 May 2006. Cage completed 7 Mar 2006. No later permit."),
         ("Outdoor kitchen", "Grill and outdoor kitchen", "Outdoor kitchen", "Already there in 2019."),
         ("Wine bar and fireplace", "Wine bar, electric fireplace", "Not in the 2019 remarks", "Cosmetic. An electric fireplace is not a gas fireplace."),
         ("Lighting and windows treatments", "Designer lighting and window treatments", "Not singled out in 2019", "Cosmetic. Not impact glass."),
         ("Water softener", "Whole-house softener listed as an appliance", "Not in the 2019 remarks", "Useful. Small dollars."),
         ("Closet", "Oversized custom organized closet", "Two walk-in closets", "Organization system, not added area."),
         ("Accent walls", "Distinctive accent walls", "Not in the 2019 remarks", "Paint and millwork."),
-        ("Roof", "Agent: 20 years old", "Not described as new in 2019", "Original 2006 tile roof. Underlayment is the expensive item. Still get the certification."),
-        ("Air conditioners", "Agent: one system 2024, second system 2017", "Not dated in 2019", "Two systems. The 2024 unit is current. The 2017 unit is mid-life. Ask which zone each serves."),
-        ("Pool heater", "Agent: 2020", "Pool and spa already existed", "Serviceable. This date does not cover the pool surface or the screen cage."),
-        ("Water heater", "Still not dated", "Not mentioned", "Still open. Typical life is inside the time since 2006."),
+        ("Roof", "Agent: 20 years old", "Not described as new in 2019", "Confirmed original. CMP-05031188 completed 28 Feb 2006. No reroof permit. Still get the certification."),
+        ("Air conditioners", "Agent: one system 2024, second system 2017", "Not dated in 2019", "One permit only: BLD2405-3790, issued 30 May 2024, like for like, $9,524. No 2017 permit. Require the second data plate."),
+        ("Pool heater", "Agent: 2020", "Pool and spa already existed", "No heater permit in the live county layer. Do not pay for a 2020 heater without the invoice or data plate."),
+        ("Water heater", "Still not dated", "Not mentioned", "No water-heater permit in the files searched. Planning range is $1,500–$3,000 if it is original."),
         ("Windows", "Blinds and treatments only", "Not described as impact", "No wind-mitigation credit is being claimed. Verify."),
-        ("Public record renovation year", "Remarks say fully remodeled, no date", "Redfin shows a 2012 renovation year", "Do not treat 2012 as proven. Pull the permit file."),
+        ("Public record renovation year", "Remarks say fully remodeled, no date", "Redfin shows a 2012 renovation year", "No kitchen, bath, or alteration permit was found for this parcel. Do not treat 2012 as proven."),
     ]
     for r, row in enumerate(upgrade_rows, 2):
         for c, value in enumerate(row, 1):
@@ -765,14 +847,14 @@ def build_workbook(path: Path) -> Path:
         (
             "Roof and insurance",
             "High",
-            "Listing agent says the roof is 20 years old, so it is the original 2006 tile roof. 13828, which sold at $346/sf, led with a brand-new roof.",
+            "Permit CMP-05031188 completed 28 Feb 2006 with a tile roof. No reroof permit follows it. 13828, which sold at $346/sf, led with a brand-new roof.",
             "Roof certification, 4-point, wind mitigation, and an insurance binder before the inspection period ends. Planning range to replace a tile roof of this size is $40,000–$80,000. That is not a bid.",
         ),
         (
             "Second HVAC and water heater",
-            "Medium",
-            "Listing agent: one air conditioner replaced in 2024, the second in 2017. Water heater is still undated.",
-            "Confirm tonnage and which zone each system serves. Budget the 2017 unit for replacement later in the decade. Water heater planning range is $1,500–$3,000 if it is original.",
+            "High",
+            "The only HVAC permit is BLD2405-3790, one like-for-like changeout issued 30 May 2024 for $9,524. No 2017 permit was found. No water-heater permit was found.",
+            "Read both data plates. If the second system is original, budget a replacement. Water heater planning range is $1,500–$3,000 if it is original. Accela lists no completed inspections on the 2024 permit; GIS shows a certificate date of 22 May 2026.",
         ),
         (
             "Tax reset",
@@ -783,8 +865,8 @@ def build_workbook(path: Path) -> Path:
         (
             "Remodel story",
             "Medium",
-            "2019 remarks already included the pool, spa, outdoor kitchen, tile, tall cabinets, granite, and office bath. Redfin shows a 2012 renovation field.",
-            "Permit search for kitchen, bath, electric, and any wall changes. Unpermitted work is a loan and insurance problem.",
+            "2019 remarks already included the pool, spa, outdoor kitchen, tile, tall cabinets, granite, and office bath. The county files checked have no kitchen, bath, or alteration permit. Redfin's 2012 field is not a permit.",
+            "Do not pay a remodel premium the permit file does not support. Ask the seller for invoices. Unpermitted work is a loan and insurance problem.",
         ),
         (
             "HOA disclosure",
@@ -795,8 +877,8 @@ def build_workbook(path: Path) -> Path:
         (
             "Pool and cage",
             "Medium",
-            "Listing agent dated the pool heater at 2020. Surface, pump, and the 2006 screen cage are still undated.",
-            "Pool inspection. Resurface and rescreen are separate five-figure and four-figure jobs when they are due.",
+            "Pool completed 25 May 2006. Mansard cage completed 7 Mar 2006. No later pool, heater, or cage permit. The agent's 2020 heater date is not in the county file.",
+            "Pool inspection. Do not credit a 2020 heater without the data plate or invoice. Resurface and rescreen are separate jobs when they are due.",
         ),
         (
             "Three bedrooms",
@@ -859,6 +941,57 @@ def build_workbook(path: Path) -> Path:
     risks.add_data_validation(sev)
     sev.add(f"B2:B{1 + len(risk_rows) + 10}")
 
+    # --- Permits ---
+    permits = wb.create_sheet("Permits")
+    permits["A1"] = "Manatee County public permits for 13994 Siena Loop"
+    permits["A1"].font = Font(bold=True, size=16, color="1F4E79")
+    permits.merge_cells("A2:G2")
+    permits["A2"] = (
+        "Checked 23 Oct 2026. Archive CSVs published by Manatee Development Services cover 2004 through 21 Feb 2018. "
+        "The live GIS PermitData layer, queried by parcel 588502359 and by house 13994 SIENA, returned one building permit, BLD2405-3790, plus a pointer to the historical archive. "
+        "A missing permit means it was not in those public files. It does not prove the equipment was never replaced."
+    )
+    permits["A2"].alignment = Alignment(wrap_text=True, vertical="top")
+    permits.row_dimensions[2].height = 36
+    permit_headers = ["Work", "Permit", "Issued", "Completed", "Status", "What the county file shows", "Against the agent's date"]
+    for c, title in enumerate(permit_headers, 1):
+        cell = permits.cell(4, c, title)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = WRAP
+    for r, item in enumerate(PERMITS, 5):
+        values = [
+            item["work"],
+            item["permit"],
+            item["issued"],
+            item["completed"],
+            item["status"],
+            item["record"],
+            item["versus_agent"],
+        ]
+        for c, value in enumerate(values, 1):
+            cell = permits.cell(r, c, value)
+            cell.alignment = WRAP
+            cell.border = THIN
+        if item["status"] == "Closed":
+            permits.cell(r, 5).fill = SOLD_FILL
+        else:
+            permits.cell(r, 5).fill = WARN_FILL
+        permits.row_dimensions[r].height = 48
+    permits.auto_filter.ref = f"A4:G{4 + len(PERMITS)}"
+    permits.freeze_panes = "A5"
+    _widths(permits, [28, 18, 22, 28, 14, 72, 62])
+    permits.page_setup.orientation = "landscape"
+    permits.page_setup.fitToPage = True
+    permits.page_setup.fitToWidth = 1
+    permits.page_setup.fitToHeight = 1
+    permits.page_setup.paperSize = permits.PAPERSIZE_TABLOID
+    permits.sheet_properties.pageSetUpPr.fitToPage = True
+    permits.print_title_rows = "4:4"
+    permits.oddHeader.left.text = "County permits, parcel 588502359"
+    permits.oddFooter.right.text = "Page &P of &N"
+    permits.row_dimensions[1].height = 22
+
     # --- Sources ---
     src = wb.create_sheet("Sources")
     src_headers = ["Fact", "Source", "Date used"]
@@ -880,7 +1013,12 @@ def build_workbook(path: Path) -> Path:
         ("13987 sold $760,000, prior sale $810,000 in 2023", "Your Observer, Lakewood Ranch sales for 3–7 Aug 2026", "Published 18 Aug 2026"),
         ("Proposed FY2026/27 Siena CDD $3,781.92", "Lakewood Ranch CDD 5 budget-hearing notice, transcribed by Move With Momentum", "Hearing 17 Aug 2026, proposed"),
         ("Club initiation and dues", "Lakewood Ranch Golf & Country Club 2026 membership packet", "2026 packet"),
-        ("Renovation year 2012 field", "Redfin public-record pane", "Unverified county field"),
+        ("Renovation year 2012 field", "Redfin public-record pane", "Not matched to a permit"),
+        ("New house and tile roof, completed 28 Feb 2006", "Manatee historical permit CMP-05031188, parcel 588502359", "Archive file 2004–2005, checked 23 Oct 2026"),
+        ("Pool and spa, completed 25 May 2006", "Manatee historical permit CMP-05070213", "Archive file 2004–2005, checked 23 Oct 2026"),
+        ("Mansard screen cage, completed 7 Mar 2006", "Manatee historical permit CMP-06011072", "Archive file 2006, checked 23 Oct 2026"),
+        ("One HVAC changeout, issued 30 May 2024, GIS certificate 22 May 2026", "Manatee GIS PermitData and Accela BLD2405-3790", "Live layer and Accela page, 23 Oct 2026"),
+        ("No 2017 HVAC permit, no 2020 heater permit, no remodel permit", "Same archive CSVs through 21 Feb 2018, plus the live GIS layer for this parcel and house", "Checked 23 Oct 2026"),
     ]
     for r, row in enumerate(sources, 2):
         for c, value in enumerate(row, 1):
