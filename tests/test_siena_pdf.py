@@ -31,6 +31,7 @@ def test_pdf_states_the_conclusion(tmp_path: Path):
     assert "CMP-06011072" in text
     assert "None found" in text
     assert "no completed inspections" in text
+    assert "Pass" in text
     assert "two offers" in text
     assert "under $1,000,000" in text
     assert "rejected" in text

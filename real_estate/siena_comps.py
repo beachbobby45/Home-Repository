@@ -603,14 +603,14 @@ def build_workbook(path: Path) -> Path:
     val["A1"] = "Desk value"
     val["A1"].font = Font(bold=True, size=16, color="1F4E79")
     val["A2"] = (
-        "Yellow cells are inputs. Updated 23 Oct 2026 after a Manatee County permit check. "
+        "Yellow cells are inputs. Recommendation on 23 Oct 2026 is to pass. The owners rejected two offers under $1,000,000 and are still asking $1,195,000. "
         "The roof is the original tile roof, completed 28 Feb 2006. One HVAC changeout was permitted on 30 May 2024. "
         "The agent's 2017 HVAC date and 2020 pool-heater date are not in the public permit file. "
         "It is not an appraisal and it is not a prediction of the contract price."
     )
     val["A2"].alignment = Alignment(wrap_text=True)
     val.merge_cells("A2:C2")
-    val.row_dimensions[2].height = 48
+    val.row_dimensions[2].height = 60
 
     labels = [
         (4, "Ask", ASK, "MLS A4704244"),
@@ -622,9 +622,9 @@ def build_workbook(path: Path) -> Path:
         (10, "13978 $/sf", "=B8/B9", "Formula"),
         (11, "Subject sized at 13978 $/sf", "=B10*B5", "What this house costs if it sells at the twin's ask rate"),
         (12, "Dollars above that twin", "=B4-B11", "Ask minus the twin-sized value"),
-        (13, "Opening offer", OFFER, "Start here. The owners have already rejected two offers under $1,000,000, so this number may be refused. The roof permit still calls for the credit. Do not raise it to meet a counter at $1,000,000."),
+        (13, "Pass unless the price is", OFFER, "No offer today. The owners rejected two bids under $1,000,000 and are still asking $1,195,000. This cell is the bottom of the old bid range, not an instruction to write it."),
         (14, "Supported value", SUPPORTED, "About the 13978 contract rate on this living area. One permitted 2024 changeout offsets part of the roof. It does not support a premium, and the unconfirmed 2017 system does not add value."),
-        (15, "Ceiling", CEILING, "Only with an affordable insurance binder, a roof report that does not require immediate replacement, and a data plate or invoice showing the second system is 2017 or newer."),
+        (15, "Reopen the file at or below", CEILING, "Only if the ask or a written counter is this or less, with an affordable insurance binder, a roof report that does not require immediate replacement, and a data plate showing the second system is 2017 or newer."),
         (16, "Ask vs supported", "=B4/B14-1", "Percent the ask sits above the supported value"),
         (17, "Dollars above supported", "=B4-B14", "Gap between the ask and the supported value"),
         (18, "2020 purchase", PRIOR_SALE, "21 May 2020. Ask is 2.69 times that price"),
@@ -670,9 +670,10 @@ def build_workbook(path: Path) -> Path:
         "Manatee permits confirm the tile roof is original: CMP-05031188 was completed 28 Feb 2006, and no reroof permit follows it. "
         "The only later mechanical permit is BLD2405-3790, a like-for-like HVAC changeout issued 30 May 2024 for $9,524. "
         "That is one system. The agent's 2017 air conditioner and 2020 pool heater are not in the county file, so they are not credits. "
-        "The original roof removes the $1,030,000 case. Supported value is $880,000. Open at $850,000. Do not exceed $910,000 unless the second system's data plate is 2017 or newer and the roof report is clean. "
+        "The original roof removes the $1,030,000 case. Supported value is $880,000. "
         "On 23 Oct 2026 the listing agent told our broker the owners have rejected two offers, both under $1,000,000. The amounts were not disclosed. "
-        "That confirms buyers are writing below $1,000,000. It is not a reason to pay $1,000,000. A counter at or above $1,000,000 is still above the comps."
+        "The owners are holding a price above the bids buyers will write. Pass. "
+        "Reopen the file only if the ask or a written counter is $910,000 or less."
     )
     val["A24"].alignment = Alignment(wrap_text=True, vertical="top")
     val.row_dimensions[24].height = 36
@@ -838,7 +839,7 @@ def build_workbook(path: Path) -> Path:
             "Price",
             "High",
             "Ask is $456/sf against a 2026 sold median near $314/sf and a same-view neighbor under contract at $336/sf. The owners rejected two offers under $1,000,000. Amounts were not disclosed.",
-            "Do not write at the ask, and do not raise the bid because those offers were rejected. Supported value is $880,000. Open at $850,000. Ceiling is $910,000. A counter at or above $1,000,000 is still above the comps.",
+            "Pass. The owners rejected the band buyers are writing. Supported value is $880,000. Reopen the file only if the ask or a counter is $910,000 or less.",
         ),
         (
             "Resale",

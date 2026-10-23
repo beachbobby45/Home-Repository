@@ -84,7 +84,7 @@ class Brief(FPDF):
         self.cell(
             0,
             4.5,
-            "13994 Siena Loop   ·   Permits checked 23 Oct 2026, Pacific   ·   Original 2006 roof   ·   One HVAC permit, May 2024",
+            "13994 Siena Loop   ·   23 Oct 2026, Pacific   ·   Recommendation: pass   ·   Owners are above the market",
             align="L",
         )
         self.set_xy(self.l_margin, 16)
@@ -255,7 +255,7 @@ def build_pdf(path: Path = OUT) -> Path:
 
     pdf = Brief()
     pdf.add_page()
-    pdf.h1("This ask is above the street")
+    pdf.h1("Pass on this house")
     pdf.lede(
         "The typed address, 13394 Siena Loop, is not a Manatee County parcel. "
         "The active listing is 13994 Siena Loop, MLS A4704244, in Siena at Lakewood Ranch Country Club."
@@ -274,13 +274,13 @@ def build_pdf(path: Path = OUT) -> Path:
     pdf.set_font("InterM", "", 9)
     pdf.set_text_color(*NAVY)
     pdf.set_x(pdf.l_margin)
-    pdf.cell(pdf.content_w, 5, "Pricing after the Manatee County permit check", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(pdf.content_w, 5, "The owners are pricing it above the buyers", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
     pdf.boxes(
         [
-            (money(OFFER), f"Opening offer.\nAbout {psf(OFFER / LIVING_SF)} per foot.", WARM),
-            (money(supported), f"Supported value.\nAbout {psf(supported / LIVING_SF)} per foot.", BAND),
-            (money(CEILING), f"Ceiling.\nAbout {psf(CEILING / LIVING_SF)} per foot.", GREEN),
+            ("Pass", "No offer today.\nSellers are above the market.", WARM),
+            (money(supported), f"Comps support this.\nAbout {psf(supported / LIVING_SF)} per foot.", BAND),
+            (money(CEILING), f"Reopen only at this.\nAbout {psf(CEILING / LIVING_SF)} per foot.", GREEN),
         ]
     )
     pdf.body(
@@ -289,10 +289,9 @@ def build_pdf(path: Path = OUT) -> Path:
         f"changeout issued 30 May 2024 for $9,524. That removes the old high case near {money(1_030_000)}. "
         "It does not confirm the agent's second system from 2017 or a pool heater from 2020. Those two dates are not in the public file, "
         "so they are not credits. Supported value stays on the 13978 contract rate for this floor plan, "
-        f"about {money(round(twin, -3))}. The two rejected offers confirm that buyers are writing under $1,000,000. "
-        f"They do not move this house up to $1,000,000. Open at {money(OFFER)}. "
-        f"Do not go above {money(CEILING)} unless the insurance binder is affordable, "
-        "the roof report does not require immediate replacement, and the second system's data plate is 2017 or newer. "
+        f"about {money(round(twin, -3))}. Buyers have already written two offers under $1,000,000, and the owners rejected both. "
+        f"A bid from {money(OFFER)} to {money(CEILING)} is inside the band they refused. "
+        f"Pass. Reopen the file only if the ask or a counter is {money(CEILING)} or less. "
         f"The ask is {money(ASK - supported)} above the supported value."
     )
 
@@ -440,21 +439,19 @@ def build_pdf(path: Path = OUT) -> Path:
         [42, 22, 124],
     )
 
-    pdf.h2("Pricing recommendation")
+    pdf.h2("Recommendation")
     pdf.body(
-        f"Offer {money(OFFER)}. Supported value is {money(supported)}, about {psf(supported / LIVING_SF)} per living foot, "
+        f"Pass. Supported value is {money(supported)}, about {psf(supported / LIVING_SF)} per living foot, "
         "in line with the 13978 contract once this house's living area is used. "
-        "The permitted 2024 changeout is one system at a $9,524 job value. It offsets part of the original roof. It is not a premium. "
-        "The 2017 air conditioner and the 2020 pool heater are not in the county file, so do not pay for them. "
-        f"Do not exceed {money(CEILING)}. Go there only if the insurance binder is affordable, the roof certification does not call for immediate replacement, "
-        "and the second system's data plate or invoice shows 2017 or newer. "
-        f"The {money(ASK)} ask is {money(ASK - supported)} above the supported value. "
-        "The owners have already turned down two offers under $1,000,000, so an offer in this range may be rejected. "
-        "Leave it there. A counter at or above $1,000,000 is the seller's number, and the comps do not support it."
+        f"The {money(ASK)} ask is {money(ASK - supported)} above that. "
+        "The owners rejected two offers under $1,000,000 and have not cut the price on day 49. "
+        "They are holding a value the current buyers have already refused. "
+        f"A fresh offer from {money(OFFER)} to {money(CEILING)} would ask them to accept the same kind of bid they turned down."
     )
     pdf.body(
-        "Still require a roof certification, a 4-point, a wind-mitigation report, a wood-destroying-organism inspection, "
-        "a pool inspection, and both estoppels. Photograph both air-conditioner data plates and the pool-heater and water-heater plates."
+        f"Look again only if the ask, or a written counter, is {money(CEILING)} or less, the insurance binder is affordable, "
+        "the roof report does not require immediate replacement, and the second system's data plate is 2017 or newer. "
+        "Until then, spend the inspection money on a house whose seller is in the market."
     )
     pdf.h2("Sources")
     pdf.note(
