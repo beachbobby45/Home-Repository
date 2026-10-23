@@ -1,0 +1,139 @@
+"""Checks for the Siena Loop desk comparison workbook."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from openpyxl import load_workbook
+
+from real_estate.siena_comps import (
+    ASK,
+    LIVING_SF,
+    NON_AD_VALOREM,
+    PRIOR_SALE,
+    TOTAL_MILLS,
+    build_workbook,
+    homestead_tax,
+    non_homestead_tax,
+    price_per_sf,
+    sold_median_ppsf,
+    twin_implied_value,
+)
+
+
+def test_address_and_price_per_foot():
+    assert price_per_sf(ASK, LIVING_SF) == ASK / 2623
+    assert round(price_per_sf(ASK, LIVING_SF), 2) == 455.59
+    assert sold_median_ppsf() < 320
+    assert twin_implied_value() < 900_000
+    assert ASK - twin_implied_value() > 300_000
+
+
+def test_tax_reset_is_higher_than_the_seller_bill():
+    seller_bill = 13_012.60
+    assert non_homestead_tax(ASK) == ASK * TOTAL_MILLS / 1000 + NON_AD_VALOREM
+    assert non_homestead_tax(ASK) > seller_bill + 7_000
+    assert homestead_tax(ASK) > seller_bill + 6_000
+    assert homestead_tax(880_000) > seller_bill
+
+
+def test_workbook_formulas_and_subject_row(tmp_path: Path):
+    path = build_workbook(tmp_path / "lakewood-ranch-homes.xlsx")
+    wb = load_workbook(path)
+    assert wb.sheetnames == [
+        "How to use",
+        "Subject",
+        "Comps",
+        "Valuation",
+        "Carrying costs",
+        "Upgrades",
+        "Risks",
+        "Permits",
+        "Sources",
+        "Sale history",
+    ]
+    subject = wb["Subject"]
+    assert subject["B1"].value == "13994 Siena Loop"
+    assert "rejected" in str(subject["B3"].value).lower()
+    assert "1,000,000" in str(subject["C3"].value)
+    assert "13394" in subject["C1"].value
+    assert subject["B4"].value == PRIOR_SALE or subject["B13"].value == PRIOR_SALE
+    assert subject["B4"].value == ASK
+
+    comps = wb["Comps"]
+    assert comps["B2"].value == "13994 Siena Loop"
+    assert comps["E2"].value == ASK
+    assert comps["I2"].value == LIVING_SF
+    assert comps["M2"].value == "=IF(I2=\"\",\"\",E2/I2)"
+    assert comps["B14"].value.startswith("=AGGREGATE")
+    assert comps._charts, "price-per-foot chart is missing"
+    assert comps["A2"].value == "Subject"
+    sold_prices = []
+    for row in range(2, 13):
+        assert comps.cell(row, 9).value
+        if comps.cell(row, 1).value == "Sold":
+            sold_prices.append(comps.cell(row, 5).value / comps.cell(row, 9).value)
+    assert len(sold_prices) == 6
+
+    valuation = wb["Valuation"]
+    assert valuation["B4"].value == ASK
+    assert valuation["B6"].value == "=B4/B5"
+    assert valuation["B11"].value == "=B10*B5"
+    assert valuation["B13"].value == 850_000
+    assert valuation["B14"].value == 880_000
+    assert valuation["B15"].value == 910_000
+    assert valuation["B16"].value == "=B4/B14-1"
+
+    costs = wb["Carrying costs"]
+    assert costs["C4"].value == "=Valuation!B4"
+    assert costs["C7"].value == "=C5+C6"
+    assert "Save Our Homes" in costs["E5"].value
+
+    risks = wb["Risks"]
+    severities = [risks.cell(row, 2).value for row in range(2, 16)]
+    assert severities.count("High") >= 4
+    assert "Roof and insurance" in [risks.cell(row, 1).value for row in range(2, 16)]
+
+    history = wb["Sale history"]
+    houses = set()
+    prices_13804 = []
+    prices_13994 = []
+    originals = set()
+    for row in range(5, history.max_row + 1):
+        house = history.cell(row, 1).value
+        if house is None:
+            continue
+        houses.add(house)
+        if history.cell(row, 10).value == "Yes":
+            originals.add(house)
+        if house == 13804:
+            prices_13804.append(history.cell(row, 5).value)
+        if house == 13994:
+            prices_13994.append(history.cell(row, 5).value)
+    assert len(houses) == 68
+    assert len(originals) == 14
+    assert 790_000 in prices_13804
+    assert 714_100 in prices_13804
+    assert 817_700 in prices_13994
+    assert 445_000 in prices_13994
+
+    permits = wb["Permits"]
+    permit_text = " ".join(
+        str(permits.cell(row, col).value or "")
+        for row in range(1, 12)
+        for col in range(1, 8)
+    )
+    assert "CMP-05031188" in permit_text
+    assert "BLD2405-3790" in permit_text
+    assert "CMP-05070213" in permit_text
+    assert "CMP-06011072" in permit_text
+    assert "None found" in permit_text
+    assert "2017" in permit_text
+
+
+def test_2020_sale_multiple():
+    assert round(ASK / PRIOR_SALE, 2) == 2.69
