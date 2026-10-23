@@ -266,7 +266,7 @@ def build_pdf(path: Path = OUT) -> Path:
         f"13978 Siena Loop, the same 3-bed, 3-bath, office, golf-and-lake plan, went under contract "
         f"at a {money(899_000)} ask, which is {psf(price_per_sf(899_000, 2673))} per foot. "
         f"Sized to this house, that rate is about {money(round(twin, -3))}. The ask is about {money(round(gap, -3))} above it. "
-        "Listed 4 Sep 2026. On 23 Oct 2026 it was day 49, with no price cut.",
+        "Day 49 on 23 Oct 2026, with no price cut. The listing agent told our broker the owners have rejected two offers, both under $1,000,000.",
         ROSE,
         RED,
     )
@@ -289,10 +289,11 @@ def build_pdf(path: Path = OUT) -> Path:
         f"changeout issued 30 May 2024 for $9,524. That removes the old high case near {money(1_030_000)}. "
         "It does not confirm the agent's second system from 2017 or a pool heater from 2020. Those two dates are not in the public file, "
         "so they are not credits. Supported value stays on the 13978 contract rate for this floor plan, "
-        f"about {money(round(twin, -3))}. Open at {money(OFFER)}. Do not go above {money(CEILING)} unless the insurance binder is affordable, "
+        f"about {money(round(twin, -3))}. The two rejected offers confirm that buyers are writing under $1,000,000. "
+        f"They do not move this house up to $1,000,000. Open at {money(OFFER)}. "
+        f"Do not go above {money(CEILING)} unless the insurance binder is affordable, "
         "the roof report does not require immediate replacement, and the second system's data plate is 2017 or newer. "
-        f"The ask is {money(ASK - supported)} above the supported value. "
-        f"County market value on the 2025 roll is {money(MARKET_VALUE)}. The owners bought the house on 21 May 2020 for {money(PRIOR_SALE)}."
+        f"The ask is {money(ASK - supported)} above the supported value."
     )
 
     pdf.h2("The house")
@@ -429,7 +430,7 @@ def build_pdf(path: Path = OUT) -> Path:
     pdf.simple_table(
         ["Risk", "Level", "What is open"],
         [
-            ["Price and resale", "High", "The ask is the outlier. 13911 has already been cut 23 percent and was still listed. 13987 sold in 2026 below its 2023 price."],
+            ["Price and resale", "High", "The owners rejected two offers under $1,000,000. Amounts were not disclosed. 13911 has already been cut 23 percent and was still listed."],
             ["Roof and insurance", "High", "Permit CMP-05031188 completed 28 Feb 2006 with the original tile roof. No reroof permit. Planning range to replace tile is $40,000 to $80,000. That is not a bid."],
             ["Second HVAC, water heater", "High", "Only BLD2405-3790, one 2024 changeout for $9,524. No 2017 permit and no water-heater permit. Read both data plates."],
             ["Tax reset", "High", f"About {money(year1 - SELLER_TAX_BILL)} more per year at the ask than the homestead bill."],
@@ -447,7 +448,9 @@ def build_pdf(path: Path = OUT) -> Path:
         "The 2017 air conditioner and the 2020 pool heater are not in the county file, so do not pay for them. "
         f"Do not exceed {money(CEILING)}. Go there only if the insurance binder is affordable, the roof certification does not call for immediate replacement, "
         "and the second system's data plate or invoice shows 2017 or newer. "
-        f"The {money(ASK)} ask is {money(ASK - supported)} above the supported value."
+        f"The {money(ASK)} ask is {money(ASK - supported)} above the supported value. "
+        "The owners have already turned down two offers under $1,000,000, so an offer in this range may be rejected. "
+        "Leave it there. A counter at or above $1,000,000 is the seller's number, and the comps do not support it."
     )
     pdf.body(
         "Still require a roof certification, a 4-point, a wind-mitigation report, a wood-destroying-organism inspection, "
@@ -461,7 +464,9 @@ def build_pdf(path: Path = OUT) -> Path:
         "Your Observer, 18 Aug 2026, for the 13987 sale. Lakewood Ranch CDD 5 FY2026/27 hearing notice for the proposed Siena assessment. "
         "Lakewood Ranch Golf & Country Club 2026 membership packet for dues. "
         "Permits: Manatee historical files 2004 through 21 Feb 2018, the live GIS PermitData layer, and Accela record BLD2405-3790, all read 23 Oct 2026. "
-        "The agent's 2017 HVAC date and 2020 heater date remain the agent's statements. Repair ranges are planning numbers, not contractor bids."
+        "The agent's 2017 HVAC date and 2020 heater date remain the agent's statements. "
+        "The two rejected offers under $1,000,000 were relayed by our broker from the listing agent on 23 Oct 2026. The dollar amounts were not disclosed. "
+        "Repair ranges are planning numbers, not contractor bids."
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(path)

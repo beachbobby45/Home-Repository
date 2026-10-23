@@ -436,7 +436,7 @@ def build_workbook(path: Path) -> Path:
     subject_rows = [
         ("Address analyzed", SUBJECT_ADDRESS, "User typed 13394. No Manatee parcel uses that number. Tax roll also spells the street SIENNA."),
         ("MLS", "A4704244", "Stellar / My Florida Regional. Listed 4 Sep 2026 by Katina and Kenneth Shanahan, Coldwell Banker."),
-        ("Status as of 23 Oct 2026", "Active, 49 days, no cut", "Zachos snapshot updated 23 Oct 2026. An open house was scheduled 18 Oct 2026, 1–4pm."),
+        ("Status as of 23 Oct 2026", "Active, 49 days, two offers rejected", "No price cut. The listing agent told our broker the owners rejected two offers, both under $1,000,000. The amounts were not disclosed."),
         ("Ask", ASK, "No price reduction since the list date."),
         ("Living area", LIVING_SF, "Public-record living area. This is the denominator for every $/sf figure in this file."),
         ("Total building area", TOTAL_SF, "Garage and lanai are inside this number. Ask divided by 3,548 is about $337/sf and is not comparable."),
@@ -622,7 +622,7 @@ def build_workbook(path: Path) -> Path:
         (10, "13978 $/sf", "=B8/B9", "Formula"),
         (11, "Subject sized at 13978 $/sf", "=B10*B5", "What this house costs if it sells at the twin's ask rate"),
         (12, "Dollars above that twin", "=B4-B11", "Ask minus the twin-sized value"),
-        (13, "Opening offer", OFFER, "Start here. The roof permit confirms original tile completed 28 Feb 2006, so the offer leaves room for a roof credit."),
+        (13, "Opening offer", OFFER, "Start here. The owners have already rejected two offers under $1,000,000, so this number may be refused. The roof permit still calls for the credit. Do not raise it to meet a counter at $1,000,000."),
         (14, "Supported value", SUPPORTED, "About the 13978 contract rate on this living area. One permitted 2024 changeout offsets part of the roof. It does not support a premium, and the unconfirmed 2017 system does not add value."),
         (15, "Ceiling", CEILING, "Only with an affordable insurance binder, a roof report that does not require immediate replacement, and a data plate or invoice showing the second system is 2017 or newer."),
         (16, "Ask vs supported", "=B4/B14-1", "Percent the ask sits above the supported value"),
@@ -670,7 +670,9 @@ def build_workbook(path: Path) -> Path:
         "Manatee permits confirm the tile roof is original: CMP-05031188 was completed 28 Feb 2006, and no reroof permit follows it. "
         "The only later mechanical permit is BLD2405-3790, a like-for-like HVAC changeout issued 30 May 2024 for $9,524. "
         "That is one system. The agent's 2017 air conditioner and 2020 pool heater are not in the county file, so they are not credits. "
-        "The original roof removes the $1,030,000 case. Supported value is $880,000. Open at $850,000. Do not exceed $910,000 unless the second system's data plate is 2017 or newer and the roof report is clean."
+        "The original roof removes the $1,030,000 case. Supported value is $880,000. Open at $850,000. Do not exceed $910,000 unless the second system's data plate is 2017 or newer and the roof report is clean. "
+        "On 23 Oct 2026 the listing agent told our broker the owners have rejected two offers, both under $1,000,000. The amounts were not disclosed. "
+        "That confirms buyers are writing below $1,000,000. It is not a reason to pay $1,000,000. A counter at or above $1,000,000 is still above the comps."
     )
     val["A24"].alignment = Alignment(wrap_text=True, vertical="top")
     val.row_dimensions[24].height = 36
@@ -835,8 +837,8 @@ def build_workbook(path: Path) -> Path:
         (
             "Price",
             "High",
-            "Ask is $456/sf against a 2026 sold median near $314/sf and a same-view neighbor under contract at $336/sf.",
-            "Do not write at the ask. Supported value is $880,000. Open at $850,000. Ceiling is $910,000.",
+            "Ask is $456/sf against a 2026 sold median near $314/sf and a same-view neighbor under contract at $336/sf. The owners rejected two offers under $1,000,000. Amounts were not disclosed.",
+            "Do not write at the ask, and do not raise the bid because those offers were rejected. Supported value is $880,000. Open at $850,000. Ceiling is $910,000. A counter at or above $1,000,000 is still above the comps.",
         ),
         (
             "Resale",
@@ -1019,6 +1021,7 @@ def build_workbook(path: Path) -> Path:
         ("Mansard screen cage, completed 7 Mar 2006", "Manatee historical permit CMP-06011072", "Archive file 2006, checked 23 Oct 2026"),
         ("One HVAC changeout, issued 30 May 2024, GIS certificate 22 May 2026", "Manatee GIS PermitData and Accela BLD2405-3790", "Live layer and Accela page, 23 Oct 2026"),
         ("No 2017 HVAC permit, no 2020 heater permit, no remodel permit", "Same archive CSVs through 21 Feb 2018, plus the live GIS layer for this parcel and house", "Checked 23 Oct 2026"),
+        ("Two offers under $1,000,000, both rejected", "Listing agent, told to our broker. Dollar amounts were not disclosed", "23 Oct 2026"),
     ]
     for r, row in enumerate(sources, 2):
         for c, value in enumerate(row, 1):

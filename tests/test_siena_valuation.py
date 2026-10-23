@@ -57,6 +57,8 @@ def test_workbook_formulas_and_subject_row(tmp_path: Path):
     ]
     subject = wb["Subject"]
     assert subject["B1"].value == "13994 Siena Loop"
+    assert "rejected" in str(subject["B3"].value).lower()
+    assert "1,000,000" in str(subject["C3"].value)
     assert "13394" in subject["C1"].value
     assert subject["B4"].value == PRIOR_SALE or subject["B13"].value == PRIOR_SALE
     assert subject["B4"].value == ASK
