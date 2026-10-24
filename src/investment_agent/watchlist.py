@@ -28,7 +28,7 @@ PRESETS: dict[str, str] = {
     "starter10": "Starter 10 (default ingest list)",
     "sp100": "S&P 100 liquid subset (~100 tickers)",
     "sp500": "S&P 500 full index (~500 tickers + regime ETFs)",
-    "datacenter_us": "US AI data center buildout & maintenance (~124 tickers)",
+    "datacenter_us": "US AI data center buildout & maintenance (~128 tickers)",
 }
 
 SPECIAL_WATCH_EXTRAS_PREFIX = "special_watch_extras:"

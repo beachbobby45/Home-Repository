@@ -141,3 +141,8 @@ GOOGL
 AMZN
 META
 ORCL
+# Operator news / growth track (outside core S&P pool intake — same Step 3 rules)
+NCLD
+CBRS
+CRWD
+IQV

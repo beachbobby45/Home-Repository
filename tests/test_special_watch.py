@@ -40,6 +40,9 @@ def test_datacenter_us_preset_loads():
     # FCF Yield Screen sleeves A + B (new names; GEV/CEG/VST/TLN/NRG already present)
     for ticker in ("CHTR", "WBD", "DXC", "NVDA", "MSFT", "SNDK", "META", "ORCL"):
         assert ticker in tickers
+    # Operator news / growth-track intake
+    for ticker in ("CRWV", "NBIS", "APLD", "IREN", "NCLD", "CBRS", "CRWD", "IQV"):
+        assert ticker in tickers
     assert len(tickers) == len(set(tickers))
 
 
