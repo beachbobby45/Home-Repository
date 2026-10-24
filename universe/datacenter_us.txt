@@ -114,3 +114,30 @@ NTAP
 DRAM
 ASML
 NBIS
+# FCF Yield Screen — Sleeve A (add if not already on Special Watch)
+CHTR
+CMCSA
+F
+TDC
+CTVA
+WBD
+BAX
+LEN
+FMC
+OGN
+M
+DXC
+GPK
+CNC
+# FCF Yield Screen — Sleeve B (skip names already listed above: GEV CEG VST TLN NRG)
+NVDA
+AVGO
+MSFT
+MU
+SNDK
+APP
+TSM
+GOOGL
+AMZN
+META
+ORCL

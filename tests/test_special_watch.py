@@ -37,6 +37,9 @@ def test_datacenter_us_preset_loads():
     assert "ASML" in tickers
     assert "NBIS" in tickers
     assert "DRAM" in tickers
+    # FCF Yield Screen sleeves A + B (new names; GEV/CEG/VST/TLN/NRG already present)
+    for ticker in ("CHTR", "WBD", "DXC", "NVDA", "MSFT", "SNDK", "META", "ORCL"):
+        assert ticker in tickers
     assert len(tickers) == len(set(tickers))
 
 
