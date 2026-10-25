@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="8.5in" height="11in" viewBox="0 0 820 1061" font-family="Inter, Liberation Sans, sans-serif">
+<rect x="0" y="0" width="820" height="1061" fill="#f7f4ee"/>
+<rect x="0" y="0" width="820" height="58" fill="#1e3f5a"/>
+<text x="36" y="28" text-anchor="start" font-size="20" font-weight="650" fill="#ffffff">13994 Siena Loop</text>
+<text x="36" y="46" text-anchor="start" font-size="11" font-weight="500" fill="#d5e2ec">Lakewood Ranch  ·  arrangement plan  ·  25 Oct 2026, Pacific</text>
+<text x="784" y="32" text-anchor="end" font-size="11" font-weight="600" fill="#ffffff">Street at the bottom</text>
+<text x="784" y="46" text-anchor="end" font-size="10" font-weight="500" fill="#d5e2ec">Lanai and sunset at the top</text>
+<path d="M 46 168 L 46 78 L 760 78 L 760 430 L 620 430 L 530 500 L 480 500 L 480 400 L 316 400 L 316 168 Z" fill="#e3eddf" stroke="#8aa384" stroke-width="2" stroke-dasharray="5 4"/>
+<text x="400" y="96" text-anchor="middle" font-size="11" font-weight="650" fill="#3e6244" letter-spacing="1.2">SCREEN CAGE  ·  LANAI</text>
+<path d="M 360 250 C 390 150, 470 130, 560 150 C 640 168, 670 230, 640 290 C 610 340, 520 330, 470 300 C 420 270, 390 300, 360 250 Z" fill="#8ec4dc" stroke="#3d7f9c" stroke-width="2"/>
+<text x="520" y="230" text-anchor="middle" font-size="13" font-weight="700" fill="#14384a">POOL</text>
+<path d="M 640 118 L 700 108 L 748 140 L 736 190 L 678 196 L 632 160 Z" fill="#6aafcc" stroke="#2d6e8c" stroke-width="2"/>
+<text x="690" y="156" text-anchor="middle" font-size="12" font-weight="700" fill="#14384a">SPA</text>
+<text x="700" y="100" text-anchor="middle" font-size="9" font-weight="500" fill="#3e6244">gravel bed</text>
+<rect x="328" y="186" width="58" height="36" fill="#f7f1e4" stroke="#6d7a62" stroke-width="1.5"/>
+<text x="357" y="208" text-anchor="middle" font-size="10" font-weight="600" fill="#3e6244">Grill</text>
+<path d="M 46 990 L 46 150 L 316 150 L 316 400 L 480 400 L 480 500 L 530 500 L 640 370 L 760 370 L 760 990 Z" fill="#fffdf8" stroke="none"/>
+<rect x="500" y="860" width="260" height="130" fill="#ece6db"/>
+<rect x="575" y="705" width="185" height="155" fill="#f3f7f8"/>
+<rect x="46" y="735" width="130" height="80" fill="#f3f7f8"/>
+<rect x="150" y="275" width="142" height="77" fill="#f3f7f8"/>
+<path d="M 46 990 L 46 150 L 316 150 L 316 400 L 480 400 L 480 500 L 530 500 L 640 370 L 760 370 L 760 990 Z" fill="none" stroke="#24323c" stroke-width="8" stroke-linejoin="miter"/>
+<line x1="46" y1="275" x2="118" y2="275" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="156" y1="275" x2="316" y2="275" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="150" y1="275" x2="150" y2="352" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="292" y1="275" x2="292" y2="352" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="150" y1="352" x2="250" y2="352" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="292" y1="352" x2="316" y2="352" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="46" y1="510" x2="108" y2="510" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="230" y1="510" x2="300" y2="510" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="46" y1="640" x2="246" y2="640" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="46" y1="735" x2="168" y2="735" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="46" y1="815" x2="150" y2="815" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="176" y1="735" x2="176" y2="790" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="176" y1="815" x2="176" y2="860" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="246" y1="640" x2="246" y2="990" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="430" y1="735" x2="430" y2="860" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="430" y1="755" x2="548" y2="755" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="548" y1="735" x2="548" y2="860" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="430" y1="860" x2="520" y2="860" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="575" y1="860" x2="760" y2="860" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="575" y1="700" x2="760" y2="700" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="575" y1="735" x2="575" y2="860" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="506" y1="545" x2="760" y2="545" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="506" y1="545" x2="506" y2="655" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="570" y1="545" x2="570" y2="700" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="640" y1="545" x2="640" y2="700" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="506" y1="700" x2="575" y2="700" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="236" y1="582" x2="296" y2="582" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="296" y1="582" x2="296" y2="638" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="236" y1="638" x2="296" y2="638" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="236" y1="582" x2="236" y2="638" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="530" y1="500" x2="530" y2="545" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="316" y1="400" x2="316" y2="448" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="480" y1="448" x2="480" y2="500" stroke="#24323c" stroke-width="4" stroke-linecap="square"/>
+<line x1="316" y1="175" x2="316" y2="245" stroke="#f4f7f8" stroke-width="11" stroke-linecap="square"/>
+<line x1="316" y1="175" x2="316" y2="245" stroke="#2f6f8f" stroke-width="3"/>
+<line x1="316" y1="365" x2="316" y2="440" stroke="#f4f7f8" stroke-width="11" stroke-linecap="square"/>
+<line x1="316" y1="365" x2="316" y2="440" stroke="#2f6f8f" stroke-width="3"/>
+<line x1="360" y1="400" x2="455" y2="400" stroke="#f4f7f8" stroke-width="11" stroke-linecap="square"/>
+<line x1="360" y1="400" x2="455" y2="400" stroke="#2f6f8f" stroke-width="3"/>
+<line x1="480" y1="400" x2="480" y2="450" stroke="#fbf8f2" stroke-width="10" stroke-linecap="square"/>
+<line x1="480" y1="400" x2="480" y2="450" stroke="#2c3d4a" stroke-width="2"/>
+<line x1="485" y1="400" x2="485" y2="450" stroke="#7f93a3" stroke-width="1.5"/>
+<line x1="80" y1="150" x2="230" y2="150" stroke="#fbf8f2" stroke-width="10" stroke-linecap="square"/>
+<line x1="80" y1="150" x2="230" y2="150" stroke="#2c3d4a" stroke-width="2"/>
+<line x1="80" y1="155" x2="230" y2="155" stroke="#7f93a3" stroke-width="1.5"/>
+<line x1="46" y1="400" x2="46" y2="470" stroke="#fbf8f2" stroke-width="10" stroke-linecap="square"/>
+<line x1="46" y1="400" x2="46" y2="470" stroke="#2c3d4a" stroke-width="2"/>
+<line x1="51" y1="400" x2="51" y2="470" stroke="#7f93a3" stroke-width="1.5"/>
+<line x1="655" y1="370" x2="735" y2="370" stroke="#fbf8f2" stroke-width="10" stroke-linecap="square"/>
+<line x1="655" y1="370" x2="735" y2="370" stroke="#2c3d4a" stroke-width="2"/>
+<line x1="655" y1="375" x2="735" y2="375" stroke="#7f93a3" stroke-width="1.5"/>
+<line x1="548" y1="478" x2="612" y2="402" stroke="#f4f7f8" stroke-width="11" stroke-linecap="square"/>
+<line x1="548" y1="478" x2="612" y2="402" stroke="#2f6f8f" stroke-width="3"/>
+<text x="690" y="400" text-anchor="middle" font-size="8" font-weight="650" fill="#2f6f8f">French doors</text>
+<line x1="168" y1="735" x2="168" y2="772" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="168" y1="735" x2="168" y2="772" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="168" cy="735" r="1.6" fill="#2c3d4a"/>
+<line x1="176" y1="792" x2="214" y2="792" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="176" y1="792" x2="214" y2="792" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="176" cy="792" r="1.6" fill="#2c3d4a"/>
+<line x1="200" y1="815" x2="242" y2="815" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="200" y1="815" x2="242" y2="815" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="200" cy="815" r="1.6" fill="#2c3d4a"/>
+<line x1="250" y1="582" x2="282" y2="582" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="250" y1="582" x2="282" y2="582" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="250" cy="582" r="1.6" fill="#2c3d4a"/>
+<line x1="118" y1="275" x2="150" y2="248" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="118" y1="275" x2="150" y2="248" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="118" cy="275" r="1.6" fill="#2c3d4a"/>
+<line x1="250" y1="275" x2="250" y2="312" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="250" y1="275" x2="250" y2="312" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="250" cy="275" r="1.6" fill="#2c3d4a"/>
+<line x1="292" y1="318" x2="316" y2="318" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="292" y1="318" x2="316" y2="318" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="292" cy="318" r="1.6" fill="#2c3d4a"/>
+<line x1="520" y1="860" x2="520" y2="828" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="520" y1="860" x2="520" y2="828" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="520" cy="860" r="1.6" fill="#2c3d4a"/>
+<line x1="575" y1="735" x2="575" y2="778" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="575" y1="735" x2="575" y2="778" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="575" cy="735" r="1.6" fill="#2c3d4a"/>
+<line x1="688" y1="700" x2="724" y2="700" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="688" y1="700" x2="724" y2="700" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="688" cy="700" r="1.6" fill="#2c3d4a"/>
+<line x1="506" y1="655" x2="548" y2="655" stroke="#fbf8f2" stroke-width="9"/>
+<line x1="506" y1="655" x2="548" y2="655" stroke="#2c3d4a" stroke-width="1.2"/>
+<circle cx="506" cy="655" r="1.6" fill="#2c3d4a"/>
+<line x1="300" y1="990" x2="360" y2="990" stroke="#fbf8f2" stroke-width="10"/>
+<line x1="300" y1="990" x2="360" y2="990" stroke="#1e3f5a" stroke-width="3"/>
+<text x="330" y="1006" text-anchor="middle" font-size="8" font-weight="700" fill="#1e3f5a" letter-spacing="0.6">FRONT DOOR</text>
+<rect x="168" y="190" width="28" height="18" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="70" y="292" width="36" height="22" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="96" y="455" width="70" height="28" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="150" y="358" width="54" height="12" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="70" y="545" width="28" height="40" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="130" y="548" width="90" height="42" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="200" y="592" width="28" height="26" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="70" y="760" width="34" height="22" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="78" y="880" width="70" height="90" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="78" y="655" width="70" height="60" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="300" y="860" width="28" height="90" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="360" y="560" width="16" height="16" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="400" y="600" width="16" height="16" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="455" y="790" width="36" height="28" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="500" y="790" width="36" height="28" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="600" y="790" width="70" height="36" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="690" y="800" width="22" height="16" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="718" y="800" width="22" height="16" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="680" y="735" width="28" height="22" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="680" y="400" width="56" height="74" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="520" y="575" width="36" height="90" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<rect x="660" y="575" width="80" height="90" fill="none" stroke="#c3b8a6" stroke-width="1.25"/>
+<text x="150" y="210" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Office</text>
+<text x="150" y="225" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">slider to the lanai</text>
+<text x="220" y="316" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Pool bath</text>
+<text x="220" y="331" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">door to office and lanai</text>
+<text x="150" y="430" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Family room</text>
+<text x="150" y="445" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">sketch: living room</text>
+<text x="78" y="392" text-anchor="start" font-size="8" font-weight="600" fill="#5d6b76">Wine bar</text>
+<text x="145" y="575" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Kitchen</text>
+<text x="145" y="590" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">island and pantry</text>
+<text x="266" y="616" text-anchor="middle" font-size="9" font-weight="650" fill="#1a2b36">Pantry</text>
+<text x="130" y="690" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Bedroom 3</text>
+<text x="108" y="778" text-anchor="middle" font-size="12" font-weight="650" fill="#1a2b36">Guest bath</text>
+<text x="140" y="900" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Bedroom 2</text>
+<text x="330" y="800" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Dining</text>
+<text x="330" y="815" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">front door</text>
+<text x="390" y="530" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Living room</text>
+<text x="390" y="545" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">sketch: sitting area</text>
+<text x="400" y="478" text-anchor="middle" font-size="9" font-weight="600" fill="#5d6b76">Dinette windows</text>
+<text x="490" y="805" text-anchor="middle" font-size="12" font-weight="650" fill="#1a2b36">Laundry</text>
+<text x="630" y="930" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Garage</text>
+<text x="630" y="945" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">2 cars, door to the right of the entry</text>
+<text x="668" y="785" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Primary bath</text>
+<text x="668" y="800" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">shower, two sinks, angled tub</text>
+<text x="668" y="748" text-anchor="middle" font-size="8" font-weight="500" fill="#5d6b76">toilet room</text>
+<text x="538" y="640" text-anchor="middle" font-size="11" font-weight="650" fill="#1a2b36">Closet</text>
+<text x="700" y="640" text-anchor="middle" font-size="11" font-weight="650" fill="#1a2b36">Closet</text>
+<text x="690" y="470" text-anchor="middle" font-size="14" font-weight="650" fill="#1a2b36">Primary bedroom</text>
+<text x="690" y="485" text-anchor="middle" font-size="9" font-weight="500" fill="#5d6b76">angled doors to the lanai</text>
+<line x1="36" y1="1016" x2="86" y2="1016" stroke="#1e3f5a" stroke-width="1.6"/>
+<path d="M 86 1016 L 76 1011 L 76 1021 Z" fill="#1e3f5a"/>
+<text x="96" y="1020" text-anchor="start" font-size="12" font-weight="700" fill="#1e3f5a">N</text>
+<text x="118" y="1020" text-anchor="start" font-size="10" font-weight="500" fill="#5d6b76">Garage side. The street is east. The lanai faces west.</text>
+<text x="36" y="1038" text-anchor="start" font-size="8.5" font-weight="500" fill="#4e5962">Arrangement from the household sketch and the listing photos. Walls are not measured. County living area is 2,623 sq ft.</text>
+<text x="36" y="1050" text-anchor="start" font-size="8.5" font-weight="500" fill="#4e5962">The garage, cage, pool, and spa are outside that area. The sketch calls the fireplace room the living room and the blue-chair room the sitting area.</text>
+</svg>
