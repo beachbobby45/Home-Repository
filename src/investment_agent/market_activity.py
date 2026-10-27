@@ -57,10 +57,13 @@ ABOVE_AVERAGE_MIN = GO_SESSION_MIN
 EXCEPTIONAL_MIN = 80
 AVERAGE_MIN = TRADE_MIN
 BELOW_AVERAGE_MIN = 40
-FLIP_EXIT_MIN = 55
-# Produce mode (paper calibration): unlocks the 55–59 score cluster observed on Tony's Mac
-# (Sep 2026 avg ~49–51; near-misses at 55–59). Bull gate is not required in produce.
-PRODUCE_TRADE_MIN = FLIP_EXIT_MIN
+# Flip / soft-exit band (below produce entry floor so 50–54 entries are not
+# immediately flagged for exit on the same session).
+FLIP_EXIT_MIN = 45
+# Produce mode (v1 paper calibration, Oct 2026 gated study):
+# Live MA allow_trade was ~1/30 at prior floors; Sep Mac avg ~49–51.
+# Entry at MA ≥50 without bull gate. Preserve mode still uses TRADE_MIN 60 + bull.
+PRODUCE_TRADE_MIN = 50
 
 MACRO_POSITIVE = re.compile(
     r"\b(rate cut|cuts rates|dovish|soft landing|beat estimates|gdp growth)\b",
@@ -155,7 +158,7 @@ def authorize_trade(
     """Effective day authorization.
 
     preserve — band.allow_trade (score ≥60) AND bull gate (SPY 20d > 0)
-    produce  — score ≥ PRODUCE_TRADE_MIN (55); bull gate not required
+    produce  — score ≥ PRODUCE_TRADE_MIN (50); bull gate not required
     """
     from investment_agent.account import DAY_GATE_PRODUCE
 

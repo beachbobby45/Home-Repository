@@ -65,7 +65,8 @@ def main() -> None:
         if pick.get("pullback_pct") is not None:
             print(
                 f"   Open ${pick.get('session_open', 0):.2f} · "
-                f"pullback −{pick['pullback_pct']}% · cancel unfilled by 11:30 ET"
+                f"pullback −{pick['pullback_pct']}% · cancel unfilled by "
+                f"{pick.get('limit_fill_deadline_et') or '12:30 ET'}"
             )
     else:
         print("\nNo tradable #1 pick for today's dollar goal.")

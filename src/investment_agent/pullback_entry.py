@@ -18,8 +18,10 @@ from investment_agent.strategy import STOP_PCT
 PULLBACK_RANGE_FRACTION = 0.35
 PULLBACK_MIN_PCT = 0.25
 PULLBACK_MAX_PCT = 1.20
-LIMIT_FILL_DEADLINE = time(11, 30)
-LIMIT_FILL_DEADLINE_LABEL = "11:30 ET"
+# v1 paper calibration (Oct 2026): extend past 11:30 — ~60% of #1 days never
+# filled the pullback by 11:30 in the gated 30d study; keep same pullback math.
+LIMIT_FILL_DEADLINE = time(12, 30)
+LIMIT_FILL_DEADLINE_LABEL = "12:30 ET"
 
 
 def pullback_pct_from_open(avg_range_pct: float) -> float:

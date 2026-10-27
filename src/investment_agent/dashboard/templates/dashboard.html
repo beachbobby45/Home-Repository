@@ -664,16 +664,16 @@
           </div>
           <div class="journal-mode-row">
             <label for="day-gate-mode">Day gate</label>
-            <select id="day-gate-mode" title="Preserve = MA≥60 + bull gate. Produce = MA≥55, bull gate soft (paper calibration).">
+            <select id="day-gate-mode" title="Preserve = MA≥60 + bull gate. Produce = MA≥50, bull gate soft (v1 paper calibration).">
               <option value="preserve">PRESERVE (strict)</option>
-              <option value="produce">PRODUCE (MA≥55)</option>
+              <option value="produce">PRODUCE (MA≥50)</option>
             </select>
             <button class="btn secondary btn-sm" type="button" id="save-day-gate-mode">Save</button>
             <span class="brief" id="day-gate-mode-status"></span>
           </div>
           <p class="brief" id="day-gate-mode-help">
             Preserve: trade only when Market Activity ≥60 and SPY 20d &gt; 0.
-            Produce: paper calibration — entries allowed when MA ≥55; confirmation on #1 still required; bull gate not required.
+            Produce: v1 paper calibration — entries allowed when MA ≥50; confirmation on #1 still required; bull gate not required.
           </p>
           <div class="journal-day-log-actions">
             <span class="brief journal-day-log-label">Daily attendance (September paper):</span>
@@ -1253,7 +1253,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           · need <strong>$${fmt(netGoal)}</strong>
         </div>` : ""}
         <div class="pick-prices">
-          <div class="pick-prices-head">Pullback limit plan · cancel unfilled by ${pick.limit_fill_deadline_et || "11:30 ET"}</div>
+          <div class="pick-prices-head">Pullback limit plan · cancel unfilled by ${pick.limit_fill_deadline_et || "12:30 ET"}</div>
           ${pick.session_open != null ? `<div class="pick-price-row brief"><span>Today&apos;s open</span><strong>$${fmt(pick.session_open)}</strong>${pick.pullback_pct != null ? `<span class="brief">−${pick.pullback_pct}% limit zone</span>` : ""}</div>` : ""}
           <div class="pick-price-row highlight">
             <span>Limit buy</span><strong class="pick-price">$${fmt(limitBuy)}</strong>
@@ -1331,7 +1331,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const limitSell = pick.limit_sell_price ?? pick.target_price;
       const netGoal = pick.net_target ?? td.daily_target;
       document.getElementById("trade-math-goal").textContent =
-        `(Limit entry · $${fmt(netGoal)} net after $14 fees · cancel if not filled by ${pick.limit_fill_deadline_et || "11:30 ET"})`;
+        `(Limit entry · $${fmt(netGoal)} net · RH $0 commission · cancel if not filled by ${pick.limit_fill_deadline_et || "12:30 ET"})`;
       document.getElementById("math-buy").textContent = "$" + fmt(limitBuy);
       document.getElementById("math-shares").textContent =
         `${pick.recommended_shares ?? "—"} shares · deploy $${fmt(pick.suggested_size)}`;
@@ -1500,7 +1500,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       }
       const score = ma.score ?? 0;
       const produce = ma.day_gate_mode === "produce" || ma.produce_active;
-      const produceMin = ma.produce_trade_min ?? 55;
+      const produceMin = ma.produce_trade_min ?? 50;
       const tradeMin = ma.trade_min ?? 60;
       const cls = !ma.allow_trade ? "no-trade" : score >= 70 ? "trade-ok" : "trade-caution";
       const band = ma.band_label || ma.band || "—";
@@ -1913,7 +1913,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
             ? " LIVE journal is on — keep human approval on every fill."
             : " Prefer PAPER journal while calibrating.";
         banner.textContent =
-          "PRODUCE day gate — entries allowed when Market Activity ≥55 (bull gate soft). #1 confirmation still required."
+          "PRODUCE day gate — entries allowed when Market Activity ≥50 (bull gate soft). #1 confirmation still required."
           + liveNote;
       } else {
         banner.hidden = true;
@@ -1997,10 +1997,10 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       try {
         const s = await api("/api/summary");
         updateTradingModeBanner(s.trading_mode || "paper");
-        updateDayGateBanner(s.day_gate_mode || "preserve", s.trading_mode || "paper");
+        updateDayGateBanner(s.day_gate_mode || "produce", s.trading_mode || "paper");
         document.getElementById("trading-mode").value = s.trading_mode || "paper";
         const dayGateSelect = document.getElementById("day-gate-mode");
-        if (dayGateSelect) dayGateSelect.value = s.day_gate_mode || "preserve";
+        if (dayGateSelect) dayGateSelect.value = s.day_gate_mode || "produce";
         document.getElementById("goal-pct").textContent = fmtPct(s.goal_pct);
         document.getElementById("goal-bar").style.width = Math.min(100, s.goal_pct) + "%";
         document.getElementById("goal-label").textContent =
@@ -3819,7 +3819,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       if (mode === "produce") {
         const ok = window.confirm(
           "Enable PRODUCE day gate?\n\n"
-          + "• Market Activity ≥55 unlocks the day (was ≥60)\n"
+          + "• Market Activity ≥50 unlocks the day (preserve still ≥60)\n"
           + "• Bull gate (SPY 20d > 0) is NOT required\n"
           + "• #1 confirmation is still required before buying\n"
           + "• Intended for PAPER calibration first\n\nContinue?"

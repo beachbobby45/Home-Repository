@@ -68,14 +68,37 @@ def test_simulate_pullback_target_when_dip_then_rally():
 
 
 def test_limit_fill_missed_after_deadline():
+    from investment_agent.pullback_entry import LIMIT_FILL_DEADLINE, LIMIT_FILL_DEADLINE_LABEL
+
+    assert LIMIT_FILL_DEADLINE == time(12, 30)
+    assert LIMIT_FILL_DEADLINE_LABEL == "12:30 ET"
     limit = limit_buy_price(100.0, 3.0)
-    assert limit_fill_missed(
+    # Still inside the window at 12:00 — not missed yet
+    assert not limit_fill_missed(
         limit_buy_price=limit,
         session_low=limit + 0.05,
         as_of_time=time(12, 0),
     )
+    # After 12:30 with low still above limit → missed
+    assert limit_fill_missed(
+        limit_buy_price=limit,
+        session_low=limit + 0.05,
+        as_of_time=time(12, 31),
+    )
     assert not limit_fill_missed(
         limit_buy_price=limit,
         session_low=limit - 0.01,
-        as_of_time=time(12, 0),
+        as_of_time=time(12, 31),
     )
+
+
+def test_pullback_plan_reports_rh_zero_fees_and_deadline():
+    plan = compute_pullback_trade_plan(
+        session_open=100.0,
+        avg_range_pct=3.0,
+        deploy_dollar=10_000,
+        net_target=150.0,
+    )
+    assert plan["fees_round_trip"] == 0.0
+    assert plan["limit_fill_deadline_et"] == "12:30 ET"
+    assert plan["skip_if_not_filled_by"] == "12:30 ET"

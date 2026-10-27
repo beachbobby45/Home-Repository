@@ -22,7 +22,7 @@ def _assess(entry: float, quote: dict, **kwargs):
 
 
 def test_nflx_mon_aug3_open_entry_not_tradable():
-    """Mon 8/3 — high $73.95 missed ~$73.97 target from open."""
+    """Mon 8/3 — day high cleared the RH $0 target, but price retraced + stop tagged."""
     quote = {
         "price": 72.77,
         "open": 72.77,
@@ -33,7 +33,9 @@ def test_nflx_mon_aug3_open_entry_not_tradable():
     result = _assess(72.77, quote, avg_range_pct=3.0)
     assert result["verdict"] == "NOT_TRADABLE"
     assert result["max_net_at_day_high"] is not None
-    assert result["max_net_at_day_high"] < 150.0
+    # With RH $0 fees the day-high *could* have paid $150; blockers are missed window / stop.
+    assert result["max_net_at_day_high"] >= 150.0
+    assert any("already touched" in b or "stop" in b.lower() for b in result["blockers"])
 
 
 def test_nflx_wed_aug5_gap_up_not_tradable():

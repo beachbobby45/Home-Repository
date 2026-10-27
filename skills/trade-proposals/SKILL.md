@@ -28,7 +28,7 @@ description: Trade Proposal lifecycle, pullback limit plans, human approve/rejec
 
 1. Every proposal includes: entry, stop, target, shares, opportunity factors, risk snapshot at creation.
 2. **Refresh live** before approve re-runs Risk Engine (`refresh_live_quotes`).
-3. Limit fill deadline **11:30 ET** — cancel unfilled; do not chase market.
+3. Limit fill deadline **12:30 ET** — cancel unfilled; do not chase market.
 4. Stop on every buy (~0.75% / `STOP_PCT`) — non-negotiable.
 5. Proposals link to journal via `proposal_id` on BUY.
 6. Max **5** active proposals (existing cap).

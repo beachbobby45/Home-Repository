@@ -30,7 +30,7 @@ description: Intraday go/no-go, live quote refresh, tradability, regime gate, ex
 ## Rules
 
 1. **30-min gate:** entry readiness from 10:00 ET (`ENTRY_READY`).
-2. Limit fill deadline **11:30 ET** — missed limit = skip, no chase.
+2. Limit fill deadline **12:30 ET** — missed limit = skip, no chase.
 3. Regime: all three indices down → `block_new_longs`.
 4. Extended session: pre-market / after-hours / weekend — RTH estimates unchanged.
 5. Fill assumption: journal open position locks **Filled**; else toggle Not filled / Filled.

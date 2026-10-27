@@ -95,7 +95,7 @@ def build_pdf(path: Path) -> Path:
             "[ ] Trade tab: Refresh live before buy (updates MA, confirmation, top pick)",
             "[ ] Read status bar: Session verdict | Today $net / daily | Week n of 3 / weekly",
             "[ ] Check banners: RED = DO NOT TRADE | ORANGE = EXIT (sell at market) | PURPLE = Exceptional +1",
-            "[ ] If GO: place limit buy in E*TRADE (deadline 11:30 AM ET - no chase if missed)",
+            "[ ] If GO: place limit buy (deadline 12:30 PM ET - no chase if missed)",
             "[ ] Approve proposal (if used) -> execute -> Account tab: Log trade (link proposal on BUY)",
             "[ ] Refresh live before any second entry; max 2 open positions",
         ],

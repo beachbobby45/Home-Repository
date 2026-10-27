@@ -41,26 +41,30 @@ def test_day_gate_mode_get_and_put(client) -> None:
     r = http.get("/api/settings/day-gate-mode")
     assert r.status_code == 200
     body = r.json()
-    assert body["mode"] == "preserve"
+    assert body["mode"] == "produce"  # v1 paper default
     assert body["trade_min"] == 60
-    assert body["produce_trade_min"] == 55
-    assert body["bull_gate_required"] is True
+    assert body["produce_trade_min"] == 50
+    assert body["bull_gate_required"] is False
 
-    put = http.put("/api/settings/day-gate-mode", json={"mode": "produce"})
+    put = http.put("/api/settings/day-gate-mode", json={"mode": "preserve"})
     assert put.status_code == 200, put.text
-    assert put.json()["mode"] == "produce"
-    assert put.json()["bull_gate_required"] is False
+    assert put.json()["mode"] == "preserve"
+    assert put.json()["bull_gate_required"] is True
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        assert get_day_gate_mode(conn) == "produce"
+        assert get_day_gate_mode(conn) == "preserve"
     finally:
         conn.close()
 
     summary = http.get("/api/summary")
     assert summary.status_code == 200
-    assert summary.json()["day_gate_mode"] == "produce"
+    assert summary.json()["day_gate_mode"] == "preserve"
+
+    put_back = http.put("/api/settings/day-gate-mode", json={"mode": "produce"})
+    assert put_back.status_code == 200
+    assert put_back.json()["produce_trade_min"] == 50
 
 
 def test_day_gate_mode_rejects_invalid(client) -> None:

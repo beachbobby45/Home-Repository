@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
-from investment_agent.pullback_entry import LIMIT_FILL_DEADLINE
+from investment_agent.pullback_entry import LIMIT_FILL_DEADLINE, LIMIT_FILL_DEADLINE_LABEL
 
 ET = ZoneInfo("America/New_York")
 
@@ -84,7 +84,7 @@ def simulate_round_trip_5m(
     as_of_et: datetime | None = None,
     fill_mode: str | None = None,
 ) -> dict[str, Any]:
-    """Walk 5m bars for fill by 11:30 ET then target/stop/EOD."""
+    """Walk 5m bars for fill by LIMIT_FILL_DEADLINE then target/stop/EOD."""
     mode = resolve_fill_mode(fill_mode)
     if not day_bars:
         return {
@@ -138,15 +138,21 @@ def simulate_round_trip_5m(
                 "net_pnl": None,
                 "complete": False,
                 "fill_mode": mode,
-                "detail": f"Limit ${buy:.2f} not {verb} yet (deadline 11:30 ET)",
+                "detail": (
+                    f"Limit ${buy:.2f} not {verb} yet "
+                    f"(deadline {LIMIT_FILL_DEADLINE_LABEL})"
+                ),
             }
         return {
+            # Historical scenario key (deadline was 11:30); keep for scoreboard/tests.
             "scenario": "no_fill_by_1130",
             "filled": False,
             "net_pnl": 0.0,
             "complete": True,
             "fill_mode": mode,
-            "detail": f"Limit ${buy:.2f} not {verb} by 11:30 ET ({mode})",
+            "detail": (
+                f"Limit ${buy:.2f} not {verb} by {LIMIT_FILL_DEADLINE_LABEL} ({mode})"
+            ),
         }
 
     started = False

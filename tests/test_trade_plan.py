@@ -14,13 +14,14 @@ from investment_agent.trading_day import compute_trade_plan
 
 def test_compute_trade_plan_growth_plan_150_net_at_10k():
     plan = compute_trade_plan(entry_price=100.0, deploy_dollar=10_000, net_target=150)
-    assert plan["shares"] == 99
+    assert plan["shares"] == 100  # RH $0 buy fee → full deploy
     assert plan["stop_price"] == 99.25
     assert plan["net_target"] == 150
     assert plan["net_at_target"] >= 149
     assert plan["net_at_target"] <= 151
-    assert plan["target_pct"] > 1.6
-    assert plan["net_at_stop"] < -80
+    assert plan["target_pct"] > 1.4
+    assert plan["fees_round_trip"] == 0.0
+    assert plan["net_at_stop"] < -70
 
 
 def test_compute_trade_plan_scales_down_pct_at_15k():
@@ -39,5 +40,5 @@ def test_compute_trade_plan_updates_with_price():
 
 def test_sell_price_for_net_target():
     px = sell_price_for_net_target(entry_price=72.79, shares=137, net_target=150)
-    net = 137 * (px - 72.79) - 14
+    net = 137 * (px - 72.79)  # RH $0 round-trip fees
     assert abs(net - 150) < 0.05

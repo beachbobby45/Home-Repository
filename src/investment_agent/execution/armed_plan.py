@@ -59,7 +59,7 @@ class ArmedPlan:
     pdt_cap: int | None = None
     pdt_used: int | None = None
     arm_deadline_et: str | None = None
-    fill_deadline_et: str = "11:30"
+    fill_deadline_et: str = "12:30"
     notes: str | None = None
     selection_audit: dict[str, Any] | None = None
     created_at: str | None = None
@@ -108,7 +108,7 @@ class ArmedPlan:
             pdt_cap=d.get("pdt_cap"),
             pdt_used=d.get("pdt_used"),
             arm_deadline_et=d.get("arm_deadline_et"),
-            fill_deadline_et=d.get("fill_deadline_et") or "11:30",
+            fill_deadline_et=d.get("fill_deadline_et") or "12:30",
             notes=d.get("notes"),
             selection_audit=payload.get("selection_audit"),
             created_at=d.get("created_at"),

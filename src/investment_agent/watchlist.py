@@ -173,6 +173,43 @@ def merge_special_watch_tickers(preset_name: str, extras: list[str]) -> list[str
     return out
 
 
+def sync_special_watch_into_consideration(
+    conn: sqlite3.Connection,
+    preset_name: str = "datacenter_us",
+) -> dict:
+    """Ensure Special Watch names are on the active watchlist (same Step 3 rules).
+
+    Intake / memory only — no ranking boost. Prepare / screener / paper consider
+    whatever is active; this keeps SW (file + extras) in that pool.
+    """
+    name = preset_name.lower().strip()
+    if name not in PRESETS:
+        known = ", ".join(sorted(PRESETS))
+        raise ValueError(f"Unknown preset {preset_name!r}. Choose one of: {known}")
+
+    extras = get_special_watch_extras(conn, name)
+    merged = merge_special_watch_tickers(name, extras)
+    before = set(get_active_watchlist(conn))
+    activated = upsert_tickers(
+        conn,
+        merged,
+        source="special_watch",
+        added_via="consideration_sync",
+    )
+    after = set(get_active_watchlist(conn))
+    newly = sorted(after - before)
+    return {
+        "ok": True,
+        "preset": name,
+        "merged_count": len(merged),
+        "extras_count": len(extras),
+        "upserted": activated,
+        "newly_activated_count": len(newly),
+        "newly_activated_sample": newly[:25],
+        "active_watchlist_count": len(after),
+    }
+
+
 def add_special_watch_ticker(
     conn: sqlite3.Connection,
     preset_name: str,

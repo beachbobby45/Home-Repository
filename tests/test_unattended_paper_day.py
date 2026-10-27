@@ -148,7 +148,14 @@ class UnattendedPaperDayTests(unittest.TestCase):
 
     def test_after_deadline_without_pick_finalizes_no_signal(self) -> None:
         self._tick(datetime(2026, 10, 23, 0, 5, tzinfo=ET))
-        out = self._tick(datetime(2026, 10, 23, 12, 0, tzinfo=ET))
+        # v1 fill deadline is 12:30 ET — 12:00 still waits; 12:45 finalizes.
+        still_waiting = self._tick(datetime(2026, 10, 23, 12, 0, tzinfo=ET))
+        self.assertTrue(still_waiting["ok"])
+        gate = get_session_log(self.conn, self.day, ACCOUNT_GATE)
+        assert gate is not None
+        self.assertEqual(gate["status"], "waiting_signal")
+
+        out = self._tick(datetime(2026, 10, 23, 12, 45, tzinfo=ET))
         self.assertTrue(out["ok"])
         gate = get_session_log(self.conn, self.day, ACCOUNT_GATE)
         assert gate is not None

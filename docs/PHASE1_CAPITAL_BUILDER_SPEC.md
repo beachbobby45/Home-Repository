@@ -429,7 +429,7 @@ Preserve **pullback limit entry** as default Phase 1 entry mode:
 | `limit_buy_price` | `pullback_entry.limit_buy_price()` |
 | `limit_sell_price` | Growth Plan net target via `sell_price_for_net_target()` |
 | `stop_price` | `STOP_PCT` below fill price |
-| Fill deadline | 11:30 ET |
+| Fill deadline | 12:30 ET |
 | Overnight | If not closed EOD and human approves hold, monitor transitions queue to `runner` state (existing) |
 
 ### 6.2 Position sizing (dynamic)
@@ -478,7 +478,7 @@ Replace/enhance top pick card with **Proposal Card**:
 │ NVDA  ·  Opportunity 87/100  ·  PROPOSED              │
 ├─────────────────────────────────────────────────────────┤
 │ Limit buy $XXX  ·  Sell $XXX  ·  Stop $XXX  ·  100 sh  │
-│ Max risk $75 (0.75%)  ·  R:R 2.4:1  ·  Cancel 11:30 ET│
+│ Max risk $75 (0.75%)  ·  R:R 2.4:1  ·  Cancel 12:30 ET│
 ├─────────────────────────────────────────────────────────┤
 │ Factors: Tech 91 · Mom 94 · News 84 · Regime 81 · ...  │
 ├─────────────────────────────────────────────────────────┤

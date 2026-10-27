@@ -99,20 +99,21 @@ def test_trading_mode_defaults_to_paper():
         assert get_trading_mode(conn) == "paper"
         summary = build_dashboard_summary(conn)
         assert summary.trading_mode == "paper"
-        assert summary.day_gate_mode == "preserve"
+        assert summary.day_gate_mode == "produce"  # v1 paper default
     finally:
         conn.close()
         path.unlink(missing_ok=True)
 
 
-def test_day_gate_mode_defaults_preserve_and_switches():
+def test_day_gate_mode_defaults_produce_and_switches():
     conn, path = _conn()
     try:
-        assert get_day_gate_mode(conn) == "preserve"
-        assert set_day_gate_mode(conn, "produce") == "produce"
         assert get_day_gate_mode(conn) == "produce"
+        assert set_day_gate_mode(conn, "preserve") == "preserve"
+        assert get_day_gate_mode(conn) == "preserve"
         summary = build_dashboard_summary(conn)
-        assert summary.day_gate_mode == "produce"
+        assert summary.day_gate_mode == "preserve"
+        assert set_day_gate_mode(conn, "produce") == "produce"
         try:
             set_day_gate_mode(conn, "invalid")
             assert False, "expected ValueError"

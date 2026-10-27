@@ -658,9 +658,13 @@ def api_prepare_morning(
     """Step 2 — run screener and return trade candidates with size / sell / stop."""
     if ingest_lock_active():
         raise HTTPException(status_code=503, detail=ingest_lock_message())
+    from investment_agent.account import build_dashboard_summary
+    from investment_agent.watchlist import sync_special_watch_into_consideration
+
+    # Special Watch → active consideration pool (same Step 3 rules, no boost).
+    sw_sync = sync_special_watch_into_consideration(conn, "datacenter_us")
     start, end = date_range_for_period(14, conn=conn)
     trading_dates = list_trading_dates(conn, count=14)
-    from investment_agent.account import build_dashboard_summary
 
     summary = build_dashboard_summary(conn)
     deploy = float(summary.tradable_cash or ORIGINAL_BASIS)
@@ -691,6 +695,7 @@ def api_prepare_morning(
         "candidates": candidates,
         "trading_day": status,
         "rhythm": rhythm,
+        "special_watch_sync": sw_sync,
     }
 
 
