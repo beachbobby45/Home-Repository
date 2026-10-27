@@ -118,6 +118,8 @@ def _simulate_5m(
     sell: float,
     stop: float,
     shares: int,
+    buy_fee: float = DEFAULT_BUY_FEE,
+    sell_fee: float = DEFAULT_SELL_FEE,
 ) -> dict:
     """Proven fill/exit walk on one session's 5m bars. Never invents fills."""
     if not day_bars:
@@ -154,6 +156,7 @@ def _simulate_5m(
             "detail": f"Limit ${buy:.2f} not touched on any 5m bar by {LIMIT_FILL_DEADLINE.strftime('%H:%M')} ET",
         }
 
+    fees = float(buy_fee) + float(sell_fee)
     # Walk bars at/after fill for exit
     started = False
     for bar in day_bars:
@@ -169,7 +172,7 @@ def _simulate_5m(
             # Conservative: if stop also in fill bar, take stop; elif target, take target.
             exit_px, reason = _bar_exit_price(target=sell, stop=stop, bar=bar)
             if exit_px is not None and reason is not None:
-                net = round(shares * (exit_px - buy) - DEFAULT_BUY_FEE - DEFAULT_SELL_FEE, 2)
+                net = round(shares * (exit_px - buy) - fees, 2)
                 return {
                     "scenario": f"exit_{reason}_same_bar_as_fill",
                     "filled": True,
@@ -185,7 +188,7 @@ def _simulate_5m(
 
         exit_px, reason = _bar_exit_price(target=sell, stop=stop, bar=bar)
         if exit_px is not None and reason is not None:
-            net = round(shares * (exit_px - buy) - DEFAULT_BUY_FEE - DEFAULT_SELL_FEE, 2)
+            net = round(shares * (exit_px - buy) - fees, 2)
             return {
                 "scenario": f"exit_{reason}",
                 "filled": True,
@@ -201,7 +204,7 @@ def _simulate_5m(
     last = day_bars[-1]
     last_t = _bar_time_et(last)
     close_px = float(last["close"])
-    net = round(shares * (close_px - buy) - DEFAULT_BUY_FEE - DEFAULT_SELL_FEE, 2)
+    net = round(shares * (close_px - buy) - fees, 2)
     return {
         "scenario": "exit_eod_close",
         "filled": True,
@@ -222,6 +225,10 @@ def analyze_day(
     deploy: float,
     bars_by_ticker: dict[str, dict[str, list[dict]]],
     lookback_days: int,
+    net_target: float | None = None,
+    stop_pct: float | None = None,
+    buy_fee: float | None = None,
+    sell_fee: float | None = None,
 ) -> dict:
     top, source = _resolve_top1(conn, session_date)
     ma = conn.execute(
@@ -271,15 +278,24 @@ def analyze_day(
         base["day_close"] = bar["close"]
         return base
 
-    net_target = daily_profit_target(deploy)
-    plan = compute_pullback_trade_plan(
-        session_open=bar["open"],
-        avg_range_pct=avg_range,
-        deploy_dollar=deploy,
-        net_target=net_target,
-        buy_fee=DEFAULT_BUY_FEE,
-        sell_fee=DEFAULT_SELL_FEE,
+    buy_fee_v = DEFAULT_BUY_FEE if buy_fee is None else float(buy_fee)
+    sell_fee_v = DEFAULT_SELL_FEE if sell_fee is None else float(sell_fee)
+    goal = (
+        float(net_target)
+        if net_target is not None
+        else daily_profit_target(deploy)
     )
+    plan_kwargs: dict = {
+        "session_open": bar["open"],
+        "avg_range_pct": avg_range,
+        "deploy_dollar": deploy,
+        "net_target": goal,
+        "buy_fee": buy_fee_v,
+        "sell_fee": sell_fee_v,
+    }
+    if stop_pct is not None:
+        plan_kwargs["stop_pct"] = float(stop_pct)
+    plan = compute_pullback_trade_plan(**plan_kwargs)
     if not plan:
         base["limitation"] = "Pullback plan empty"
         return base
@@ -307,7 +323,8 @@ def analyze_day(
                     "limit_sell": sell,
                     "stop": stop,
                     "shares": shares,
-                    "net_target": net_target,
+                    "net_target": goal,
+                    "stop_pct": float(stop_pct) if stop_pct is not None else None,
                     "scenario": "intraday_fetch_failed",
                     "limitation": f"5m fetch failed for {ticker}: {exc}",
                     "counts_toward_pnl": False,
@@ -316,7 +333,15 @@ def analyze_day(
             return base
 
     day_bars = bars_by_ticker[ticker].get(session_date, [])
-    sim = _simulate_5m(day_bars, buy=buy, sell=sell, stop=stop, shares=shares)
+    sim = _simulate_5m(
+        day_bars,
+        buy=buy,
+        sell=sell,
+        stop=stop,
+        shares=shares,
+        buy_fee=buy_fee_v,
+        sell_fee=sell_fee_v,
+    )
 
     return {
         **base,
@@ -330,7 +355,8 @@ def analyze_day(
         "limit_sell": sell,
         "stop": stop,
         "shares": shares,
-        "net_target": net_target,
+        "net_target": goal,
+        "stop_pct": float(stop_pct) if stop_pct is not None else None,
         "fill_deadline_et": LIMIT_FILL_DEADLINE.strftime("%H:%M"),
         **sim,
         "limitation": sim.get("detail") if not sim.get("counts_toward_pnl") else None,
