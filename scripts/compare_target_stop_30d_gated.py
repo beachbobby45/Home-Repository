@@ -344,21 +344,28 @@ def main() -> int:
             "If paper logs are sparse historically, MA_ALLOW is the next-best proxy."
         )
 
+        payload = {
+            "deploy": args.deploy,
+            "fees_per_side": args.fees,
+            "views": view_payload,
+            "days_annotated_current": ann_a,
+            "days_annotated_proposed": ann_b,
+        }
         out = args.json_out or (ROOT / "data" / "compare_target_stop_30d_gated.json")
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(
-            json.dumps(
-                {
-                    "deploy": args.deploy,
-                    "fees_per_side": args.fees,
-                    "views": view_payload,
-                    "days_annotated_current": ann_a,
-                    "days_annotated_proposed": ann_b,
-                },
-                indent=2,
-            )
-        )
+        out.write_text(json.dumps(payload, indent=2))
         print(f"\nWrote {out}")
+
+        # Human-readable HTML beside the JSON
+        try:
+            from render_gated_backtest_html import render
+
+            html_path = out.with_suffix(".html")
+            html_path.write_text(render(payload))
+            print(f"Wrote {html_path}")
+            print(f"Open in browser: open {html_path}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"WARN: HTML render skipped: {exc}")
         return 0
     finally:
         conn.close()
