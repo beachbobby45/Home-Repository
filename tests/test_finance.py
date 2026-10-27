@@ -22,7 +22,9 @@ from investment_agent.finance import (
 
 
 def test_round_trip_fees():
-    assert round_trip_fees() == 14.0
+    # Robinhood US-listed equities: $0 commission defaults
+    assert round_trip_fees() == 0.0
+    assert round_trip_fees(7.0, 7.0) == 14.0
 
 
 def test_goal_progress_pct():

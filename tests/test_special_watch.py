@@ -76,6 +76,45 @@ def test_add_special_watch_ticker_manual_extra():
         conn.close()
 
 
+def test_sync_special_watch_into_consideration():
+    from investment_agent.db import get_active_watchlist
+    from investment_agent.watchlist import (
+        add_special_watch_ticker,
+        sync_special_watch_into_consideration,
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "sw_sync.db"
+        init_db(path)
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+
+        before = set(get_active_watchlist(conn))
+        assert "VRT" not in before
+
+        add_special_watch_ticker(conn, "datacenter_us", "ZZSYNC")
+        conn.commit()
+
+        result = sync_special_watch_into_consideration(conn, "datacenter_us")
+        conn.commit()
+        assert result["ok"] is True
+        assert result["merged_count"] >= 90
+        assert result["extras_count"] == 1
+        assert result["newly_activated_count"] >= 1
+
+        after = set(get_active_watchlist(conn))
+        assert "VRT" in after
+        assert "ZZSYNC" in after
+        assert result["active_watchlist_count"] == len(after)
+
+        # Idempotent — second sync should not explode newly_activated
+        again = sync_special_watch_into_consideration(conn, "datacenter_us")
+        conn.commit()
+        assert again["newly_activated_count"] == 0
+        assert again["active_watchlist_count"] == len(after)
+        conn.close()
+
+
 def test_build_special_watch_report_counts():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "sw.db"

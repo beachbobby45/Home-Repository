@@ -37,8 +37,21 @@ class OpsAuditTests(unittest.TestCase):
         self.conn.close()
         self.tmp.cleanup()
 
-    def test_default_ledger_is_journal_until_paper_activated(self) -> None:
-        self.assertEqual(get_ledger_source(self.conn), "journal")
+    def test_ensure_paper_accounts_activates_paper_ledger(self) -> None:
+        # setUp calls ensure_paper_accounts, which flips ledger_source to paper
+        # so Risk/Account tabs use the paper book (not an empty journal).
+        self.assertEqual(get_ledger_source(self.conn), "paper")
+
+    def test_fresh_db_defaults_ledger_to_journal(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        try:
+            db = Path(tmp.name) / "fresh.db"
+            init_db(db)
+            conn = connect(db)
+            self.assertEqual(get_ledger_source(conn), "journal")
+            conn.close()
+        finally:
+            tmp.cleanup()
 
     def test_test_suite_does_not_change_equity(self) -> None:
         before = get_paper_balance(self.conn, ACCOUNT_GATE)

@@ -53,7 +53,7 @@ SWEEP_SCHEDULE_KEY = "sweep_schedule"
 # Day authorization policy (separate from paper/live journal tagging).
 DAY_GATE_MODE_KEY = "day_gate_mode"
 DAY_GATE_PRESERVE = "preserve"  # MA ≥60 + bull gate (strict capital protection)
-DAY_GATE_PRODUCE = "produce"  # MA ≥55, bull gate not required (paper calibration)
+DAY_GATE_PRODUCE = "produce"  # MA ≥50, bull gate not required (v1 paper calibration)
 VALID_DAY_GATE_MODES = frozenset({DAY_GATE_PRESERVE, DAY_GATE_PRODUCE})
 
 
@@ -159,8 +159,9 @@ def set_trading_mode(conn: sqlite3.Connection, mode: str) -> str:
 
 
 def get_day_gate_mode(conn: sqlite3.Connection) -> str:
-    raw = get_setting(conn, DAY_GATE_MODE_KEY, DAY_GATE_PRESERVE).lower().strip()
-    return raw if raw in VALID_DAY_GATE_MODES else DAY_GATE_PRESERVE
+    # Default produce for paper calibration (v1) — preserve remains available via UI/API.
+    raw = get_setting(conn, DAY_GATE_MODE_KEY, DAY_GATE_PRODUCE).lower().strip()
+    return raw if raw in VALID_DAY_GATE_MODES else DAY_GATE_PRODUCE
 
 
 def set_day_gate_mode(conn: sqlite3.Connection, mode: str) -> str:

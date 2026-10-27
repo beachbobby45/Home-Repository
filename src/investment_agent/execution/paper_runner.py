@@ -88,7 +88,7 @@ def _session_already_final(
         return False
     if status not in _FINAL_STATUSES:
         return False
-    # Early propose failures must not lock the day before 11:30 ET when a pick appears later.
+    # Early propose failures must not lock the day before fill deadline when a pick appears later.
     if (
         _is_retryable_no_signal(existing)
         and signal_ok

@@ -40,9 +40,9 @@ fi
 
 echo ""
 echo "Starting dashboard at http://127.0.0.1:8080"
-echo "Expected version after restart: v0.9.1 · \$15K · Annual Sweep (Cash \$15,000 · \$200/day target)"
+echo "Expected version after restart: v0.9.9 · v1 paper calibration"
 echo "Verify: curl -s http://127.0.0.1:8080/api/version"
-echo "If Cash still shows \$10,000: git pull origin main, restart dashboard, then Cmd+Shift+R."
+echo "If badge still shows 0.9.8: git pull, hard_restart_dashboard_mac.sh, then Cmd+Shift+R."
 echo "Keep this Terminal window open. Press Ctrl+C to stop."
 echo ""
 

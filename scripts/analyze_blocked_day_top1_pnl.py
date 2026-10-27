@@ -4,10 +4,10 @@
 Rules (Tony, 2026-10-17):
   - Deploy exactly $10,000 per day (one stock only — T+1 settlement of sale).
   - Count a win/loss ONLY when 5-minute bars prove fill order (option B).
-  - Limit buy must fill by 11:30 ET (system deadline).
+  - Limit buy must fill by LIMIT_FILL_DEADLINE (12:30 ET v1).
   - After fill: walk subsequent 5m bars; same-bar stop+target → stop
     (matches backtest._bar_exit_price conservatism).
-  - No fill by 11:30 → no trade that day (net $0).
+  - No fill by deadline → no trade that day (net $0).
   - No 5m bars for that ticker/day → excluded from P&L (not guessed).
 
 Usage (Mac with agent.db):
@@ -478,7 +478,7 @@ def main() -> int:
         print(f"  Target exits:          {len(targets)}")
         print(f"  Stop exits:            {len(stops)}")
         print(f"  EOD close exits:       {len(eods)}")
-        print(f"  No fill by 11:30:      {len(no_fill)}")
+        print(f"  No fill by {LIMIT_FILL_DEADLINE.strftime('%H:%M')}:      {len(no_fill)}")
         print(f"Days excluded (no data): {len(excluded)}")
         print(f"Starting capital: ${starting:,.2f}")
         print(f"Ending capital:   ${capital:,.2f}")

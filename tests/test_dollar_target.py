@@ -29,7 +29,8 @@ def test_adp_aug7_not_reachable_from_open():
     assert outcome == "neither"
     net_high = net_at_high_from_open(open_px, high, deploy_dollar=deploy)
     assert net_high < 150.0
-    assert net_high == 69.52
+    # RH $0 commission (was 69.52 under legacy $7+$7 fees)
+    assert net_high == 83.52
 
     pred = assess_dollar_reachability(
         entry_price=open_px,
@@ -62,7 +63,8 @@ def test_estimate_net_at_typical_high():
         deploy_dollar=10_000.0,
     )
     assert net > 0
-    assert net == 134.5
+    # Half of 3% range on $10k @ $100 with RH $0 fees → exactly $150
+    assert net == 150.0
 
 
 def test_high_enough_reaches_target():

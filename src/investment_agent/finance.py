@@ -7,8 +7,10 @@ from dataclasses import dataclass
 # Defaults from approved product spec v3 (Phase 1 operating model)
 ORIGINAL_BASIS = 15_000.0
 GOAL_ACCOUNT_VALUE = 5_000_000.0
-DEFAULT_BUY_FEE = 7.0
-DEFAULT_SELL_FEE = 7.0
+# Robinhood US-listed stocks: $0 commission; regulatory sell fees are pennies.
+# Legacy E*TRADE-style $7+$7 inflated targets/sims — do not use for RH paper/live.
+DEFAULT_BUY_FEE = 0.0
+DEFAULT_SELL_FEE = 0.0
 DEFAULT_TAX_RESERVE_RATE = 0.25
 DEFAULT_MGMT_SWEEP_RATE = 0.10
 DEFAULT_TOTAL_SWEEP_RATE = DEFAULT_MGMT_SWEEP_RATE + DEFAULT_TAX_RESERVE_RATE

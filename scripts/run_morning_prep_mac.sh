@@ -50,11 +50,16 @@ from investment_agent.db import connect, init_db
 from investment_agent.daily_rhythm import build_trading_candidates
 from investment_agent.period_screener import date_range_for_period, list_trading_dates, run_period_screener, save_screener_run
 from investment_agent.screen_actions import ACTION_PERIOD_SCREENER, record_screen_action
-from investment_agent.account import build_dashboard_summary
+from investment_agent.account import build_dashboard_summary, set_day_gate_mode, get_day_gate_mode
 from investment_agent.trading_day import build_trading_day_status
+from investment_agent.watchlist import sync_special_watch_into_consideration
 
 conn = connect(init_db())
 try:
+    # v1 paper defaults: produce day-gate + Special Watch in consideration pool
+    if get_day_gate_mode(conn) != "produce":
+        set_day_gate_mode(conn, "produce")
+    sw_sync = sync_special_watch_into_consideration(conn, "datacenter_us")
     summary = build_dashboard_summary(conn)
     deploy = float(summary.tradable_cash or 10000)
     start, end = date_range_for_period(14, conn=conn)
@@ -73,6 +78,8 @@ try:
         "top_pick": (status.get("top_pick") or {}).get("ticker"),
         "verdict": status.get("verdict"),
         "headline": status.get("headline"),
+        "day_gate_mode": get_day_gate_mode(conn),
+        "special_watch_sync": sw_sync,
     }, indent=2))
 finally:
     conn.close()

@@ -55,7 +55,7 @@ A **rules-based, same-day long-only** trading program that:
 
 1. Ranks liquid U.S. equities using a local research stack (screener, dollar-goal fit, market activity, confirmation).  
 2. Selects primarily the **#1 ranked name** each session.  
-3. Enters with a **pullback limit buy**, exits at a **dollar profit target** or **stop**, with an **11:30 ET** entry deadline.  
+3. Enters with a **pullback limit buy**, exits at a **dollar profit target** or **stop**, with a **12:30 ET** entry deadline.  
 4. Trades **up to 5 weekdays per week** when a setup fills (post–PDT rules); **one name per day**; redeploy only with **settled** buying power (cash / unlevered).  
 5. **Paper-trades 40–60 sessions** (Oct–Nov 2026) with pre-registered pass/fail **before** any live deposit; proposed **RH CASH live $5k on 2026-12-01**, then **+$5k every ~30 trading sessions** to **$20k invested** — dates are earliest sketches; deposits stay **evidence-gated (never automatic)**.  
 6. Executes via **Robinhood** as the ledger of record, with a local always-on worker for travel-safe **broker-side** target/stop orders—not discretionary “AI guessing” each minute.
@@ -123,7 +123,7 @@ Robinhood has **no stock paper account** (Simulated Returns = options scenarios 
 ### 4.1 Daily process
 1. **Morning prep** — data, rank, market activity, confirmation on #1.  
 2. **Arm plan** — ticker, limit buy, target, stop, shares; confirm **settled** buying power ≥ deploy.  
-3. **Entry** — limit buy; cancel if not filled by **11:30 ET**.  
+3. **Entry** — limit buy; cancel if not filled by **12:30 ET**.  
 4. **Exit** — resting **target** and **stop** at the broker after fill.  
 5. **EOD / next morning** — RH sync; sale proceeds settle **T+1** in cash mode before next deploy.
 

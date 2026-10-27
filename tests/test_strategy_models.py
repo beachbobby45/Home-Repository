@@ -74,7 +74,11 @@ def test_next_growth_tier():
 
 
 def test_target_pct_for_dollars_on_10k():
-    # need $150 net + $14 fees on ~$10k deploy ≈ 1.64%
-    pct = target_pct_for_dollars(net_needed=150, deploy_dollar=10_000, fees=14)
+    # RH $0 fees: need $150 net on ~$10k deploy ≈ 1.50%
+    pct = target_pct_for_dollars(net_needed=150, deploy_dollar=10_000, fees=0)
     assert pct is not None
-    assert 1.6 < pct < 1.7
+    assert 1.45 < pct < 1.55
+    # Legacy E*TRADE-style still computable when fees passed explicitly
+    pct_legacy = target_pct_for_dollars(net_needed=150, deploy_dollar=10_000, fees=14)
+    assert pct_legacy is not None
+    assert 1.6 < pct_legacy < 1.7

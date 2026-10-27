@@ -238,7 +238,7 @@ anthropic, pytest, fpdf2
 
 **Dollar rank gate** (`dollar_target.py`): ≥40% $ hit rate, avg net ≥90% of daily goal, ≥2 days.
 
-**Pullback simulation** (`pullback_entry.py`): limit buy ≈ open − 35% of avg range; 11:30 ET fill deadline.
+**Pullback simulation** (`pullback_entry.py`): limit buy ≈ open − 35% of avg range; 12:30 ET fill deadline.
 
 ### 5.4 Missing Phase 1 factors
 
@@ -301,7 +301,7 @@ This is a **single-score rank + tradability gate**, not a **multi-factor Opportu
 | Ranked + live Step 3 | `period_screener.py`, `trading_day.py` | **EXISTING** |
 | Regime not blocking | `regime.py` | **EXISTING** |
 | Tradability GO | `tradability.py` | **EXISTING** |
-| Pullback limit fill | `pullback_entry.py`, 11:30 ET deadline | **EXISTING** |
+| Pullback limit fill | `pullback_entry.py`, 12:30 ET deadline | **EXISTING** |
 | 30-min opening gate | `trading_day.session_phase()` | **EXISTING** |
 | Human validate | `/api/trading-day/validate` | **EXISTING** |
 

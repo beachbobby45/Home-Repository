@@ -64,7 +64,7 @@ $5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 202
 | Names per day | **1** under `single_top1` (default); dual only if mode enabled |
 | Day-trade cap (ops) | **5**/week max filled round-trips |
 | Settled funds | Required before arm (cash / unlevered) |
-| Entry | Limit buy from pullback plan; **fill by 11:30 ET** or cancel |
+| Entry | Limit buy from pullback plan; **fill by 12:30 ET** or cancel |
 | Exit | Growth Plan **limit sell** + **stop**; same-bar ambiguity → stop (backtest convention) |
 | Day gate | Configurable Preserve / Produce; default **do not arm** if `allow_trade` false unless Tony enables “counterfactual arm” flag (off by default for live) |
 | Confirmation | #1 (or live-confirmed alternate from top list) must pass confirmation checks before arm |
@@ -169,13 +169,13 @@ $5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 202
 **Build**
 - On approved/armed day: worker places **limit buy** (or Tony taps Approve → submit).  
 - On fill: **immediately** place target limit sell + stop (OCO/bracket if RH supports; else two linked orders + monitor).  
-- Cancel unfilled buy at **11:30 ET**.  
+- Cancel unfilled buy at **12:30 ET**.  
 - Ops guard blocks submit if weekly day-trade count ≥ **5**.  
 - Settled buying power required before submit.  
 - Kill switch cancels entry; does **not** cancel protective stop unless flattening.
 
 **Test**
-- Paper/agent sandbox: full day lifecycle (no fill / fill→target / fill→stop / 11:30 cancel).  
+- Paper/agent sandbox: full day lifecycle (no fill / fill→target / fill→stop / 12:30 cancel).  
 - Chaos: kill dashboard during open order → exits still rest at RH.  
 - Chaos: kill worker after fill+exits placed → RH still holds exits.  
 - Ops: 6th submit attempt in a week rejected.
@@ -230,7 +230,7 @@ $5k all-fill path over 60 sessions ≈ +18.7%; staged plan Nov 2026 → ~Apr 202
 | UT-3 | Unit | Sync idempotency | No duplicate fills |
 | IT-1 | Integration | Paper buy → bracket → target | Fill+flatten recorded in RH+DB |
 | IT-2 | Integration | Paper buy → stop | Stop preferred on same-bar conflict |
-| IT-3 | Integration | 11:30 cancel | No late entry |
+| IT-3 | Integration | 12:30 cancel | No late entry |
 | IT-4 | Chaos | Dashboard down, worker up | Exits remain |
 | IT-5 | Chaos | Worker down after brackets | RH still protects |
 | AT-1 | Acceptance | 7-day uptime | No morning “connection failed” |

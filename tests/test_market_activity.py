@@ -131,7 +131,13 @@ def test_authorize_trade_preserve_vs_produce():
         )
         is False
     )
-    # Produce: unlocked at ≥55 without bull gate
+    # Produce (v1): unlocked at ≥50 without bull gate
+    assert (
+        authorize_trade(
+            score=50, band=band_for_score(50), bull_gate_ok=False, day_gate_mode="produce"
+        )
+        is True
+    )
     assert (
         authorize_trade(
             score=55, band=band_below, bull_gate_ok=False, day_gate_mode="produce"
@@ -140,14 +146,16 @@ def test_authorize_trade_preserve_vs_produce():
     )
     assert (
         authorize_trade(
-            score=54, band=band_for_score(54), bull_gate_ok=True, day_gate_mode="produce"
+            score=49, band=band_for_score(49), bull_gate_ok=True, day_gate_mode="produce"
         )
         is False
     )
-    assert PRODUCE_TRADE_MIN == FLIP_EXIT_MIN == 55
+    assert PRODUCE_TRADE_MIN == 50
+    assert FLIP_EXIT_MIN == 45
+    assert FLIP_EXIT_MIN < PRODUCE_TRADE_MIN
 
 
-def test_produce_mode_allows_score_55_without_bull_gate():
+def test_produce_mode_allows_score_50_without_bull_gate():
     conn = _conn()
     try:
         _seed_spy_bars(conn, uptrend=False)  # bull gate off
@@ -157,11 +165,11 @@ def test_produce_mode_allows_score_55_without_bull_gate():
         when = datetime(2026, 8, 3, 10, 0, tzinfo=ET)
         with patch(
             "investment_agent.market_activity.composite_opportunity_score",
-            return_value=(55, {"market_direction": 20.0}),
+            return_value=(50, {"market_direction": 20.0}),
         ):
             result = evaluate_market_activity(conn, when=when, persist=False)
         assert result["day_gate_mode"] == "produce"
-        assert result["score"] == 55
+        assert result["score"] == 50
         assert result["bull_gate_ok"] is False
         assert result["preserve_allow_trade"] is False
         assert result["allow_trade"] is True
@@ -176,6 +184,7 @@ def test_preserve_mode_still_blocks_score_55():
         _seed_spy_bars(conn, uptrend=True)
         _seed_index_snapshots(conn, spy_change=0.2)
         insert_macro(conn, "VIXCLS", "2026-08-03", 18.0, "2026-08-03T12:00:00+00:00")
+        set_day_gate_mode(conn, "preserve")
         assert get_day_gate_mode(conn) == "preserve"
         when = datetime(2026, 8, 3, 10, 0, tzinfo=ET)
         with patch(
@@ -202,6 +211,7 @@ def test_evaluate_blocks_when_bull_gate_off():
         _seed_spy_bars(conn, uptrend=False)
         _seed_index_snapshots(conn, spy_change=0.5)
         insert_macro(conn, "VIXCLS", "2026-08-03", 16.0, "2026-08-03T12:00:00+00:00")
+        set_day_gate_mode(conn, "preserve")  # bull gate only binds in preserve
         when = datetime(2026, 8, 3, 10, 0, tzinfo=ET)
         result = evaluate_market_activity(conn, when=when, persist=False)
         assert result["allow_trade"] is False
@@ -241,7 +251,7 @@ def test_flip_detection_two_consecutive_low_scores():
             session_date_et="2026-08-03",
             captured_at="2026-08-03T15:00:00+00:00",
             slot="plus_15m",
-            score=52,
+            score=44,
             band="below_average",
             allow_trade=False,
             bull_gate_ok=True,
@@ -251,14 +261,8 @@ def test_flip_detection_two_consecutive_low_scores():
         )
         conn.commit()
         with patch(
-            "investment_agent.market_activity.score_market_direction",
-            return_value=45.0,
-        ), patch(
-            "investment_agent.market_activity.score_index_momentum",
-            return_value=45.0,
-        ), patch(
-            "investment_agent.market_activity.score_sector_participation",
-            return_value=45.0,
+            "investment_agent.market_activity.composite_opportunity_score",
+            return_value=(44, {"market_direction": 20.0}),
         ):
             result = evaluate_market_activity(conn, when=when, persist=False)
         assert result["score"] < FLIP_EXIT_MIN

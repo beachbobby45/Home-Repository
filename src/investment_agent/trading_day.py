@@ -31,6 +31,7 @@ from investment_agent.strategy import ENTRY_DELAY_MINUTES, ENTRY_WINDOW_ET, STOP
 from investment_agent.dollar_target import load_dollar_history
 from investment_agent.pullback_entry import (
     LIMIT_FILL_DEADLINE,
+    LIMIT_FILL_DEADLINE_LABEL,
     compute_pullback_trade_plan,
     dollar_confidence,
     limit_fill_missed,
@@ -1517,7 +1518,7 @@ def build_trading_day_status(conn: sqlite3.Connection) -> dict:
                 add_check(
                     "Limit fill",
                     None,
-                    f"Place limit buy ${limit_px:.2f} · cancel if not filled by 11:30 ET",
+                    f"Place limit buy ${limit_px:.2f} · cancel if not filled by {LIMIT_FILL_DEADLINE_LABEL}",
                 )
 
     # Second pick: next tradable live name after actionable #1
