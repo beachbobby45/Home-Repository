@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-__version__ = "0.9.9"
-__release_name__ = "v1 paper calibration"
-__release_tag__ = "v0.9.9-v1-paper"
+__version__ = "0.9.10"
+__release_name__ = "paper no-bars wait"
+__release_tag__ = "v0.9.10-no-bars-wait"
 
 
 def version_info() -> dict[str, str]:

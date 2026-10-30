@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=0.9.9" />
+  <link rel="stylesheet" href="/static/style.css?v=0.9.10" />
 </head>
 <body>
   <header class="app-header">
@@ -781,7 +781,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.9 · v1 paper calibration</strong> (produce@50 · 12:30 ET fill · SW consideration · RH $0 fees)</p>
+          <p class="brief">Latest release: <strong>v0.9.10 · paper no-bars wait</strong> (v1 calibration + empty 5m feed no longer burns the day early)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -883,9 +883,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (["0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
+            if (["0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
               setupHelp.textContent =
-                v.version === "0.9.9"
+                v.version === "0.9.10"
+                  ? "You are on v0.9.10 — paper waits for 5m bars before finalizing (no early no_5m_bars burn). Hard-refresh (Cmd+Shift+R)."
+                  : v.version === "0.9.9"
                   ? "You are on v0.9.9 — v1 paper calibration (produce MA≥50, 12:30 ET fill, RH $0 fees). Hard-refresh (Cmd+Shift+R) if Trade still shows 11:30 / MA≥55."
                   : "You are on the current release (Plan = one funded path: Begin → Remaining by calendar year). Hard-refresh (Cmd+Shift+R) if Plan still shows Year 1 / $15K.";
               setupHelp.className = "brief setup-version-help setup-version-ok";
