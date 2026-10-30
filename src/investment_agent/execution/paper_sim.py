@@ -87,6 +87,27 @@ def simulate_round_trip_5m(
     """Walk 5m bars for fill by LIMIT_FILL_DEADLINE then target/stop/EOD."""
     mode = resolve_fill_mode(fill_mode)
     if not day_bars:
+        # Empty feed before the fill deadline is temporary (Yahoo lag / pre-open).
+        # Finalizing as no_5m_bars here locked paper books overnight (Oct 2026).
+        # as_of_et is None → full-day / force_complete path → finalize.
+        if as_of_et is not None:
+            when = as_of_et
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=ET)
+            else:
+                when = when.astimezone(ET)
+            if when.timetz().replace(tzinfo=None) <= LIMIT_FILL_DEADLINE:
+                return {
+                    "scenario": "waiting_for_bars",
+                    "filled": False,
+                    "net_pnl": None,
+                    "complete": False,
+                    "fill_mode": mode,
+                    "detail": (
+                        "No 5m bars yet — waiting until "
+                        f"{LIMIT_FILL_DEADLINE_LABEL} (or until bars arrive)"
+                    ),
+                }
         return {
             "scenario": "no_5m_bars",
             "filled": False,

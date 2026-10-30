@@ -48,6 +48,8 @@ _FINAL_STATUSES = frozenset(
 # Soft holding state while morning prep / ranks are still catching up.
 _WAITING_SIGNAL = "waiting_signal"
 _PROPOSE_FAILED = "propose_failed"
+_NO_5M_BARS = "no_5m_bars"
+_WAITING_FOR_BARS = "waiting_for_bars"
 
 
 def _before_fill_deadline(as_of_et: datetime | None) -> bool:
@@ -73,6 +75,17 @@ def _is_retryable_no_signal(existing: dict[str, Any] | None) -> bool:
     return scenario in {_PROPOSE_FAILED, "no_top_pick"} or "no top pick" in detail
 
 
+def _is_retryable_empty_bars(existing: dict[str, Any] | None) -> bool:
+    """True when a premature no-bars finalize should reopen before the fill deadline."""
+    if not existing:
+        return False
+    scenario = (existing.get("scenario") or "").strip()
+    detail = (existing.get("detail") or "").lower()
+    if scenario in {_NO_5M_BARS, _WAITING_FOR_BARS}:
+        return True
+    return "no 5m bars" in detail
+
+
 def _session_already_final(
     existing: dict[str, Any] | None,
     *,
@@ -80,7 +93,7 @@ def _session_already_final(
     as_of_et: datetime | None,
     force_complete: bool,
 ) -> bool:
-    """Block re-entry only for true finals — not premature no_signal before deadline."""
+    """Block re-entry only for true finals — not premature no_signal / no_bars."""
     if not existing:
         return False
     status = existing.get("status")
@@ -93,6 +106,14 @@ def _session_already_final(
         _is_retryable_no_signal(existing)
         and signal_ok
         and (force_complete or _before_fill_deadline(as_of_et))
+    ):
+        return False
+    # Overnight / empty Yahoo feed must not burn an unlocked gate day.
+    if (
+        _is_retryable_empty_bars(existing)
+        and signal_ok
+        and not force_complete
+        and _before_fill_deadline(as_of_et)
     ):
         return False
     return True
