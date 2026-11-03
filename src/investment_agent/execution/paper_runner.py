@@ -86,6 +86,19 @@ def _is_retryable_empty_bars(existing: dict[str, Any] | None) -> bool:
     return "no 5m bars" in detail
 
 
+def _is_retryable_gate_blocked(existing: dict[str, Any] | None) -> bool:
+    """True when an early day-gate NO should be re-checked (not 'day over')."""
+    if not existing:
+        return False
+    if (existing.get("status") or "").strip() != "skipped_gate":
+        return False
+    if existing.get("filled"):
+        return False
+    scenario = (existing.get("scenario") or "").strip()
+    detail = (existing.get("detail") or "").lower()
+    return scenario == "gate_blocked" or "allow_trade=false" in detail
+
+
 def _session_already_final(
     existing: dict[str, Any] | None,
     *,
@@ -93,7 +106,7 @@ def _session_already_final(
     as_of_et: datetime | None,
     force_complete: bool,
 ) -> bool:
-    """Block re-entry only for true finals — not premature no_signal / no_bars."""
+    """Block re-entry only for true finals — not premature no_signal / no_bars / gate NO."""
     if not existing:
         return False
     status = existing.get("status")
@@ -111,6 +124,15 @@ def _session_already_final(
     # Overnight / empty Yahoo feed must not burn an unlocked gate day.
     if (
         _is_retryable_empty_bars(existing)
+        and signal_ok
+        and not force_complete
+        and _before_fill_deadline(as_of_et)
+    ):
+        return False
+    # Early MA/day-gate NO is "not yet" until 12:30 ET — re-evaluate each worker tick
+    # when a tradeable pick exists (may still rewrite skipped_gate if still blocked).
+    if (
+        _is_retryable_gate_blocked(existing)
         and signal_ok
         and not force_complete
         and _before_fill_deadline(as_of_et)
