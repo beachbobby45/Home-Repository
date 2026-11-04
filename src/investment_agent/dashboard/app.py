@@ -573,8 +573,14 @@ def api_summary(conn=Depends(_db)) -> dict[str, Any]:
 
 
 @app.get("/api/trading-day/status")
-def api_trading_day_status(conn=Depends(_db)) -> dict[str, Any]:
-    return build_trading_day_status(conn)
+def api_trading_day_status(
+    refresh: bool = False,
+    conn=Depends(_db),
+) -> dict[str, Any]:
+    """Go/no-go panel. Cached ~45s unless refresh=1 (keeps Ops poll snappy)."""
+    from investment_agent.trading_day_cache import get_trading_day_status_cached
+
+    return get_trading_day_status_cached(conn, force_refresh=bool(refresh))
 
 
 @app.get("/api/trading-day/snapshots")
@@ -747,7 +753,13 @@ def api_trading_day_refresh(
         refresh = refresh_live_quotes(conn, settings)
         if refresh.get("ok"):
             conn.commit()
-        status = build_trading_day_status(conn)
+        from investment_agent.trading_day_cache import (
+            clear_trading_day_status_cache,
+            get_trading_day_status_cached,
+        )
+
+        clear_trading_day_status_cache()
+        status = get_trading_day_status_cached(conn, force_refresh=True)
         return {"refresh": refresh, "status": status}
     except sqlite3.OperationalError as exc:
         conn.rollback()

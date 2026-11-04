@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-__version__ = "0.9.12"
-__release_name__ = "retry gate blocked"
-__release_tag__ = "v0.9.12-retry-gate"
+__version__ = "0.9.13"
+__release_name__ = "dashboard responsive cache"
+__release_tag__ = "v0.9.13-dash-cache"
 
 
 def version_info() -> dict[str, str]:

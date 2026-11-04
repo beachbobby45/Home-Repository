@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=0.9.12" />
+  <link rel="stylesheet" href="/static/style.css?v=0.9.13" />
 </head>
 <body>
   <header class="app-header">
@@ -781,7 +781,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.12 · retry gate blocked</strong> (early day-gate NO rechecks until 12:30 ET)</p>
+          <p class="brief">Latest release: <strong>v0.9.13 · dashboard responsive cache</strong> (Ops polls paper cheaply; trading-day cached ~45s)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -883,9 +883,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (["0.9.12", "0.9.11", "0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
+            if (["0.9.13", "0.9.12", "0.9.11", "0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
               setupHelp.textContent =
-                v.version === "0.9.12"
+                v.version === "0.9.13"
+                  ? "You are on v0.9.13 — Ops paper polls stay light; trading-day status is cached ~45s so the UI is less sticky."
+                  : v.version === "0.9.12"
                   ? "You are on v0.9.12 — early day-gate NO is 'not yet' and rechecks until 12:30 ET (same cadence as the paper worker)."
                   : v.version === "0.9.11"
                   ? "You are on v0.9.11 — Ops paper strip/table auto-refreshes on the dashboard poll (no hard-reload needed after fills)."
@@ -1571,9 +1573,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         <div class="quote-snapshot-slots">${slotHtml}</div>`;
     }
 
+    // Shared with Ops strip (updated by heavy poll / Refresh — not every paper poll).
+    let lastTradingDayStatus = null;
+
     async function loadTradingDay() {
       try {
+      // Cached ~45s on server; use refresh=1 only from explicit Refresh live.
       const td = await api("/api/trading-day/status");
+      lastTradingDayStatus = td;
       const badge = document.getElementById("verdict-badge");
       const panel = document.getElementById("trading-day-panel");
       const verdict = td.verdict || "WAIT";
@@ -1853,14 +1860,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       `).join("");
     }
 
+    // Paper strip: cheap DB only — must NOT call /api/trading-day/status every poll.
     async function loadPaperAutomation() {
       try {
-        const [paper, sessions, td] = await Promise.all([
+        const [paper, sessions] = await Promise.all([
           api("/api/paper/status"),
           api("/api/paper/sessions?limit=40"),
-          api("/api/trading-day/status").catch(() => null),
         ]);
-        renderPaperAutomation(paper, td);
+        renderPaperAutomation(paper, lastTradingDayStatus);
         renderPaperTransactions(sessions.sessions || []);
         return paper;
       } catch (err) {
@@ -3449,6 +3456,21 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     }
 
     let dashboardPollTimer = null;
+    // Light = paper Ops (cheap). Heavy = trading-day / summary (expensive).
+    let heavyPollCounter = 0;
+
+    async function runLightDashboardPoll() {
+      await loadPaperAutomation();
+    }
+
+    async function runHeavyDashboardPoll() {
+      await Promise.allSettled([
+        loadTradingDay(),
+        loadSummary(),
+        loadOpsAudit(),
+        loadFundingPlan(),
+      ]);
+    }
 
     function scheduleDashboardPoll() {
       if (dashboardPollTimer) clearTimeout(dashboardPollTimer);
@@ -3456,15 +3478,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const ms = dashboardPollIntervalMs();
       dashboardPollTimer = setTimeout(async () => {
         try {
-          // Paper Ops strip/table must poll too — otherwise fills stay invisible
-          // until Refresh all / hard reload (trading-day alone is not enough).
-          await Promise.allSettled([
-            loadPaperAutomation(),
-            loadTradingDay(),
-            loadSummary(),
-            loadOpsAudit(),
-            loadFundingPlan(),
-          ]);
+          // Always refresh Ops/paper from DB so fills never look stale.
+          await runLightDashboardPoll();
+          // Trading-day / summary every 3rd tick (or every tick when poll is already slow).
+          heavyPollCounter += 1;
+          const doHeavy = heavyPollCounter % 3 === 0 || ms >= 120_000;
+          if (doHeavy) {
+            await runHeavyDashboardPoll();
+          }
         } catch (_e) {
           /* keep polling on transient errors */
         }
@@ -3477,12 +3498,9 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (dashboardPollTimer) clearTimeout(dashboardPollTimer);
         dashboardPollTimer = null;
       } else {
-        Promise.allSettled([
-          loadPaperAutomation(),
-          loadTradingDay(),
-          loadOpsAudit(),
-          loadFundingPlan(),
-        ]).catch(() => {});
+        // Tab focus: paper immediately; heavy once so Trade panel catches up.
+        runLightDashboardPoll().catch(() => {});
+        runHeavyDashboardPoll().catch(() => {});
         scheduleDashboardPoll();
       }
     });
