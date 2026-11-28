@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=0.9.13" />
+  <link rel="stylesheet" href="/static/style.css?v=0.9.14" />
 </head>
 <body>
   <header class="app-header">
@@ -727,7 +727,7 @@
       <section class="view-section">
         <header class="view-head">
           <h2>Calendar-year growth plan</h2>
-          <p class="brief">Your funded plan by calendar year: <strong>Begin → Remaining</strong> carries forward. Right side keeps <strong>Deploy · net/trade</strong>, <strong>Deposits</strong>, <strong>Δ End</strong> (vs $5K-only), and <strong>Notes</strong>.</p>
+          <p class="brief">Live plan starts <strong>2027-01-04 at exactly $15,000</strong> (fresh seed — Dec paper equity does <strong>not</strong> transfer). Then <strong>Begin → Remaining</strong> compounds year to year.</p>
         </header>
         <div class="plan-quick-links card">
           <span class="brief">Related:</span>
@@ -767,9 +767,9 @@
           </div>
         </div>
         <p class="brief plan-disclaimer">
-          <strong>Begin</strong> / <strong>Remaining</strong> are your funded path ($5K Dec 2026 + $15K in 2027). Remaining → next year’s Begin.
-          <strong>Δ End</strong> = funded Remaining minus a $5K-only path at year-end.
-          Deploy · net/trade is tier size / net target. Model only — deposits stay evidence-gated.
+          <strong>2027 Begin = $15,000 exactly</strong> — fresh RH CASH seed after Dec paper review; paper growth does not roll into live.
+          After 2027, <strong>Remaining → next year’s Begin</strong>. Deploy · net/trade is tier size / ~1.50% net target.
+          Model only — live seed stays evidence-gated until written go.
         </p>
       </section>
     </div>
@@ -781,7 +781,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.13 · dashboard responsive cache</strong> (Ops polls paper cheaply; trading-day cached ~45s)</p>
+          <p class="brief">Latest release: <strong>v0.9.14 · dec paper 15k · Jan 2027 seed</strong> (Plan begins 2027 at exactly $15k — paper does not transfer)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -883,9 +883,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (["0.9.13", "0.9.12", "0.9.11", "0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
+            if (["0.9.14", "0.9.13", "0.9.12", "0.9.11", "0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
               setupHelp.textContent =
-                v.version === "0.9.13"
+                v.version === "0.9.14"
+                  ? "You are on v0.9.14 — Plan starts 2027 at exactly $15,000 (fresh seed; Dec paper equity does not transfer). Hard-refresh (Cmd+Shift+R) if Plan still shows 2026 $5k."
+                  : v.version === "0.9.13"
                   ? "You are on v0.9.13 — Ops paper polls stay light; trading-day status is cached ~45s so the UI is less sticky."
                   : v.version === "0.9.12"
                   ? "You are on v0.9.12 — early day-gate NO is 'not yet' and rechecks until 12:30 ET (same cadence as the paper worker)."

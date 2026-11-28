@@ -165,7 +165,9 @@ def _simulate_yearly_plan(
             deploy_label, net_trade, tier = _tier_labels_at_balance(balance)
             notes_parts: list[str] = []
             if calendar_year == start_calendar_year:
-                notes_parts.append("RH live Jan 4 · $15K seed")
+                notes_parts.append(
+                    "RH live Jan 4 · fresh $15K begin (paper equity does not transfer)"
+                )
             if goal_crossed and goal_week is not None and goal_week > week - week_in_year:
                 notes_parts.append(f"$5M goal crossed in {calendar_year}")
             if year_injection > 0:
