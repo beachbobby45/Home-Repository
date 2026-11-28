@@ -8,6 +8,13 @@
 - **Do not** flip Paper→Live until **2027-01-04** written go after Dec 30/60/90 review.
 - Live seed is **fresh $15k** (not a paper roll). Same-day EOD flatten on live.
 
+## Plan tab
+
+| Row | Begin | Remaining | Notes |
+|-----|-------|-----------|-------|
+| **2026** | $5,000 | $5,000 + gate trading P&L | Paper history (top-up credit excluded from growth) |
+| **2027** | **$15,000 exactly** | Live model | Fresh seed — **2026 Remaining does not carry** |
+
 ## Mac apply (after pulling this branch)
 
 ```bash

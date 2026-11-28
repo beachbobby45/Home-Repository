@@ -421,9 +421,9 @@ def api_scenario_visualizer(
 
 
 @app.get("/api/growth-plan/ten-year")
-def api_growth_plan_ten_year() -> dict[str, Any]:
-    """Year 1–10 projection: $15K Jan 2027 live seed path."""
-    return build_ten_year_growth_plan()
+def api_growth_plan_ten_year(conn=Depends(_db)) -> dict[str, Any]:
+    """2026 paper history + 2027+ live $15k seed (2027 Begin never inherits paper)."""
+    return build_ten_year_growth_plan(conn=conn)
 
 
 @app.get("/api/cio/summary")

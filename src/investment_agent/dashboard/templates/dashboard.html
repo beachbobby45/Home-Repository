@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=0.9.14" />
+  <link rel="stylesheet" href="/static/style.css?v=0.9.15" />
 </head>
 <body>
   <header class="app-header">
@@ -727,7 +727,7 @@
       <section class="view-section">
         <header class="view-head">
           <h2>Calendar-year growth plan</h2>
-          <p class="brief">Live plan starts <strong>2027-01-04 at exactly $15,000</strong> (fresh seed — Dec paper equity does <strong>not</strong> transfer). Then <strong>Begin → Remaining</strong> compounds year to year.</p>
+          <p class="brief"><strong>2026</strong> = paper history (gate book P&amp;L). <strong>2027 Begin = $15,000 exactly</strong> — fresh seed; 2026 Remaining does <strong>not</strong> carry. Then Begin → Remaining compounds.</p>
         </header>
         <div class="plan-quick-links card">
           <span class="brief">Related:</span>
@@ -738,9 +738,9 @@
         </div>
         <div class="grid grid-4 plan-kpi-grid" id="plan-kpi-grid">
           <div class="card kpi-card"><h2>$5M target year</h2><div class="metric small" id="plan-months-inj">—</div></div>
+          <div class="card kpi-card"><h2>2026 paper end</h2><div class="metric small" id="plan-paper-2026">—</div></div>
           <div class="card kpi-card"><h2>2027 begin</h2><div class="metric small" id="plan-begin-2026">$15,000</div></div>
-          <div class="card kpi-card"><h2>2027 seed</h2><div class="metric small" id="plan-dep-2027">+$15,000</div></div>
-          <div class="card kpi-card"><h2 id="plan-y10-inj-label">2037 remaining</h2><div class="metric small" id="plan-y10-inj">—</div></div>
+          <div class="card kpi-card"><h2 id="plan-y10-inj-label">2038 remaining</h2><div class="metric small" id="plan-y10-inj">—</div></div>
         </div>
         <div class="card" id="plan-assumptions">Loading assumptions…</div>
         <div class="card table-card">
@@ -767,9 +767,9 @@
           </div>
         </div>
         <p class="brief plan-disclaimer">
-          <strong>2027 Begin = $15,000 exactly</strong> — fresh RH CASH seed after Dec paper review; paper growth does not roll into live.
-          After 2027, <strong>Remaining → next year’s Begin</strong>. Deploy · net/trade is tier size / ~1.50% net target.
-          Model only — live seed stays evidence-gated until written go.
+          <strong>2026</strong> shows gate-book paper trading P&amp;L (Begin $5,000 + fills). The Dec $15k top-up credit is not counted as growth.
+          <strong>2027 Begin = $15,000 exactly</strong> — fresh RH seed; 2026 Remaining never carries forward.
+          From 2027 on, Remaining → next year’s Begin. Model only — live seed stays evidence-gated.
         </p>
       </section>
     </div>
@@ -781,7 +781,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.14 · dec paper 15k · Jan 2027 seed</strong> (Plan begins 2027 at exactly $15k — paper does not transfer)</p>
+          <p class="brief">Latest release: <strong>v0.9.15 · plan 2026 paper + 2027 $15k seed</strong> (2026 = gate P&amp;L; 2027 Begin = $15k exactly)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -883,9 +883,11 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (["0.9.14", "0.9.13", "0.9.12", "0.9.11", "0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
+            if (["0.9.15", "0.9.14", "0.9.13", "0.9.12", "0.9.11", "0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
               setupHelp.textContent =
-                v.version === "0.9.14"
+                v.version === "0.9.15"
+                  ? "You are on v0.9.15 — Plan row 2026 = gate paper P&L; 2027 Begin = $15,000 exactly (paper does not carry). Hard-refresh (Cmd+Shift+R)."
+                  : v.version === "0.9.14"
                   ? "You are on v0.9.14 — Plan starts 2027 at exactly $15,000 (fresh seed; Dec paper equity does not transfer). Hard-refresh (Cmd+Shift+R) if Plan still shows 2026 $5k."
                   : v.version === "0.9.13"
                   ? "You are on v0.9.13 — Ops paper polls stay light; trading-day status is cached ~45s so the UI is less sticky."
@@ -3108,11 +3110,12 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
             : (mtg.injection != null ? `${(mtg.injection / 12).toFixed(1)} yr` : ">2037");
       }
       const years = data.years || [];
+      const y2026 = years.find((r) => r.year === 2026);
       const y2027 = years.find((r) => r.year === 2027);
+      const paperEl = document.getElementById("plan-paper-2026");
+      if (paperEl && y2026) paperEl.textContent = "$" + fmt(y2026.injection?.end_balance);
       const beginEl = document.getElementById("plan-begin-2026");
       if (beginEl && y2027) beginEl.textContent = "$" + fmt(y2027.injection?.start_balance);
-      const depEl = document.getElementById("plan-dep-2027");
-      if (depEl && y2027) depEl.textContent = "+$" + fmt(y2027.injection?.capital_injection);
       const yLast = years[years.length - 1];
       if (yLast) {
         const injLbl = document.getElementById("plan-y10-inj-label");
@@ -3142,13 +3145,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           : (remaining - Number(base.end_balance || 0)));
         const deltaCls = delta >= 0 ? "plan-advantage" : "metric negative";
         const goalMilestone = (p.goal_pct || 0) >= 100 ? " plan-row-goal" : "";
+        const paperCls = row.is_paper_history ? " plan-row-paper" : "";
         const depCell = depositsShow > 0 ? `$${fmt(depositsShow)}` : "—";
         const growthSign = growth >= 0 ? "+" : "";
         const pctSign = growthPct >= 0 ? "+" : "";
         const deltaSign = delta >= 0 ? "+" : "";
         const deploy = `${p.trade_deploy_label || "—"} · $${fmt(p.trade_net_target)}/tr`;
-        return `<tr class="${goalMilestone}">
-          <td><strong>${row.year}</strong></td>
+        return `<tr class="${goalMilestone}${paperCls}">
+          <td><strong>${row.year}</strong>${row.is_paper_history ? ' <span class="brief">paper</span>' : ""}</td>
           <td>$${fmt(begin)}</td>
           <td><strong>$${fmt(remaining)}</strong></td>
           <td class="${growthCls}">${growthSign}$${fmt(growth)}</td>

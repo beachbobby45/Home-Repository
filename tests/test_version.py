@@ -17,8 +17,8 @@ from investment_agent.version import __version__, version_info
 def test_version_info():
     info = version_info()
     assert info["version"] == __version__
-    assert info["version"] == "0.9.14"
-    assert "15k" in info["release"].lower() or "seed" in info["release"].lower()
+    assert info["version"] == "0.9.15"
+    assert "plan" in info["release"].lower() or "15k" in info["release"].lower()
 
 
 def test_api_version_endpoint():
@@ -26,5 +26,4 @@ def test_api_version_endpoint():
     resp = client.get("/api/version")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["version"] == "0.9.14"
-    assert "15k" in data["release"].lower() or "seed" in data["release"].lower()
+    assert data["version"] == "0.9.15"
