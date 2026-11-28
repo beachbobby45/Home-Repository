@@ -15,9 +15,9 @@ from investment_agent.risk_engine import build_portfolio_snapshot
 
 PHASE1_START = ORIGINAL_BASIS  # legacy $15k journal path
 PHASE1_TARGET = 30_000.0
-# Paper / staged RH funding band (Tony Oct 2026 plan)
-PAPER_PHASE_START = 5_000.0
-PAPER_PHASE_TARGET = 20_000.0
+# Paper / RH live band (Dec 2026 $15k paper → Jan 2027 $15k seed)
+PAPER_PHASE_START = 15_000.0
+PAPER_PHASE_TARGET = 30_000.0
 SOFT_TARGET_NOTE = (
     "Guidance only — up to 3 winning trades/week at tier net/trade; "
     "default is one #1 pick per day. A second trade only on exceptional days "

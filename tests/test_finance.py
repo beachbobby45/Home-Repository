@@ -72,6 +72,6 @@ def test_split_lot_weekly_at_10k():
 
 def test_split_lot_weekly_at_15k_basis():
     detail = capital_tier_detail(15_000)
-    assert detail["daily_production_target"] == 200.0
-    assert detail["weekly_production_target"] == 600.0
-    assert daily_profit_target(ORIGINAL_BASIS) == 200.0
+    assert detail["daily_production_target"] == 225.0
+    assert detail["weekly_production_target"] == 675.0
+    assert daily_profit_target(ORIGINAL_BASIS) == 225.0

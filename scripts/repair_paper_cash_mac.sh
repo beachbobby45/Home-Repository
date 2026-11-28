@@ -1,5 +1,5 @@
 #!/bin/bash
-# Repair virgin paper books to $5,000 settled cash when there are no fills.
+# Repair virgin paper books to $15,000 settled cash when there are no fills.
 # Also forces ledger_source=paper so risk uses the paper book (not $0 journal).
 #
 # Usage:
@@ -39,7 +39,7 @@ print(json.dumps(out, indent=2, default=str))
 conn.close()
 PY
 else
-  echo "=== Repair paper cash (starting \$5,000 when no fills) ==="
+  echo "=== Repair paper cash (starting \$15,000 when no fills) ==="
   echo "(If diagnose showed from=2099-01-02 / ticker SIM, re-run with: --purge-eval-sim)"
   "$PY" - <<PY
 import json
@@ -69,5 +69,7 @@ for k, v in (d.get('balances') or {}).items():
 " 2>/dev/null || echo "(start dashboard to verify via API)"
 
 echo ""
-echo "Done. Risk 1% cap should be ~\$50 on a \$5k settled book."
+echo "Done. Risk 1% cap should be ~\$150 on a \$15k settled book."
+echo "If books already have fills and need a \$15k scale (keep history), use:"
+echo "  ./scripts/scale_paper_to_15k_mac.sh"
 echo "Refresh Dashboard Account / Auto tabs."

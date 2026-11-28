@@ -34,7 +34,7 @@ def main() -> int:
         action="store_true",
         help="Treat day as complete (EOD/backfill) using all available 5m bars",
     )
-    parser.add_argument("--starting-cash", type=float, default=5_000.0)
+    parser.add_argument("--starting-cash", type=float, default=15_000.0)
     parser.add_argument("--status-only", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()

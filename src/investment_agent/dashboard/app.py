@@ -422,7 +422,7 @@ def api_scenario_visualizer(
 
 @app.get("/api/growth-plan/ten-year")
 def api_growth_plan_ten_year() -> dict[str, Any]:
-    """Year 1–10 projection: $5K base vs staged funding ladder to $20K invested."""
+    """Year 1–10 projection: $15K Jan 2027 live seed path."""
     return build_ten_year_growth_plan()
 
 
@@ -934,7 +934,7 @@ def api_execution_armed_plan_arm(
 class PaperTickBody(BaseModel):
     session_date_et: str | None = None
     force_complete: bool = False
-    starting_cash: float = 5_000.0
+    starting_cash: float = 15_000.0
 
 
 @app.get("/api/paper/status")
