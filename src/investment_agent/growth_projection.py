@@ -1,13 +1,18 @@
 """Tier-based growth plan projection for scenario visualizer / Plan tab.
 
-Planning basis is the post-PDT $5K paper → staged RH funding path
-(not the legacy $15K journal ORIGINAL_BASIS).
+Planning basis is the Jan 4 2027 RH CASH $15k live seed (Dec 2026 paper
+sized to match). Optional later deposits are evidence-gated, not scheduled.
+
+Row 2026 is paper history from the gate ledger (actual trading P&L). It does
+**not** carry into 2027 Begin — live seed is always a fresh $15k.
 """
 
 from __future__ import annotations
 
 import math
+import sqlite3
 from dataclasses import dataclass
+from typing import Any
 
 from investment_agent.finance import (
     DAILY_TARGET_EVERY,
@@ -31,12 +36,17 @@ WEEKS_PER_YEAR = 52
 WEEKS_PER_MONTH = WEEKS_PER_YEAR / 12.0
 _MAX_TIER_THRESHOLD = max(TIER_LOT_STRUCTURES.keys())
 
-# Plan tab / scenario planning start — matches paper ledger & RH Deposit #1
-PLAN_STARTING_BASIS = 5_000.0
-PLAN_FUNDED_TARGET = 20_000.0  # four × $5k invested under funding plan
-PLAN_START_CALENDAR_YEAR = 2026
-# RH #1 on 2026-12-01 → ~4 trading weeks remain in calendar 2026
-PLAN_START_YEAR_WEEKS = 4
+# Plan tab / scenario planning start — matches $15k paper + Jan 4 2027 live seed
+PLAN_STARTING_BASIS = 15_000.0
+PLAN_FUNDED_TARGET = 15_000.0  # fresh seed; optional adds are evidence-gated
+PLAN_START_CALENDAR_YEAR = 2027
+# RH live 2027-01-04 → ~51 calendar weeks remain in 2027
+PLAN_START_YEAR_WEEKS = 51
+RH_LIVE_DATE = "2027-01-04"
+
+# Informational paper-history row (Option A) — does not feed 2027 Begin
+PAPER_HISTORY_YEAR = 2026
+PAPER_HISTORY_START = 5_000.0
 
 
 def projection_daily_target(balance: float) -> float:
@@ -79,18 +89,14 @@ class YearPlanRow:
     notes: str = ""
 
 
-# Staged +$5K deposits after first $5K live (funding_plan.py earliest sketches).
-# Cadence: ~30 trading sessions (~6 calendar weeks) between deposits.
-# Offsets from RH Deposit #1 (2026-12-01 / plan week 0):
-#   #2 ~2027-01-13 (week 6), #3 ~2027-02-25 (week 12), #4 ~2027-04-09 (week 18).
-DEFAULT_FUNDING_INJECTIONS: tuple[CapitalInjection, ...] = (
-    CapitalInjection(week_offset=6, amount=5_000.0, label="Deposit #2 (+$5K · ~2027-01-13)"),
-    CapitalInjection(week_offset=12, amount=5_000.0, label="Deposit #3 (+$5K · ~2027-02-25)"),
-    CapitalInjection(week_offset=18, amount=5_000.0, label="Deposit #4 (+$5K → $20K · ~2027-04-09)"),
-)
+# No staged auto-ladder: live path is a single $15k seed on Jan 4 2027.
+# Optional later capital stays evidence-gated (empty default schedule).
+DEFAULT_FUNDING_INJECTIONS: tuple[CapitalInjection, ...] = ()
 
-# Backward-compatible alias: first scheduled deposit (tests / callers expecting one).
-DEFAULT_INJECTION = DEFAULT_FUNDING_INJECTIONS[0]
+# Backward-compatible alias for callers expecting a CapitalInjection.
+DEFAULT_INJECTION = CapitalInjection(
+    week_offset=0, amount=0.0, label="(no staged deposits — $15k seed only)"
+)
 
 
 def _tier_labels_at_balance(balance: float) -> tuple[str, float, int]:
@@ -120,11 +126,11 @@ def _simulate_yearly_plan(
     """
     Weekly simulation bucketed by calendar year.
 
-    Plan week 1 = first week on/after 2026-12-01. Calendar 2026 is a short
-    stub (~4 weeks); later years are full 52-week blocks. Annual 35% sweep
+    Plan week 1 = first week on/after 2027-01-04. Calendar 2027 is a near-full
+    year (~51 weeks); later years are full 52-week blocks. Annual 35% sweep
     applies at each calendar year-end.
     """
-    injection_map = {inj.week_offset: inj for inj in injections}
+    injection_map = {inj.week_offset: inj for inj in injections if inj.amount}
     balance = float(starting_balance)
     rows: list[YearPlanRow] = []
     # Partial start year + (years - 1) full years
@@ -133,7 +139,7 @@ def _simulate_yearly_plan(
     week_in_year = 0
     weeks_this_year = max(int(start_year_weeks), 1)
     year_gross = 0.0
-    # Opening $5k counts as 2026 capital in (RH Deposit #1)
+    # Opening $15k counts as 2027 capital in (RH live seed)
     year_injection = float(starting_balance) if count_opening_deposit else 0.0
     year_sweep = 0.0
     year_start = balance
@@ -168,7 +174,9 @@ def _simulate_yearly_plan(
             deploy_label, net_trade, tier = _tier_labels_at_balance(balance)
             notes_parts: list[str] = []
             if calendar_year == start_calendar_year:
-                notes_parts.append("RH #1 Dec 1 · partial year (Dec)")
+                notes_parts.append(
+                    "RH live Jan 4 · fresh $15K begin (paper equity does not transfer)"
+                )
             if goal_crossed and goal_week is not None and goal_week > week - week_in_year:
                 notes_parts.append(f"$5M goal crossed in {calendar_year}")
             if year_injection > 0:
@@ -199,6 +207,61 @@ def _simulate_yearly_plan(
     return rows
 
 
+def build_paper_2026_history_row(
+    conn: sqlite3.Connection | None = None,
+    *,
+    goal: float = GOAL_ACCOUNT_VALUE,
+) -> dict[str, Any]:
+    """Actual gate-book paper year for Plan row 2026 (does not feed 2027 Begin).
+
+    Begin = historical $5k paper notional. Remaining = Begin + sum(fill net_pnl)
+    so the Dec $15k top-up credit is excluded from “growth.”
+    """
+    begin = float(PAPER_HISTORY_START)
+    fills = 0
+    trading_pnl = 0.0
+    if conn is not None:
+        from investment_agent.execution.paper_ledger import (
+            ACCOUNT_GATE,
+            paper_scoreboard,
+        )
+
+        sb = paper_scoreboard(conn)
+        arm = (sb.get("arms") or {}).get(ACCOUNT_GATE) or {}
+        fills = int(arm.get("fills") or 0)
+        trading_pnl = float(arm.get("total_net_pnl") or 0.0)
+
+    remaining = round(begin + trading_pnl, 2)
+    growth = round(trading_pnl, 2)
+    detail = capital_tier_detail(begin)
+    notes = (
+        f"Paper (gate) · {fills} fills · trading P&L ${growth:+,.2f} · "
+        "does not transfer to 2027 Begin"
+    )
+    row = YearPlanRow(
+        year=PAPER_HISTORY_YEAR,
+        start_balance=begin,
+        end_balance=remaining,
+        gross_production=growth,
+        annual_sweep=0.0,
+        capital_injection=0.0,
+        trade_deploy_label=detail["structure_label"],
+        trade_net_target=float(detail["trade_net_target"]),
+        tier_threshold=int(detail["tier_threshold"]),
+        goal_pct=round(goal_progress_pct(remaining, goal=goal), 4),
+        notes=notes,
+    )
+    payload = _year_row_to_dict(row)
+    return {
+        "year": PAPER_HISTORY_YEAR,
+        "base": payload,
+        "injection": payload,
+        "advantage_end_balance": 0.0,
+        "advantage_goal_pct": 0.0,
+        "is_paper_history": True,
+    }
+
+
 def build_ten_year_growth_plan(
     *,
     years: int = 12,
@@ -207,10 +270,12 @@ def build_ten_year_growth_plan(
     starting_balance: float = PLAN_STARTING_BASIS,
     injections: tuple[CapitalInjection, ...] | None = None,
     goal: float = GOAL_ACCOUNT_VALUE,
+    conn: sqlite3.Connection | None = None,
 ) -> dict:
     """
-    Side-by-side calendar-year table (2026–2037 by default): $5K vs funded → $20K.
-    Twelve rows so both paths show the calendar year $5M is reached.
+    Calendar-year table: 2026 paper history + 2027–… live $15K seed path.
+
+    2027 Begin is always ``starting_balance`` ($15k) — never 2026 Remaining.
     """
     inj_tuple = DEFAULT_FUNDING_INJECTIONS if injections is None else injections
     base_rows = _simulate_yearly_plan(
@@ -237,16 +302,19 @@ def build_ten_year_growth_plan(
         return None
 
     def _months_to_goal(rows: list[YearPlanRow]) -> int | None:
-        """Approximate months from Dec 2026 plan start to year-end when goal is hit."""
+        """Approximate months from Jan 2027 plan start to year-end when goal is hit."""
         gy = _goal_calendar_year(rows)
         if gy is None:
             return None
         if gy <= PLAN_START_CALENDAR_YEAR:
-            return 1
-        # Dec 2026 → end of gy: 1 month in 2026 + 12 × full years after
-        return 1 + (gy - PLAN_START_CALENDAR_YEAR) * 12
+            return 12
+        return (gy - PLAN_START_CALENDAR_YEAR + 1) * 12
 
     comparison: list[dict] = []
+    # Row 1: paper history (actual). Explicitly does not seed the live sim below.
+    paper_row = build_paper_2026_history_row(conn, goal=goal)
+    comparison.append(paper_row)
+
     for base, inj in zip(base_rows, inj_rows):
         comparison.append(
             {
@@ -255,15 +323,16 @@ def build_ten_year_growth_plan(
                 "injection": _year_row_to_dict(inj),
                 "advantage_end_balance": round(inj.end_balance - base.end_balance, 2),
                 "advantage_goal_pct": round(inj.goal_pct - base.goal_pct, 4),
+                "is_paper_history": False,
             }
         )
 
     hit_pct = hit_rate * 100
     inj_total = sum(i.amount for i in inj_tuple)
     inj_label = (
-        f"+${inj_total:,.0f} staged to ${PLAN_FUNDED_TARGET:,.0f}"
+        f"+${inj_total:,.0f} optional staged (evidence-gated)"
         if inj_tuple
-        else "None"
+        else "None — $15k seed only"
     )
     inj_schedule = [
         {
@@ -276,43 +345,44 @@ def build_ten_year_growth_plan(
 
     cash_schedule = [
         {
-            "stage": "RH Deposit #1 (CASH)",
+            "stage": "2026 paper history (gate book)",
+            "date": "2026-10-20",
+            "amount": 0.0,
+            "invested_after": 0.0,
+            "note": (
+                f"Begin ${PAPER_HISTORY_START:,.0f} · Remaining = begin + trading P&L · "
+                "does not transfer to 2027"
+            ),
+        },
+        {
+            "stage": "Dec paper at $15k sizing",
             "date": "2026-12-01",
+            "amount": 0.0,
+            "invested_after": 0.0,
+            "note": "Paper mode · top-up preserves fills · ~$225/trade",
+        },
+        {
+            "stage": "RH live $15k CASH seed",
+            "date": RH_LIVE_DATE,
             "amount": starting_balance,
             "invested_after": starting_balance,
-            "note": "After Oct–Nov paper pass · CASH/unlevered",
-        },
-        {
-            "stage": "Deposit #2",
-            "date": "2027-01-13",
-            "amount": 5_000.0,
-            "invested_after": 10_000.0,
-            "note": "~30 sessions after #1 · evidence-gated",
-        },
-        {
-            "stage": "Deposit #3",
-            "date": "2027-02-25",
-            "amount": 5_000.0,
-            "invested_after": 15_000.0,
-            "note": "~30 sessions after #2 · evidence-gated",
-        },
-        {
-            "stage": "Deposit #4",
-            "date": "2027-04-09",
-            "amount": 5_000.0,
-            "invested_after": PLAN_FUNDED_TARGET,
-            "note": "~30 sessions after #3 → $20K invested · evidence-gated",
+            "note": "Fresh seed — 2027 Begin is exactly $15k (not 2026 Remaining)",
         },
     ]
 
     goal_year_base = _goal_calendar_year(base_rows)
     goal_year_inj = _goal_calendar_year(inj_rows)
+    paper_remaining = float(paper_row["injection"]["end_balance"])
 
     return {
         "goal": goal,
         "starting_basis": starting_balance,
         "funded_target": PLAN_FUNDED_TARGET,
-        "calendar_year_start": PLAN_START_CALENDAR_YEAR,
+        "calendar_year_start": PAPER_HISTORY_YEAR,
+        "live_start_year": PLAN_START_CALENDAR_YEAR,
+        "paper_history_year": PAPER_HISTORY_YEAR,
+        "paper_history_start": PAPER_HISTORY_START,
+        "paper_history_remaining": paper_remaining,
         "calendar_year_end": (
             comparison[-1]["year"] if comparison else PLAN_START_CALENDAR_YEAR
         ),
@@ -326,16 +396,19 @@ def build_ten_year_growth_plan(
             "injection_week": inj_tuple[0].week_offset if inj_tuple else None,
             "injection_schedule": inj_schedule,
             "cash_schedule": cash_schedule,
-            "rh_live_date": "2026-12-01",
+            "rh_live_date": RH_LIVE_DATE,
             "account_mode": "CASH / unlevered (no borrowed margin)",
             "sessions_per_week_cap": 5,
             "deposit_cadence": (
-                "$5K in Dec 2026 · +$15K staged across 2027 (~every 30 sessions) → $20K"
+                "2026 = paper history · 2027 Begin = fresh $15k on 2027-01-04 "
+                "(paper Remaining does not carry)"
             ),
+            "trade_net_target_pct": 1.50,
             "one_trade_per_day": True,
             "second_trade": "Exceptional days only (#1 win + market GO)",
-            "settlement": "Cash / unlevered · T+1 redeploy",
+            "settlement": "Cash / unlevered · T+1 redeploy · live same-day EOD flatten",
             "year_axis": "calendar",
+            "paper_does_not_transfer": True,
         },
         "months_to_goal": {
             "base": _months_to_goal(base_rows),
@@ -347,13 +420,12 @@ def build_ten_year_growth_plan(
         },
         "years": comparison,
         "summary": (
-            f"Calendar years from {PLAN_START_CALENDAR_YEAR}: "
-            f"${starting_balance:,.0f} RH CASH #1 on 2026-12-01 · "
-            f"+$15K staged in 2027 → $20K invested (gated) · "
+            f"2026 paper (gate): ${PAPER_HISTORY_START:,.0f} → "
+            f"${paper_remaining:,.2f} trading P&L only — does not transfer. "
+            f"2027 Begin = ${starting_balance:,.0f} exactly (RH CASH live {RH_LIVE_DATE}). "
             f"{hit_pct:.1f}% hit · {tradeable_days_per_week:.1f} tradeable days/wk · "
-            f"≤5 sessions/wk · 35% annual sweep. "
-            f"$5M target: funded ~{goal_year_inj or 'beyond table'} vs "
-            f"base ~{goal_year_base or 'beyond table'}."
+            f"≤5 sessions/wk · 35% annual sweep · ~1.50% net/trade. "
+            f"$5M target: ~{goal_year_inj or goal_year_base or 'beyond table'}."
         ),
     }
 
@@ -529,7 +601,7 @@ def default_growth_scenarios(
     tradeable_days_per_week: float = DEFAULT_TRADEABLE_DAYS_PER_WEEK,
     starting_balance: float = PLAN_STARTING_BASIS,
 ) -> dict[str, dict]:
-    """Base $5K annual-sweep plan and staged funding ladder to $20K invested."""
+    """Base $15K annual-sweep plan (optional staged adds when configured)."""
     base_pts = project_growth_plan(
         starting_balance=starting_balance,
         months=months,
@@ -549,21 +621,24 @@ def default_growth_scenarios(
     return {
         "growth_plan_annual": projection_to_scenario_dict(
             base_pts,
-            name="Growth plan ($5K · annual sweep)",
+            name="Growth plan ($15K · annual sweep)",
             description=(
-                f"${starting_balance:,.0f} start · {hit_pct:.1f}% hit · "
+                f"${starting_balance:,.0f} start ({RH_LIVE_DATE}) · {hit_pct:.1f}% hit · "
                 f"{tradeable_days_per_week:.1f} tradeable days/wk · ≤5 sessions/wk · "
-                f"35% annual sweep."
+                f"35% annual sweep · ~1.50% net/trade."
             ),
         ),
         "growth_plan_injection": projection_to_scenario_dict(
             injection_pts,
-            name="Growth plan (funded → $20K)",
+            name="Growth plan ($15K seed)",
             description=(
-                f"Same as growth plan with +$5K every ~30 sessions to "
-                f"${PLAN_FUNDED_TARGET:,.0f} invested "
-                f"(#2 wk6 / #3 wk12 / #4 wk18 · {hit_pct:.1f}% hit · "
-                f"annual 35% sweep · evidence-gated)."
+                f"Same $15k seed path"
+                + (
+                    f" with optional staged adds to ${PLAN_FUNDED_TARGET:,.0f}"
+                    if DEFAULT_FUNDING_INJECTIONS
+                    else " (no staged deposits)"
+                )
+                + f" · {hit_pct:.1f}% hit · annual 35% sweep."
             ),
         ),
     }
@@ -576,11 +651,15 @@ __all__ = [
     "DEFAULT_INJECTION",
     "DEFAULT_TRADEABLE_DAYS_PER_WEEK",
     "GrowthProjectionPoint",
+    "PAPER_HISTORY_START",
+    "PAPER_HISTORY_YEAR",
     "PLAN_FUNDED_TARGET",
     "PLAN_START_CALENDAR_YEAR",
     "PLAN_START_YEAR_WEEKS",
     "PLAN_STARTING_BASIS",
+    "RH_LIVE_DATE",
     "YearPlanRow",
+    "build_paper_2026_history_row",
     "build_ten_year_growth_plan",
     "default_growth_scenarios",
     "months_to_goal_from_projection",

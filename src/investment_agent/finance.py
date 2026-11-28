@@ -33,6 +33,9 @@ LOT_BASE_SIZE = 10_000.0
 LOT_SIZE_STEP = 5_000.0
 LOT_DAILY_BASE = 150.0
 LOT_DAILY_STEP = 50.0
+# Empirical per-trade net target (Nov 2026 paper): ~1.50% of deploy
+# ($5k→$75, $10k→$150, $15k→$225). Overrides the older $15k→$200 tier step.
+TRADE_NET_TARGET_PCT = 1.50
 
 # Tier threshold (equity) → virtual lot sizes (sum equals threshold at milestones)
 # $5K first tranche matches paper / RH Deposit #1 (post-PDT plan).
@@ -151,15 +154,15 @@ def tradable_after_sweep(
 
 
 def lot_daily_production(lot_size: float) -> float:
-    """Daily net production rate for one virtual lot (e.g. $10K lot → $150, $5K → $75)."""
+    """Net production for one virtual lot at TRADE_NET_TARGET_PCT of lot size.
+
+    Keeps the validated ladder: $5K→$75, $10K→$150, $15K→$225, $20K→$300.
+    (Older step model had $15K→$200; that understated the 1.50% empirical target.)
+    """
     size = max(float(lot_size), 0.0)
     if size <= 0:
         return 0.0
-    # Below $10K: scale so the % move for a full target stays comparable ($5K → $75).
-    if size < LOT_BASE_SIZE:
-        return round(LOT_DAILY_BASE * (size / LOT_BASE_SIZE), 2)
-    steps = (size - LOT_BASE_SIZE) / LOT_SIZE_STEP
-    return round(LOT_DAILY_BASE + steps * LOT_DAILY_STEP, 2)
+    return round(size * (TRADE_NET_TARGET_PCT / 100.0), 2)
 
 
 def tier_threshold_for_equity(

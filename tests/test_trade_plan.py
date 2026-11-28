@@ -24,11 +24,12 @@ def test_compute_trade_plan_growth_plan_150_net_at_10k():
     assert plan["net_at_stop"] < -70
 
 
-def test_compute_trade_plan_scales_down_pct_at_15k():
+def test_compute_trade_plan_scales_pct_at_15k_150_bps():
     plan_10 = compute_trade_plan(entry_price=100.0, deploy_dollar=10_000, net_target=150)
-    plan_15 = compute_trade_plan(entry_price=100.0, deploy_dollar=15_000, net_target=200)
-    assert plan_15["target_pct"] < plan_10["target_pct"]
-    assert plan_15["net_target"] == 200
+    plan_15 = compute_trade_plan(entry_price=100.0, deploy_dollar=15_000, net_target=225)
+    # Same ~1.50% move at both sizes
+    assert abs(plan_15["target_pct"] - plan_10["target_pct"]) < 0.05
+    assert plan_15["net_target"] == 225
 
 
 def test_compute_trade_plan_updates_with_price():

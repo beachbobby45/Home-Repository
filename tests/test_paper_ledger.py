@@ -24,6 +24,7 @@ from investment_agent.execution.paper_ledger import (
     purge_eval_sim_pollution,
     repair_virgin_paper_cash,
     settle_due_cash,
+    top_up_paper_books_to_target,
 )
 from investment_agent.execution.paper_sim import simulate_round_trip_5m
 from investment_agent.finance import DEFAULT_BUY_FEE, DEFAULT_SELL_FEE
@@ -113,7 +114,7 @@ class PaperLedgerTests(unittest.TestCase):
             """
         )
         self.conn.commit()
-        out = repair_virgin_paper_cash(self.conn)
+        out = repair_virgin_paper_cash(self.conn, starting_cash=5_000.0)
         self.conn.commit()
         self.assertIn(ACCOUNT_GATE, out["repaired"])
         self.assertIn(ACCOUNT_ALL, out["repaired"])
@@ -156,7 +157,7 @@ class PaperLedgerTests(unittest.TestCase):
         self.assertLess(bal["settled_cash"], 100)
         self.assertGreater(bal["unsettled_cash"], 4000)
 
-        out = purge_eval_sim_pollution(self.conn)
+        out = purge_eval_sim_pollution(self.conn, starting_cash=5_000.0)
         self.conn.commit()
         self.assertGreater(out["fills_deleted"], 0)
         self.assertEqual(out["real_buy_fills_remaining"], 0)
@@ -164,6 +165,40 @@ class PaperLedgerTests(unittest.TestCase):
         g = get_paper_balance(self.conn, ACCOUNT_GATE)
         self.assertEqual(g["settled_cash"], 5_000.0)
         self.assertEqual(g["unsettled_cash"], 0.0)
+
+    def test_top_up_preserves_fills_and_credits_to_15k(self) -> None:
+        apply_round_trip(
+            self.conn,
+            account_name=ACCOUNT_GATE,
+            session_date_et="2026-10-16",
+            ticker="TEST",
+            shares=10,
+            entry_price=100.0,
+            exit_price=101.0,
+            buy_fee=DEFAULT_BUY_FEE,
+            sell_fee=DEFAULT_SELL_FEE,
+            fill_ts="2026-10-16T10:00:00-04:00",
+            exit_ts="2026-10-16T11:00:00-04:00",
+        )
+        self.conn.commit()
+        fills_before = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM paper_fills WHERE account_name = ?",
+            (ACCOUNT_GATE,),
+        ).fetchone()["n"]
+        self.assertGreater(fills_before, 0)
+        out = top_up_paper_books_to_target(self.conn, target_equity=15_000.0)
+        self.conn.commit()
+        gate = out["books"][ACCOUNT_GATE]
+        self.assertEqual(gate["status"], "topped_up")
+        self.assertAlmostEqual(gate["to_equity"], 15_000.0, places=2)
+        fills_after = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM paper_fills WHERE account_name = ?",
+            (ACCOUNT_GATE,),
+        ).fetchone()["n"]
+        self.assertEqual(fills_before, fills_after)
+        # Idempotent second call
+        out2 = top_up_paper_books_to_target(self.conn, target_equity=15_000.0)
+        self.assertEqual(out2["books"][ACCOUNT_GATE]["status"], "already_at_or_above")
 
     def test_repair_refuses_when_fills_exist(self) -> None:
         apply_round_trip(

@@ -19,29 +19,30 @@ from investment_agent.strategy_models import target_pct_for_dollars
 
 
 def test_daily_profit_target_split_lot_tiers():
+    # 1.50% of each virtual lot ($5k→$75, $10k→$150, $15k→$225, …)
     assert daily_profit_target(5_000) == 75
     assert daily_profit_target(9_999) == 75
     assert daily_profit_target(10_000) == 150
     assert daily_profit_target(14_999) == 150
-    assert daily_profit_target(15_000) == 200
+    assert daily_profit_target(15_000) == 225
     assert daily_profit_target(20_000) == 300
-    assert daily_profit_target(25_000) == 350
-    assert daily_profit_target(30_000) == 400
+    assert daily_profit_target(25_000) == 375
+    assert daily_profit_target(30_000) == 450
 
 
 def test_weekly_production_target_three_times_daily():
     assert weekly_production_target(10_000) == 450
     assert weekly_production_target(20_000) == 900
-    assert weekly_production_target(30_000) == 1200
+    assert weekly_production_target(30_000) == 1350
 
 
 def test_capital_tier_detail_structure():
     detail = capital_tier_detail(25_000)
     assert detail["structure_label"] == "$25K"
     assert detail["virtual_lot_label"] == "$10K + $15K"
-    assert detail["daily_production_target"] == 350
-    assert detail["trade_net_target"] == 350
-    assert detail["weekly_production_target"] == 1050
+    assert detail["daily_production_target"] == 375
+    assert detail["trade_net_target"] == 375
+    assert detail["weekly_production_target"] == 1125
 
 
 def test_capital_tier_single_trade_deploy_at_20k():
@@ -58,6 +59,8 @@ def test_growth_plan_milestones():
     assert rows[0]["weekly_target"] == 225.0
     row_10k = next(r for r in rows if r["balance_at_least"] == 10_000.0)
     assert row_10k["daily_target"] == 150.0
+    row_15k = next(r for r in rows if r["balance_at_least"] == 15_000.0)
+    assert row_15k["daily_target"] == 225.0
     row_20k = next(r for r in rows if r["balance_at_least"] == 20_000.0)
     assert row_20k["daily_target"] == 300.0
     assert row_20k["structure_label"] == "$20K"
@@ -66,8 +69,8 @@ def test_growth_plan_milestones():
 
 def test_next_growth_tier():
     tier = next_growth_tier(16_500)
-    assert tier["current_daily_target"] == 200
-    assert tier["current_weekly_target"] == 600
+    assert tier["current_daily_target"] == 225
+    assert tier["current_weekly_target"] == 675
     assert tier["next_balance"] == 20_000
     assert tier["next_daily_target"] == 300
     assert tier["amount_to_next_tier"] == 3_500

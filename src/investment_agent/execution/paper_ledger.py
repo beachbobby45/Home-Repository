@@ -16,7 +16,10 @@ from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")
 
-PAPER_STARTING_CASH = 5_000.0
+# December 2026 paper → January 2027 live: size twin books at the planned
+# $15k Robinhood seed so fills/targets match go-live (~1.50% → ~$225/trade).
+PAPER_STARTING_CASH = 15_000.0
+PAPER_TOPUP_NOTE = "dec_2026_scale_to_15k"
 ACCOUNT_GATE = "gate_approved"
 ACCOUNT_ALL = "all_signals"
 PAPER_ACCOUNTS = (ACCOUNT_GATE, ACCOUNT_ALL)
@@ -292,6 +295,86 @@ def repair_virgin_paper_cash(
         "force": force,
         "balances": balances,
     }
+
+
+def top_up_paper_books_to_target(
+    conn: sqlite3.Connection,
+    *,
+    target_equity: float = PAPER_STARTING_CASH,
+    note: str = PAPER_TOPUP_NOTE,
+) -> dict[str, Any]:
+    """Credit settled cash so each book's equity reaches ``target_equity``.
+
+    Preserves fills, session logs, and unsettled rows. Only raises cash (and
+    ``starting_cash`` by the same credit) so Oct–Nov history stays coherent.
+    Idempotent: books already at/above target are left alone.
+    """
+    ensure_paper_schema(conn)
+    ensure_paper_accounts(conn, starting_cash=float(target_equity))
+    now = _now_et_iso()
+    target = float(target_equity)
+    if target <= 0:
+        raise ValueError("target_equity must be positive")
+    results: dict[str, Any] = {
+        "ok": True,
+        "target_equity": target,
+        "note": str(note or PAPER_TOPUP_NOTE),
+        "books": {},
+    }
+    for name in PAPER_ACCOUNTS:
+        bal = get_paper_balance(conn, name)
+        settled = float(bal["settled_cash"])
+        unsettled = float(bal["unsettled_cash"])
+        equity = float(bal["equity"])
+        # Prefer settled+unsettled if equity row is stale.
+        cash_total = settled + unsettled
+        basis_equity = max(equity, cash_total)
+        fill_n = count_paper_fills(conn, name)
+        acct = conn.execute(
+            "SELECT starting_cash FROM paper_accounts WHERE name = ?",
+            (name,),
+        ).fetchone()
+        starting = float(acct["starting_cash"] if acct else PAPER_STARTING_CASH)
+
+        if basis_equity + 0.005 >= target:
+            results["books"][name] = {
+                "status": "already_at_or_above",
+                "equity": round(basis_equity, 2),
+                "settled_cash": round(settled, 2),
+                "unsettled_cash": round(unsettled, 2),
+                "starting_cash": round(starting, 2),
+                "fill_count": fill_n,
+            }
+            continue
+
+        credit = round(target - basis_equity, 2)
+        new_settled = round(settled + credit, 2)
+        new_equity = round(basis_equity + credit, 2)
+        new_starting = round(starting + credit, 2)
+        conn.execute(
+            """
+            UPDATE paper_balances
+            SET settled_cash = ?, equity = ?, updated_at = ?
+            WHERE account_name = ?
+            """,
+            (new_settled, new_equity, now, name),
+        )
+        conn.execute(
+            "UPDATE paper_accounts SET starting_cash = ? WHERE name = ?",
+            (new_starting, name),
+        )
+        results["books"][name] = {
+            "status": "topped_up",
+            "credit": credit,
+            "from_equity": round(basis_equity, 2),
+            "to_equity": round(new_equity, 2),
+            "settled_cash": new_settled,
+            "unsettled_cash": round(unsettled, 2),
+            "starting_cash": new_starting,
+            "fill_count": fill_n,
+            "note": str(note or PAPER_TOPUP_NOTE),
+        }
+    return results
 
 
 def get_paper_balance(conn: sqlite3.Connection, account_name: str) -> dict[str, Any]:

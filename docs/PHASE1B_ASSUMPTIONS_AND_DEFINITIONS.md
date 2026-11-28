@@ -26,33 +26,27 @@ Virtual lots (accounting buckets — one E*TRADE account).
 
 | Lot size | Daily rate per lot |
 |---------:|-------------------:|
+| $5,000 | $75 |
 | $10,000 | $150 |
-| $15,000 | $200 |
-| $20,000 | $250 |
-| $25,000 | $300 |
-| $30,000 | $350 |
+| $15,000 | $225 |
+| $20,000 | $300 |
 
-Formula: `$150 + ($lot − $10,000) / $5,000 × $50`
+Formula: **1.50% of lot size** (`TRADE_NET_TARGET_PCT`) — empirical Nov 2026 paper ladder.
 
 ### Account structure by equity tier
 
 | Equity ≥ | Structure | Daily total | Weekly (3×) |
 |---------:|-----------|------------:|------------:|
+| $5,000 | 1× $5K | $75 | $225 |
 | $10,000 | 1× $10K | $150 | $450 |
-| $15,000 | 1× $15K | $200 | $600 |
+| $15,000 | 1× $15K | $225 | $675 |
 | $20,000 | 1× $20K | $300 | $900 |
-| $25,000 | 1× $25K | $350 | $1,050 |
-| $30,000 | 1× $30K | $400 | $1,200 |
-| $35,000 | 1× $35K | $450 | $1,350 |
-| $40,000 | 1× $40K | $500 | $1,500 |
-| $45,000 | 1× $45K | $550 | $1,650 |
-| $50,000 | 1× $50K | $600 | $1,800 |
-| $55,000 | 1× $55K | $650 | $1,950 |
-| $60,000 | 1× $60K | $700 | $2,100 |
+| $25,000 | $10K + $15K | $375 | $1,125 |
+| $30,000 | $15K + $15K | $450 | $1,350 |
 
 **Tier selection:** highest threshold ≤ current equity (step function — no interpolation).
 
-**Phase 1 sizing:** **one trade** deploys the **full tier balance** (e.g. $20K → one $20K position targeting $300 net/trade). Virtual lot splits below are **accounting math only** — not two separate picks.
+**Phase 1 sizing:** **one trade** deploys the **full tier balance** (e.g. $15K → one $15K position targeting $225 net/trade). Virtual lot splits below are **accounting math only** — not two separate picks.
 
 <details>
 <summary>Virtual lot accounting (internal target math)</summary>
@@ -60,8 +54,8 @@ Formula: `$150 + ($lot − $10,000) / $5,000 × $50`
 | Equity ≥ | Virtual lots | Net/trade total |
 |---------:|--------------|----------------:|
 | $20,000 | $10K + $10K | $300 |
-| $25,000 | $10K + $15K | $350 |
-| $30,000 | $15K + $15K | $400 |
+| $25,000 | $10K + $15K | $375 |
+| $30,000 | $15K + $15K | $450 |
 
 </details>
 

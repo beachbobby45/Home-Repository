@@ -1,7 +1,8 @@
 """Operator funding & RH transition plan (evidence-gated dates).
 
-Displayed on Account. Dates are earliest sketches spaced ~30 trading
-sessions apart — deposits stay gated (never automatic).
+Displayed on Account. Dates are earliest sketches — deposits stay gated
+(never automatic). December 2026 paper runs at the $15k live seed size;
+RH CASH live earliest 2027-01-04 after Dec 30/60/90 review pass.
 """
 
 from __future__ import annotations
@@ -19,95 +20,71 @@ from investment_agent.execution.paper_ledger import (
 )
 from investment_agent.trading_day import today_et_str
 
-# Paper experiment notional (not RH cash until live deposit)
-PAPER_NOTIONAL = PAPER_STARTING_CASH  # 5_000
-LIVE_TRANCHE = 5_000.0
-TARGET_INVESTED = 20_000.0
+# Paper experiment notional (sized to match Jan 2027 live seed)
+PAPER_NOTIONAL = PAPER_STARTING_CASH  # 15_000
+LIVE_SEED = 15_000.0
+TARGET_INVESTED = 15_000.0  # fresh $15k seed (not a paper roll)
 
 # Capital Builder band while on paper / early live
-PAPER_PHASE_START = 5_000.0
-PAPER_PHASE_TARGET = 20_000.0  # four × $5k invested
+PAPER_PHASE_START = 15_000.0
+PAPER_PHASE_TARGET = 30_000.0
 
-# Cadence assumption: ~30 trading sessions ≈ ~6 calendar weeks
-# (≤5 sessions/wk when markets open; skips weekends + US holidays).
-# From RH Deposit #1 on 2026-12-01:
-#   #2 ≈ 2027-01-13, #3 ≈ 2027-02-25, #4 ≈ 2027-04-09.
+RH_LIVE_DATE = "2027-01-04"
+PAPER_REVIEW_DATE = "2026-12-31"  # Dec 30/60/90 review window close
 
 
 def funding_plan_rows(*, as_of: str | None = None) -> list[dict[str, Any]]:
-    """Static schedule: Oct–Nov paper → Dec 1 RH CASH $5k → +$5k ~every 30 sessions."""
+    """Static schedule: Oct–Nov history → Dec $15k paper → Jan 4 2027 RH $15k."""
     today = as_of or today_et_str()
     rows = [
         {
             "id": "paper_start",
-            "stage": "Paper book start",
+            "stage": "Paper book start (Oct–Nov history)",
             "date": "2026-10-20",
             "cash_in": 0.0,
             "invested_after": 0.0,
-            "paper_notional": PAPER_NOTIONAL,
+            "paper_notional": 5_000.0,
             "status_hint": "active" if today >= "2026-10-20" else "upcoming",
-            "gate": "Internal $5k paper ledger — no RH funds",
+            "gate": "Internal paper ledger — keep all Oct–Nov fills/logs",
         },
         {
-            "id": "paper_review",
-            "stage": "Paper window review",
-            "date": "2026-11-28",
+            "id": "paper_scale_15k",
+            "stage": "Scale paper books to $15k (Dec sizing)",
+            "date": "2026-12-01",
             "cash_in": 0.0,
             "invested_after": 0.0,
             "paper_notional": PAPER_NOTIONAL,
             "status_hint": "upcoming",
-            "gate": "Pass §5.2 (≥30 fills, +expectancy, beat control, DD≤10%)",
+            "gate": (
+                "Top-up credit only — preserves fills · "
+                "~1.50% net target (~$225/trade) · mode stays paper"
+            ),
+        },
+        {
+            "id": "paper_review",
+            "stage": "Dec 30/60/90 paper review",
+            "date": PAPER_REVIEW_DATE,
+            "cash_in": 0.0,
+            "invested_after": 0.0,
+            "paper_notional": PAPER_NOTIONAL,
+            "status_hint": "upcoming",
+            "gate": (
+                "Pass §5.2 at $15k sizing (≥30 fills, +expectancy, "
+                "beat control, DD≤10%) before any live seed"
+            ),
         },
         {
             "id": "rh_live_1",
-            "stage": "Robinhood live — Deposit #1 (CASH)",
-            "date": "2026-12-01",
-            "cash_in": LIVE_TRANCHE,
-            "invested_after": LIVE_TRANCHE,
+            "stage": "Robinhood live — $15k CASH seed",
+            "date": RH_LIVE_DATE,
+            "cash_in": LIVE_SEED,
+            "invested_after": LIVE_SEED,
             "paper_notional": None,
             "status_hint": "gated",
             "gate": (
-                "After Oct–Nov paper pass · CASH/unlevered · "
+                "After Dec review pass · fresh $15k seed (not paper roll) · "
+                "CASH/unlevered · same-day EOD flatten · "
                 "ledger_source→robinhood · hard −10% stop — not automatic"
-            ),
-        },
-        {
-            "id": "deposit_2",
-            "stage": "Deposit #2",
-            "date": "2027-01-13",
-            "cash_in": LIVE_TRANCHE,
-            "invested_after": 10_000.0,
-            "paper_notional": None,
-            "status_hint": "gated",
-            "gate": (
-                "~30 sessions after #1 (earliest sketch) · "
-                "evidence + written go — not automatic"
-            ),
-        },
-        {
-            "id": "deposit_3",
-            "stage": "Deposit #3",
-            "date": "2027-02-25",
-            "cash_in": LIVE_TRANCHE,
-            "invested_after": 15_000.0,
-            "paper_notional": None,
-            "status_hint": "gated",
-            "gate": (
-                "~30 sessions after #2 (earliest sketch) · "
-                "expectancy still positive; DD within limits; written go"
-            ),
-        },
-        {
-            "id": "deposit_4",
-            "stage": "Deposit #4 (cap $20k in)",
-            "date": "2027-04-09",
-            "cash_in": LIVE_TRANCHE,
-            "invested_after": TARGET_INVESTED,
-            "paper_notional": None,
-            "status_hint": "gated",
-            "gate": (
-                "~30 sessions after #3 (earliest sketch) → $20k invested · "
-                "same evidence bar; optional — skip if edge absent"
             ),
         },
     ]
@@ -117,8 +94,8 @@ def funding_plan_rows(*, as_of: str | None = None) -> list[dict[str, Any]]:
             continue
         if today > d and r["id"] == "paper_start":
             r["status_hint"] = "active"
-        elif today >= d and r["id"] == "paper_review":
-            r["status_hint"] = "due"
+        elif today >= d and r["id"] in {"paper_scale_15k", "paper_review"}:
+            r["status_hint"] = "due" if r["id"] == "paper_review" else "active"
         elif today < d:
             r["status_hint"] = "upcoming"
     return rows
@@ -132,16 +109,22 @@ def build_funding_plan_payload(conn: sqlite3.Connection) -> dict[str, Any]:
     today = today_et_str()
     rows = funding_plan_rows(as_of=today)
 
-    # Mark RH transition / deposits still gated until paper_pass
     paper_pass = bool(sb.get("paper_pass"))
     for r in rows:
         if r["id"] == "paper_review":
-            r["status_hint"] = "passed" if paper_pass else ("due" if today >= r["date"] else "upcoming")
-        if r["id"].startswith("rh_") or r["id"].startswith("deposit_"):
-            r["status_hint"] = "eligible" if paper_pass and r["id"] == "rh_live_1" else "gated"
+            r["status_hint"] = (
+                "passed" if paper_pass else ("due" if today >= r["date"] else "upcoming")
+            )
+        if r["id"].startswith("rh_"):
+            r["status_hint"] = "eligible" if paper_pass else "gated"
 
     next_funding = next(
-        (r for r in rows if r["status_hint"] in {"gated", "eligible", "due", "upcoming"} and r["cash_in"] > 0),
+        (
+            r
+            for r in rows
+            if r["status_hint"] in {"gated", "eligible", "due", "upcoming"}
+            and r["cash_in"] > 0
+        ),
         None,
     )
     rh_row = next((r for r in rows if r["id"] == "rh_live_1"), None)
@@ -154,12 +137,12 @@ def build_funding_plan_payload(conn: sqlite3.Connection) -> dict[str, Any]:
         "paper_equity": float(bal["equity"]),
         "paper_settled": float(bal["settled_cash"]),
         "paper_unsettled": float(bal["unsettled_cash"]),
-        "phase_label": f"${PAPER_PHASE_START:,.0f} → ${PAPER_PHASE_TARGET:,.0f} invested",
+        "phase_label": f"${PAPER_PHASE_START:,.0f} → ${PAPER_PHASE_TARGET:,.0f}",
         "phase_start": PAPER_PHASE_START,
         "phase_target": PAPER_PHASE_TARGET,
         "rh_transition": {
-            "earliest_date": rh_row["date"] if rh_row else "2026-12-01",
-            "amount": LIVE_TRANCHE,
+            "earliest_date": rh_row["date"] if rh_row else RH_LIVE_DATE,
+            "amount": LIVE_SEED,
             "mode": "CASH / unlevered",
             "gate": rh_row["gate"] if rh_row else "",
             "ready": paper_pass,
@@ -171,9 +154,9 @@ def build_funding_plan_payload(conn: sqlite3.Connection) -> dict[str, Any]:
         },
         "stages": rows,
         "notes": (
-            "Earliest sketches: RH live CASH $5k on 2026-12-01 after paper pass, "
-            "then +$5k every ~30 trading sessions (2027-01-13 → 2027-02-25 → 2027-04-09) "
-            "to $20k invested. Deposits stay evidence-gated — never automatic. "
-            "Until RH connects, Account balance is the paper book (starts $5,000)."
+            "Dec 2026 paper at $15k sizing (~$225 net/trade · 1.50%). "
+            f"RH CASH live earliest {RH_LIVE_DATE} after Dec 30/60/90 review pass — "
+            "fresh $15k seed, not a paper roll. Mode stays paper until that written go. "
+            "Same-day EOD flatten on live. Deposits stay evidence-gated — never automatic."
         ),
     }

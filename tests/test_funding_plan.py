@@ -21,7 +21,7 @@ from investment_agent.capital_builder import (
 from investment_agent.dashboard.app import app
 from investment_agent.db import init_db
 from investment_agent.execution.ops_audit import set_ledger_source
-from investment_agent.execution.paper_ledger import ensure_paper_accounts
+from investment_agent.execution.paper_ledger import PAPER_STARTING_CASH, ensure_paper_accounts
 from investment_agent.funding_plan import build_funding_plan_payload, funding_plan_rows
 
 
@@ -34,7 +34,7 @@ class FundingPlanTests(unittest.TestCase):
 
         self.conn = sqlite3.connect(self.db)
         self.conn.row_factory = sqlite3.Row
-        ensure_paper_accounts(self.conn, starting_cash=5_000)
+        ensure_paper_accounts(self.conn, starting_cash=PAPER_STARTING_CASH)
         set_ledger_source(self.conn, "paper")
         self.conn.commit()
 
@@ -42,38 +42,34 @@ class FundingPlanTests(unittest.TestCase):
         self.conn.close()
         self.tmp.cleanup()
 
-    def test_stages_include_rh_and_deposits(self) -> None:
+    def test_stages_include_rh_and_dec_scale(self) -> None:
         rows = funding_plan_rows()
         ids = [r["id"] for r in rows]
         self.assertIn("paper_start", ids)
+        self.assertIn("paper_scale_15k", ids)
+        self.assertIn("paper_review", ids)
         self.assertIn("rh_live_1", ids)
-        self.assertIn("deposit_2", ids)
-        self.assertIn("deposit_4", ids)
         rh = next(r for r in rows if r["id"] == "rh_live_1")
-        self.assertEqual(rh["cash_in"], 5_000)
-        self.assertEqual(rh["date"], "2026-12-01")
-        self.assertEqual(rh["invested_after"], 5_000)
-        d2 = next(r for r in rows if r["id"] == "deposit_2")
-        d3 = next(r for r in rows if r["id"] == "deposit_3")
-        d4 = next(r for r in rows if r["id"] == "deposit_4")
-        self.assertEqual(d2["date"], "2027-01-13")
-        self.assertEqual(d2["invested_after"], 10_000)
-        self.assertEqual(d3["date"], "2027-02-25")
-        self.assertEqual(d3["invested_after"], 15_000)
-        self.assertEqual(d4["date"], "2027-04-09")
-        self.assertEqual(d4["invested_after"], 20_000)
-        self.assertIn("~30 sessions", d2["gate"])
+        self.assertEqual(rh["cash_in"], 15_000)
+        self.assertEqual(rh["date"], "2027-01-04")
+        self.assertEqual(rh["invested_after"], 15_000)
         self.assertIn("CASH", rh["gate"])
+        scale = next(r for r in rows if r["id"] == "paper_scale_15k")
+        self.assertEqual(scale["paper_notional"], 15_000)
+        review = next(r for r in rows if r["id"] == "paper_review")
+        self.assertEqual(review["date"], "2026-12-31")
 
-    def test_payload_and_capital_builder_use_5k_band(self) -> None:
+    def test_payload_and_capital_builder_use_15k_band(self) -> None:
         fp = build_funding_plan_payload(self.conn)
-        self.assertEqual(fp["paper_starting_cash"], 5_000)
-        self.assertEqual(fp["phase_start"], 5_000)
-        self.assertEqual(fp["phase_target"], 20_000)
+        self.assertEqual(fp["paper_starting_cash"], 15_000)
+        self.assertEqual(fp["phase_start"], 15_000)
+        self.assertEqual(fp["phase_target"], 30_000)
+        self.assertEqual(fp["rh_transition"]["earliest_date"], "2027-01-04")
+        self.assertEqual(fp["rh_transition"]["amount"], 15_000)
         cb = build_capital_builder_progress(self.conn)
         self.assertEqual(cb.phase1_start, PAPER_PHASE_START)
         self.assertEqual(cb.phase1_target, PAPER_PHASE_TARGET)
-        self.assertEqual(cb.current_equity, 5_000.0)
+        self.assertEqual(cb.current_equity, 15_000.0)
 
     def test_api_funding_plan(self) -> None:
         import sqlite3
@@ -89,8 +85,8 @@ class FundingPlanTests(unittest.TestCase):
                 r = http.get("/api/funding-plan")
                 self.assertEqual(r.status_code, 200, r.text)
                 body = r.json()
-                self.assertEqual(body["paper_equity"], 5_000)
-                self.assertGreaterEqual(len(body["stages"]), 5)
+                self.assertEqual(body["paper_equity"], 15_000)
+                self.assertGreaterEqual(len(body["stages"]), 4)
 
 
 if __name__ == "__main__":

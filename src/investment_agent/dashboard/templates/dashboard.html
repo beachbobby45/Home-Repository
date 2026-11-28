@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Investment Agent</title>
-  <link rel="stylesheet" href="/static/style.css?v=0.9.13" />
+  <link rel="stylesheet" href="/static/style.css?v=0.9.15" />
 </head>
 <body>
   <header class="app-header">
@@ -92,8 +92,8 @@
       </section>
 
       <section class="card auto-pnl-strip" id="auto-pnl-strip">
-        <div class="auto-pnl-item"><span class="status-label">Gate book</span><strong id="paper-gate-equity">$5,000</strong></div>
-        <div class="auto-pnl-item"><span class="status-label">All-signals book</span><strong id="paper-all-equity">$5,000</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">Gate book</span><strong id="paper-gate-equity">$15,000</strong></div>
+        <div class="auto-pnl-item"><span class="status-label">All-signals book</span><strong id="paper-all-equity">$15,000</strong></div>
         <div class="auto-pnl-item"><span class="status-label">Today (gate)</span><strong id="paper-today-net">$0</strong></div>
         <div class="auto-pnl-item"><span class="status-label">Window fills</span><strong id="paper-window-fills">0</strong></div>
         <div class="auto-pnl-item"><span class="status-label">Scoreboard</span><strong id="paper-pass-flag">Not yet</strong></div>
@@ -519,13 +519,13 @@
       <section class="view-section">
         <header class="view-head">
           <h2>Ledger &amp; balance</h2>
-          <p class="brief" id="ledger-source-note">Paper book starts at $5,000. TEST audit rows never change this balance.</p>
+          <p class="brief" id="ledger-source-note">Paper book sized at $15,000 (Dec 2026). TEST audit rows never change this balance.</p>
         </header>
         <div class="card auto-pnl-strip" id="account-ledger-strip">
           <div class="auto-pnl-item"><span class="status-label">Ledger source</span><strong id="acct-ledger-source">paper</strong></div>
-          <div class="auto-pnl-item"><span class="status-label">Starting</span><strong id="acct-paper-start">$5,000</strong></div>
-          <div class="auto-pnl-item"><span class="status-label">Paper equity</span><strong id="acct-paper-equity">$5,000</strong></div>
-          <div class="auto-pnl-item"><span class="status-label">Settled</span><strong id="acct-paper-settled">$5,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Starting</span><strong id="acct-paper-start">$15,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Paper equity</span><strong id="acct-paper-equity">$15,000</strong></div>
+          <div class="auto-pnl-item"><span class="status-label">Settled</span><strong id="acct-paper-settled">$15,000</strong></div>
           <div class="auto-pnl-item"><span class="status-label">Unsettled</span><strong id="acct-paper-unsettled">$0</strong></div>
         </div>
       </section>
@@ -533,14 +533,14 @@
       <section class="view-section" id="funding-plan-section">
         <header class="view-head">
           <h2>Funding &amp; RH transition plan</h2>
-          <p class="brief" id="funding-plan-note">$5,000 paper now → RH CASH live 2026-12-01 after paper pass → +$5,000 every ~30 sessions (Jan 13 / Feb 25 / Apr 9 2027) to $20k — evidence-gated, not automatic.</p>
+          <p class="brief" id="funding-plan-note">Dec paper at $15,000 → RH CASH live 2027-01-04 after Dec 30/60/90 review pass — fresh $15k seed, mode stays paper until then.</p>
         </header>
         <div class="card">
           <div class="auto-pnl-strip" id="funding-plan-highlights">
-            <div class="auto-pnl-item"><span class="status-label">Phase band</span><strong id="funding-phase-label">$5,000 → $20,000</strong></div>
-            <div class="auto-pnl-item"><span class="status-label">RH live (earliest)</span><strong id="funding-rh-date">2026-12-01</strong></div>
-            <div class="auto-pnl-item"><span class="status-label">RH deposit #1</span><strong id="funding-rh-amt">+$5,000</strong></div>
-            <div class="auto-pnl-item"><span class="status-label">Next +$5k</span><strong id="funding-next">Gated</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">Phase band</span><strong id="funding-phase-label">$15,000 → $30,000</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">RH live (earliest)</span><strong id="funding-rh-date">2027-01-04</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">RH seed</span><strong id="funding-rh-amt">+$15,000</strong></div>
+            <div class="auto-pnl-item"><span class="status-label">Next funding</span><strong id="funding-next">Gated</strong></div>
             <div class="auto-pnl-item"><span class="status-label">Paper pass</span><strong id="funding-paper-pass">Not yet</strong></div>
           </div>
           <div class="table-wrap" style="margin-top:1rem">
@@ -576,12 +576,12 @@
       <section class="view-section capital-builder-section">
         <header class="view-head">
           <h2>Capital Builder</h2>
-          <p class="brief">Paper / staged plan: <strong>$5,000 → $20,000</strong> invested. Equity follows paper ledger until RH is source of truth.</p>
+          <p class="brief">Paper / live plan: <strong>$15,000 → $30,000</strong>. Equity follows paper ledger until RH is source of truth.</p>
         </header>
         <div class="card capital-builder-panel" id="capital-builder-panel">
           <div class="cb-milestone">
             <div class="cb-milestone-head">
-              <span class="cb-milestone-label" id="cb-phase-label">Plan: $5,000 → $20,000</span>
+              <span class="cb-milestone-label" id="cb-phase-label">Plan: $15,000 → $30,000</span>
               <span class="cb-milestone-badge brief" id="cb-milestone-badge"></span>
             </div>
             <div class="metric" id="cb-current-equity">—</div>
@@ -727,7 +727,7 @@
       <section class="view-section">
         <header class="view-head">
           <h2>Calendar-year growth plan</h2>
-          <p class="brief">Your funded plan by calendar year: <strong>Begin → Remaining</strong> carries forward. Right side keeps <strong>Deploy · net/trade</strong>, <strong>Deposits</strong>, <strong>Δ End</strong> (vs $5K-only), and <strong>Notes</strong>.</p>
+          <p class="brief"><strong>2026</strong> = paper history (gate book P&amp;L). <strong>2027 Begin = $15,000 exactly</strong> — fresh seed; 2026 Remaining does <strong>not</strong> carry. Then Begin → Remaining compounds.</p>
         </header>
         <div class="plan-quick-links card">
           <span class="brief">Related:</span>
@@ -738,9 +738,9 @@
         </div>
         <div class="grid grid-4 plan-kpi-grid" id="plan-kpi-grid">
           <div class="card kpi-card"><h2>$5M target year</h2><div class="metric small" id="plan-months-inj">—</div></div>
-          <div class="card kpi-card"><h2>2026 begin</h2><div class="metric small" id="plan-begin-2026">$5,000</div></div>
-          <div class="card kpi-card"><h2>2027 deposits</h2><div class="metric small" id="plan-dep-2027">+$15,000</div></div>
-          <div class="card kpi-card"><h2 id="plan-y10-inj-label">2037 remaining</h2><div class="metric small" id="plan-y10-inj">—</div></div>
+          <div class="card kpi-card"><h2>2026 paper end</h2><div class="metric small" id="plan-paper-2026">—</div></div>
+          <div class="card kpi-card"><h2>2027 begin</h2><div class="metric small" id="plan-begin-2026">$15,000</div></div>
+          <div class="card kpi-card"><h2 id="plan-y10-inj-label">2038 remaining</h2><div class="metric small" id="plan-y10-inj">—</div></div>
         </div>
         <div class="card" id="plan-assumptions">Loading assumptions…</div>
         <div class="card table-card">
@@ -767,9 +767,9 @@
           </div>
         </div>
         <p class="brief plan-disclaimer">
-          <strong>Begin</strong> / <strong>Remaining</strong> are your funded path ($5K Dec 2026 + $15K in 2027). Remaining → next year’s Begin.
-          <strong>Δ End</strong> = funded Remaining minus a $5K-only path at year-end.
-          Deploy · net/trade is tier size / net target. Model only — deposits stay evidence-gated.
+          <strong>2026</strong> shows gate-book paper trading P&amp;L (Begin $5,000 + fills). The Dec $15k top-up credit is not counted as growth.
+          <strong>2027 Begin = $15,000 exactly</strong> — fresh RH seed; 2026 Remaining never carries forward.
+          From 2027 on, Remaining → next year’s Begin. Model only — live seed stays evidence-gated.
         </p>
       </section>
     </div>
@@ -781,7 +781,7 @@
         <div class="card setup-version-card">
           <h3>App version</h3>
           <p class="setup-version-running"><strong>Running:</strong> <span id="setup-version-text">Loading…</span></p>
-          <p class="brief">Latest release: <strong>v0.9.13 · dashboard responsive cache</strong> (Ops polls paper cheaply; trading-day cached ~45s)</p>
+          <p class="brief">Latest release: <strong>v0.9.15 · plan 2026 paper + 2027 $15k seed</strong> (2026 = gate P&amp;L; 2027 Begin = $15k exactly)</p>
           <p class="brief setup-version-help" id="setup-version-help"></p>
           <ul class="setup-workflow-list brief">
             <li><strong>Mac desktop app (recommended)</strong> — Finder → <code>Home-Repository/scripts/</code> → double-click <strong>Install Desktop App.command</strong> once. Puts <strong>AI Investment Agent</strong> on your Desktop with buttons for Update, Morning Prep, Refresh Live, and End of Day.</li>
@@ -883,9 +883,13 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         if (setupVer && v?.version) {
           setupVer.textContent = v.label || `v${v.version} · ${v.release || ""}`;
           if (setupHelp) {
-            if (["0.9.13", "0.9.12", "0.9.11", "0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
+            if (["0.9.15", "0.9.14", "0.9.13", "0.9.12", "0.9.11", "0.9.10", "0.9.9", "0.9.8", "0.9.7", "0.9.6", "0.9.5", "0.9.4", "0.9.3"].includes(v.version)) {
               setupHelp.textContent =
-                v.version === "0.9.13"
+                v.version === "0.9.15"
+                  ? "You are on v0.9.15 — Plan row 2026 = gate paper P&L; 2027 Begin = $15,000 exactly (paper does not carry). Hard-refresh (Cmd+Shift+R)."
+                  : v.version === "0.9.14"
+                  ? "You are on v0.9.14 — Plan starts 2027 at exactly $15,000 (fresh seed; Dec paper equity does not transfer). Hard-refresh (Cmd+Shift+R) if Plan still shows 2026 $5k."
+                  : v.version === "0.9.13"
                   ? "You are on v0.9.13 — Ops paper polls stay light; trading-day status is cached ~45s so the UI is less sticky."
                   : v.version === "0.9.12"
                   ? "You are on v0.9.12 — early day-gate NO is 'not yet' and rechecks until 12:30 ET (same cadence as the paper worker)."
@@ -1967,9 +1971,9 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
     function renderFundingPlan(fp) {
       if (!fp) return;
       const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-      setTxt("funding-phase-label", fp.phase_label || "$5,000 → $20,000");
+      setTxt("funding-phase-label", fp.phase_label || "$15,000 → $30,000");
       setTxt("funding-rh-date", fp.rh_transition?.earliest_date || "—");
-      setTxt("funding-rh-amt", fp.rh_transition?.amount != null ? `+$${fmt(fp.rh_transition.amount)}` : "+$5,000");
+      setTxt("funding-rh-amt", fp.rh_transition?.amount != null ? `+$${fmt(fp.rh_transition.amount)}` : "+$15,000");
       const next = fp.next_funding;
       setTxt(
         "funding-next",
@@ -2025,7 +2029,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         const ls = s.ledger_source || "paper";
         const setAcct = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
         setAcct("acct-ledger-source", ls);
-        setAcct("acct-paper-start", "$" + fmt(s.paper_starting_cash ?? 5000));
+        setAcct("acct-paper-start", "$" + fmt(s.paper_starting_cash ?? 15000));
         if (s.paper_balance) {
           setAcct("acct-paper-equity", "$" + fmt(s.paper_balance.equity));
           setAcct("acct-paper-settled", "$" + fmt(s.paper_balance.settled_cash));
@@ -2034,7 +2038,7 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
         const note = document.getElementById("ledger-source-note");
         if (note) {
           note.textContent = ls === "paper"
-            ? "Paper book starts at $5,000 and updates from paper fills. TEST audit rows never change this balance. When Robinhood is connected, this becomes a read-only mirror of RH."
+            ? "Paper book sized at $15,000 and updates from paper fills. TEST audit rows never change this balance. When Robinhood is connected, this becomes a read-only mirror of RH."
             : "Ledger source is Robinhood — dashboard balance/audit are mirrors of the broker (source of truth).";
         }
         document.getElementById("original-basis").textContent = "$" + fmt(s.original_basis);
@@ -3089,9 +3093,9 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
             .join(" · ");
       document.getElementById("plan-assumptions").innerHTML = [
         `<strong>Assumptions</strong> (planning model — see Plan tab disclaimer)`,
-        `<strong>$${fmt(data.starting_basis)} start</strong> · RH CASH live earliest <strong>${a.rh_live_date || "2026-12-01"}</strong> (after Oct–Nov paper pass)`,
+        `<strong>$${fmt(data.starting_basis)} start</strong> · RH CASH live earliest <strong>${a.rh_live_date || "2027-01-04"}</strong> (after Dec 30/60/90 paper review)`,
         `${a.hit_rate_pct}% hit · ${a.tradeable_days_per_week} tradeable days/wk · ≤${a.sessions_per_week_cap || 5} sessions/wk · Annual ${a.sweep_rate_pct}% sweep`,
-        `${a.deposit_cadence || "+$5K every ~30 sessions to $20K"} · ${a.account_mode || a.settlement || "CASH / unlevered"}`,
+        `${a.deposit_cadence || "Dec paper $15k · RH live $15k on 2027-01-04"} · ${a.account_mode || a.settlement || "CASH / unlevered"}`,
         `<strong>Cash schedule</strong> (earliest sketches · evidence-gated):<br>&nbsp;&nbsp;${cashBlock}`,
         `${a.one_trade_per_day ? "One #1 pick/day" : ""} · ${a.second_trade || ""}`,
       ].join("<br>");
@@ -3108,10 +3112,10 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
       const years = data.years || [];
       const y2026 = years.find((r) => r.year === 2026);
       const y2027 = years.find((r) => r.year === 2027);
+      const paperEl = document.getElementById("plan-paper-2026");
+      if (paperEl && y2026) paperEl.textContent = "$" + fmt(y2026.injection?.end_balance);
       const beginEl = document.getElementById("plan-begin-2026");
-      if (beginEl && y2026) beginEl.textContent = "$" + fmt(y2026.injection?.start_balance);
-      const depEl = document.getElementById("plan-dep-2027");
-      if (depEl && y2027) depEl.textContent = "+$" + fmt(y2027.injection?.capital_injection);
+      if (beginEl && y2027) beginEl.textContent = "$" + fmt(y2027.injection?.start_balance);
       const yLast = years[years.length - 1];
       if (yLast) {
         const injLbl = document.getElementById("plan-y10-inj-label");
@@ -3141,13 +3145,14 @@ PYTHONPATH=src python3 scripts/run_period_screener.py --days 14 --save</pre>
           : (remaining - Number(base.end_balance || 0)));
         const deltaCls = delta >= 0 ? "plan-advantage" : "metric negative";
         const goalMilestone = (p.goal_pct || 0) >= 100 ? " plan-row-goal" : "";
+        const paperCls = row.is_paper_history ? " plan-row-paper" : "";
         const depCell = depositsShow > 0 ? `$${fmt(depositsShow)}` : "—";
         const growthSign = growth >= 0 ? "+" : "";
         const pctSign = growthPct >= 0 ? "+" : "";
         const deltaSign = delta >= 0 ? "+" : "";
         const deploy = `${p.trade_deploy_label || "—"} · $${fmt(p.trade_net_target)}/tr`;
-        return `<tr class="${goalMilestone}">
-          <td><strong>${row.year}</strong></td>
+        return `<tr class="${goalMilestone}${paperCls}">
+          <td><strong>${row.year}</strong>${row.is_paper_history ? ' <span class="brief">paper</span>' : ""}</td>
           <td>$${fmt(begin)}</td>
           <td><strong>$${fmt(remaining)}</strong></td>
           <td class="${growthCls}">${growthSign}$${fmt(growth)}</td>
